@@ -490,3 +490,36 @@ test("the gate interval stretches with pending-invoice age", () => {
   assert.equal(reconcileIntervalSeconds([], 1_000), 3);
   assert.equal(reconcileIntervalSeconds([], 1_000, 5), 5);
 });
+
+test("a failed settlement transaction's cause reaches the default log, redacted", async () => {
+  const { warnFailure } = await import("../packages/js/http/src/host-payments.ts");
+  const inner = new AggregateError(
+    [new Error('invalid input syntax for type timestamp with time zone: "1762571234"')],
+    'reconciliation failed for 1 of 1 checks: invalid input syntax for type timestamp with time zone: "1762571234"',
+  );
+  const leaked = new Error(
+    "relay rejected nostr+walletconnect://abc?relay=wss://relay.test&secret=deadbeefcafe",
+  );
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    warnFailure(
+      "payment.reconcile.opportunistic.failed",
+      "opportunistic reconcile failed (will retry)",
+      new AggregateError(
+        [inner, leaked, new Error("third"), new Error("fourth")],
+        "One or more settlement transactions failed; pending attempts will be retried.",
+      ),
+    );
+  } finally {
+    console.warn = original;
+  }
+  const line = warnings.join("\n");
+  assert.match(
+    line,
+    /settlement transactions failed.*Cause: reconciliation failed for 1 of 1 checks: invalid input syntax for type timestamp/,
+  );
+  assert.match(line, /\(and 1 more\)/);
+  assert.doesNotMatch(line, /deadbeefcafe/);
+});

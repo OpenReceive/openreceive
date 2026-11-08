@@ -74,7 +74,13 @@ export interface Stack {
    * boots again and is served if the wallet answers.
    */
   readonly handler: HttpHandler;
-  /** Resolves when the first boot is up; rejects if the first boot failed. */
+  /**
+   * Resolves when the first boot is up; rejects if the first boot failed, and
+   * a relay that is slow for a moment at start is enough. The stack boots
+   * again on a later request either way, so never await `ready` before
+   * `listen()` or at the top level of the server file: the rejection would
+   * stop the process. Await it in a health check, or log it.
+   */
   readonly ready: Promise<void>;
   /** Closes the service if the stack created it. */
   close(): Promise<void>;

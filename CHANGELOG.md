@@ -52,6 +52,21 @@
   own filter gets system check warning `openreceive.W003` while `DEBUG` is on
   until that filter subclasses OpenReceive's.
 
+- Fixed (Node): an `onPaid` that throws on every retry is now visible in
+  the shop's log. The opportunistic reconcile warned only "One or more
+  settlement transactions failed; pending attempts will be retried.", so a
+  shop whose orders never turned paid gave its developer nothing to go on. The
+  warning now ends with "Cause:" and the first three failures, redacted like
+  every other OpenReceive log line. In the trial that found it, the agent wrote
+  `paidAt` into a Postgres `TIMESTAMPTZ` column.
+- Docs (Node): `paidAt` in `onPaid` is Unix seconds; its type and the ORM
+  guide now say so and show `to_timestamp($1)` (Postgres) and
+  `FROM_UNIXTIME(?)` (MySQL) for a timestamp column. The `ready` promise's
+  doc comment on `createStack`, `@openreceive/express` and `@openreceive/next`
+  now says it rejects when the first wallet check fails and must not be
+  awaited before `listen()`, as the deploying guide does. An agent that read
+  only the type awaited it and a relay blip at start stopped its shop.
+
 - Changed (checkout): the paid screen's badge reads "Paid" (and "Expired"),
   not the engine's "settled", and the waiting screen says "Keep this page
   open while we confirm your payment." instead of "… while we verify

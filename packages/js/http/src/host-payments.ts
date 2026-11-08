@@ -28,13 +28,29 @@ import {
 // payment-repository.ts; the wallet-scan passes live in reconcile-loop.ts.
 
 /**
+ * An error's message. An AggregateError (a reconcile pass whose settlement
+ * transactions failed) also names its first causes: without them the log says
+ * only that something failed, and an `onPaid` that throws on every retry, such
+ * as Unix seconds written to a timestamp column, is invisible.
+ */
+export function failureMessage(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  if (!(error instanceof AggregateError) || error.errors.length === 0) return error.message;
+  const shown = error.errors
+    .slice(0, 3)
+    .map((item: unknown) => (item instanceof Error ? item.message : String(item)));
+  const more = error.errors.length > 3 ? ` (and ${error.errors.length - 3} more)` : "";
+  return `${error.message} Cause: ${shown.join("; ")}${more}`;
+}
+
+/**
  * Warn about a background settlement failure through the same redaction every
  * service log sink applies. A wallet, relay, or database error message can
  * carry an NWC code or a provider token; the default sink must not be the one
  * place that prints it.
  */
 export function warnFailure(event: string, prefix: string, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = failureMessage(error);
   const sanitized = sanitizeEvent({ level: "warn", event, message });
   console.warn(`[openreceive] ${prefix}: ${String(sanitized.message)}`);
 }

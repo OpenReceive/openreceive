@@ -44,7 +44,12 @@ export * from "@openreceive/http/adapter-surface";
 export interface ExpressMiddleware extends RequestHandler {
   /** The normalized mount prefix the middleware handles. */
   readonly prefix: string;
-  /** All-in-one form only: resolves when the owned service and handler are up. */
+  /**
+   * All-in-one form only: resolves when the owned service and handler are up;
+   * rejects if the first wallet check failed. Requests check again either way,
+   * so never await it before `app.listen()`: a relay blip at start would stop
+   * the process. Await it in a health check, or log it.
+   */
   readonly ready?: Promise<void>;
   /** All-in-one form only: closes the service the middleware created. */
   readonly close?: () => Promise<void>;

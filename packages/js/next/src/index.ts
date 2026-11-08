@@ -37,7 +37,12 @@ export interface NextHandlers {
   readonly POST: NextRouteHandler;
   /** The underlying framework-agnostic handler, if you need it directly. */
   readonly handler: HttpHandler;
-  /** All-in-one form only: resolves when the owned service and handler are up. */
+  /**
+   * All-in-one form only: resolves when the owned service and handler are up;
+   * rejects if the first wallet check failed. Requests check again either way,
+   * so never await it at the top level of a route file: a relay blip at start
+   * would fail the module. Await it in a health check, or log it.
+   */
   readonly ready?: Promise<void>;
   /** All-in-one form only: closes the service the adapter created. */
   readonly close?: () => Promise<void>;

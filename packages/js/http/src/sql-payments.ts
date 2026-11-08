@@ -99,6 +99,12 @@ export interface SqlPaymentsOptions {
 export interface PaymentSettlement {
   readonly reference: string;
   readonly paymentHash: string;
+  /**
+   * When the wallet saw the payment, in Unix seconds (a number, not a Date).
+   * A timestamp column needs a conversion in your SQL: `to_timestamp($1)` on
+   * Postgres, `FROM_UNIXTIME(?)` on MySQL. A plain number there fails the
+   * settlement transaction on every retry.
+   */
   readonly paidAt: number;
   readonly details?: PaymentDetails;
   /**
