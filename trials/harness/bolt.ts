@@ -19,6 +19,7 @@ import {
 } from "./live.ts";
 import { publishedPort } from "./sandbox.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for a Bolt shop. Its pages are a Vite React app and its
 // payment routes a Supabase Edge Function on another site, so the buyer is a
@@ -253,10 +254,12 @@ async function buyThroughPage(
     (await item.count()) > 0
       ? item.getByRole("button", { name: /buy/i })
       : page.getByRole("button", { name: /buy/i }).nth(product - 1);
-  const created = page.waitForResponse(
-    (response) =>
-      CREATE_URL.test(new URL(response.url()).pathname) && response.request().method() === "POST",
-    { timeout: 60_000 },
+  const created = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        CREATE_URL.test(new URL(response.url()).pathname) && response.request().method() === "POST",
+      { timeout: 60_000 },
+    ),
   );
   await button.click();
   await page.waitForURL(ORDER_PATH, { timeout: 30_000 });
@@ -391,11 +394,13 @@ export async function liveBoltChecks(
     if (paymentHash !== undefined) {
       checks.push(await backToBackCheck(buyer, order, "", paymentHash));
       // A reload of the order page resumes its checkout: the same invoice.
-      const again = page.waitForResponse(
-        (response) =>
-          CREATE_URL.test(new URL(response.url()).pathname) &&
-          response.request().method() === "POST",
-        { timeout: 60_000 },
+      const again = awaitedLater(
+        page.waitForResponse(
+          (response) =>
+            CREATE_URL.test(new URL(response.url()).pathname) &&
+            response.request().method() === "POST",
+          { timeout: 60_000 },
+        ),
       );
       await page.reload();
       const reloaded = await pickBitcoinAndWait(page, again);

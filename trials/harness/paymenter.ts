@@ -15,6 +15,7 @@ import {
   swapOrderChecks,
 } from "./live.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for a Paymenter billing panel. The buyer is a signed-in
 // client in Chromium: they order a VPS through Paymenter's own shop, land on
@@ -212,11 +213,13 @@ async function payWithLightning(
     .locator("text=/Bitcoin (Lightning|& stablecoins)/ >> visible=true")
     .first()
     .click({ timeout: 30_000 });
-  const created = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === `${PREFIX}/checkouts` &&
-      response.request().method() === "POST",
-    { timeout: 60_000 },
+  const created = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `${PREFIX}/checkouts` &&
+        response.request().method() === "POST",
+      { timeout: 60_000 },
+    ),
   );
   await page.getByRole("button", { name: /pay now/i }).click();
   const checkout = page.locator("openreceive-checkout");

@@ -13,6 +13,7 @@ import {
   swapOrderChecks,
 } from "./live.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for a FOSSBilling billing panel. The buyer is a signed-in
 // client in Chromium: they order a VPS through FOSSBilling's own shop with the
@@ -221,11 +222,13 @@ async function payWithLightning(
   page: Page,
   pick = true,
 ): Promise<{ reference: string; created?: Answer }> {
-  const created = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === `${PREFIX}/checkouts` &&
-      response.request().method() === "POST",
-    { timeout: 60_000 },
+  const created = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `${PREFIX}/checkouts` &&
+        response.request().method() === "POST",
+      { timeout: 60_000 },
+    ),
   );
   const checkout = page.locator("openreceive-checkout");
   await checkout.waitFor({ state: "attached", timeout: 30_000 });

@@ -13,6 +13,7 @@ import {
   swapOrderChecks,
 } from "./live.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for an Odoo eCommerce shop. The buyer is a signed-in portal
 // customer in Chromium: they put a product in the cart, check out with the
@@ -201,11 +202,13 @@ async function order(page: Page, base: string, product: number): Promise<string>
 
 /** On the checkout page: pick Bitcoin and wait for the checkout's create call. */
 async function payWithLightning(page: Page): Promise<Answer | undefined> {
-  const created = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === `${PREFIX}/checkouts` &&
-      response.request().method() === "POST",
-    { timeout: 60_000 },
+  const created = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `${PREFIX}/checkouts` &&
+        response.request().method() === "POST",
+      { timeout: 60_000 },
+    ),
   );
   const checkout = page.locator("openreceive-checkout");
   await checkout.waitFor({ state: "attached", timeout: 30_000 });

@@ -12,6 +12,7 @@ import {
   swapOrderChecks,
 } from "./live.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for a PrestaShop store. The buyer is a signed-in customer
 // in Chromium: they put a widget in the cart, check out with the OpenReceive
@@ -231,9 +232,10 @@ async function payWithLightning(
   page: Page,
   pick = true,
 ): Promise<{ reference: string; prefix: string; token?: string; created?: Answer }> {
-  const created = page.waitForResponse(
-    (response) => isCreate(response.url(), response.request().method()),
-    { timeout: 60_000 },
+  const created = awaitedLater(
+    page.waitForResponse((response) => isCreate(response.url(), response.request().method()), {
+      timeout: 60_000,
+    }),
   );
   // Handled even when nothing awaits it: no pick, or no checkout on the page.
   created.catch(() => undefined);

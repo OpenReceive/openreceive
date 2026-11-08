@@ -332,3 +332,18 @@ test("the visitor finds the order id before a guest token, keeps the page, and s
     server.close();
   }
 });
+
+test("a wait the caller never reaches rejects without an unhandled rejection", async () => {
+  const { awaitedLater } = await import("../trials/harness/promises.ts");
+  const unhandled = [];
+  const onUnhandled = (error) => unhandled.push(error);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    awaitedLater(Promise.reject(new Error("Target page, context or browser has been closed")));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(unhandled.length, 0);
+    await assert.rejects(awaitedLater(Promise.reject(new Error("still thrown"))), /still thrown/);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+});

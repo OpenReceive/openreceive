@@ -12,6 +12,7 @@ import {
   swapOrderChecks,
 } from "./live.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for a Medusa store: the Medusa server, with Medusa's
 // Next.js starter as its storefront. The buyer shops the storefront in
@@ -126,9 +127,12 @@ async function reviewCheckout(
   pick: boolean,
   load: () => Promise<unknown>,
 ): Promise<{ reference: string; prefix: string; created?: Answer }> {
-  const prepared = page.waitForRequest(
-    (request) => request.method() === "POST" && isCheckoutCall(request.url(), "/checkouts/prepare"),
-    { timeout: 60_000 },
+  const prepared = awaitedLater(
+    page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && isCheckoutCall(request.url(), "/checkouts/prepare"),
+      { timeout: 60_000 },
+    ),
   );
   await load();
   const request = await prepared;
@@ -137,10 +141,12 @@ async function reviewCheckout(
   );
   const prefix = new URL(request.url()).pathname.replace(/\/checkouts\/prepare$/, "");
   if (!pick) return { reference, prefix };
-  const created = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" && isCheckoutCall(response.url(), "/checkouts"),
-    { timeout: 60_000 },
+  const created = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" && isCheckoutCall(response.url(), "/checkouts"),
+      { timeout: 60_000 },
+    ),
   );
   const started = performance.now();
   await page

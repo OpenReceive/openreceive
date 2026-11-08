@@ -12,6 +12,7 @@ import {
   swapOrderChecks,
 } from "./live.ts";
 import type { Check } from "./types.ts";
+import { awaitedLater } from "./promises.ts";
 
 // The live checks for a Vendure shop with its Next.js storefront. A guest's
 // cart is filled through Vendure's Shop API inside the server's container,
@@ -166,10 +167,13 @@ async function payAtCheckout(page: Page, base: string, pick = true): Promise<Ope
     }
   };
   page.on("request", watch);
-  const created = page.waitForResponse(
-    (response) =>
-      CREATE_CALL.test(new URL(response.url()).pathname) && response.request().method() === "POST",
-    { timeout: 90_000 },
+  const created = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        CREATE_CALL.test(new URL(response.url()).pathname) &&
+        response.request().method() === "POST",
+      { timeout: 90_000 },
+    ),
   );
   created.catch(() => undefined);
   try {

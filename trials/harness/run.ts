@@ -266,8 +266,17 @@ async function main(): Promise<void> {
         });
       }
     }
+    // A leaked rejection in one trial's checks must not end every other trial
+    // (a Medusa page wait ended a 69-trial batch). Log it loudly, keep going,
+    // and fail the run at the end: it is a harness bug to fix.
+    let leaked = 0;
+    process.on("unhandledRejection", (error) => {
+      leaked += 1;
+      console.error("HARNESS BUG: an unhandled rejection; the other trials go on.", error);
+    });
     try {
       await runPool(jobs, parallel, HEAVY_PARALLEL);
+      if (leaked > 0) process.exitCode = 1;
     } finally {
       if (!smoke && results.length > 0) {
         const day = new Date().toISOString().slice(0, 10);
