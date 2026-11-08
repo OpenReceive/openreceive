@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "name": "swap provider weight budget spent by Try again",
+  "handler": "swap_weight_budget_exhausted",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/swaps",
+    "body": { "reference": "order-swap-busy", "pay_in_asset": "USDT_TRON" }
+  },
+  "expected": {
+    "status": 503,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INTERNAL",
+      "message": "The swap provider is rate limited. Please try again shortly.",
+      "retryable": true,
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "The provider's create call goes through the weight budget the service attached, already spent by three creates in this window (3 x 50 = the 150 create gate), so the budget refuses before any provider request. A payer pressing Try again gets a retryable answer, the same one a provider 429 gives."
+}

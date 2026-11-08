@@ -42,6 +42,7 @@ from openreceive.swap.address import valid_for_pay_in_asset
 from openreceive.swap.assets import is_pay_in_asset
 from openreceive.swap.budget import SwapProviderWeightBudget
 from openreceive.swap.cache import TransientSwapCache
+from openreceive.swap.fixedfloat import classify_transport_failure
 from openreceive.values import LOWER_HEX_64_PATTERN, compact, stringify, to_int
 
 PAGE_LIMIT = TRANSACTION_PAGE_LIMIT
@@ -53,6 +54,13 @@ SWAP_INVOICE_EXPIRY_SECONDS = 600
 # expiry before checkout creation fails closed.
 INVOICE_EXPIRY_TOLERANCE_SECONDS = 60
 SPEND_METHODS = wallet_info.SPEND_METHODS
+# What the payer reads when a swap provider call fails: the JS throughProvider's
+# words, one per transport failure class.
+SWAP_PROVIDER_REFUSED_MESSAGE = "The swap provider refused this request."
+SWAP_PROVIDER_RATE_LIMITED_MESSAGE = "The swap provider is rate limited. Please try again shortly."
+SWAP_PROVIDER_UNREACHABLE_MESSAGE = (
+    "The swap provider is temporarily unreachable. Please try again shortly."
+)
 
 Clock = Callable[[], int]
 
@@ -305,10 +313,12 @@ class Service:
             }
         )
         order = stringify(
-            provider.create_swap(
-                pay_in_asset=asset,
-                bolt11=checkout["bolt11"],
-                invoice_amount_msats=checkout["amount_msats"],
+            self._through_provider(
+                lambda: provider.create_swap(
+                    pay_in_asset=asset,
+                    bolt11=checkout["bolt11"],
+                    invoice_amount_msats=checkout["amount_msats"],
+                )
             )
         )
         swap_data = {
@@ -327,7 +337,9 @@ class Service:
         recovery = self._normalize_swap_data(swap_data)
         provider = self._provider_by_name(recovery["provider_order"]["provider"])
         try:
-            current = stringify(provider.get_status(recovery["provider_order"]))
+            current = stringify(
+                self._through_provider(lambda: provider.get_status(recovery["provider_order"]))
+            )
             return self._public_swap(
                 current,
                 self._normalize_payment_hash(payment_hash),
@@ -351,12 +363,14 @@ class Service:
             refund_address, recovery["provider_order"].get("pay_in_asset")
         )
         provider = self._provider_by_name(recovery["provider_order"]["provider"])
-        current = stringify(provider.get_status(recovery["provider_order"]))
+        current = stringify(
+            self._through_provider(lambda: provider.get_status(recovery["provider_order"]))
+        )
         if current.get("state") != "refund_required":
             raise ConflictError(
                 f"Swap cannot be refunded from provider state {current.get('state')}."
             )
-        provider.request_refund(current, address)
+        self._through_provider(lambda: provider.request_refund(current, address))
         return self.get_swap(
             reference=host_reference, payment_hash=payment_hash, swap_data=recovery
         )
@@ -630,6 +644,35 @@ class Service:
             raise
         except Exception as error:
             raise WalletFailureError(normalize_wallet_error(error)) from error
+
+    def _through_provider(self, operation: Callable[[], Any]) -> Any:
+        """Run one outbound provider call, mapping its transport failures to
+        the 502/503 the swap routes declare (the JS throughProvider). A provider
+        refusal, outage, 429 or this process's weight budget is not an
+        OpenReceive bug: unmapped, it would reach the payer as the opaque 500.
+        The provider's own text is logged for the operator, never sent."""
+        try:
+            return operation()
+        except ServiceError:
+            raise
+        except Exception as error:
+            failure = classify_transport_failure(error)
+            if failure is None:
+                raise
+            self._log(
+                "warning",
+                f"swap.provider.{failure}: {sanitize_failure_message(error)}",
+            )
+            if failure == "refused":
+                raise ServiceError(502, "INTERNAL", SWAP_PROVIDER_REFUSED_MESSAGE) from error
+            raise ServiceError(
+                503,
+                "INTERNAL",
+                SWAP_PROVIDER_RATE_LIMITED_MESSAGE
+                if failure == "rate_limited"
+                else SWAP_PROVIDER_UNREACHABLE_MESSAGE,
+                retryable=True,
+            ) from error
 
     def _select_provider(self, asset: str) -> Any:
         """Primary-only while healthy; backup only when primary raises, never to

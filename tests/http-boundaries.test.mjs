@@ -6,6 +6,7 @@ import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { createHttpHandler, createHost, hostError } from "../packages/js/http/src/index.ts";
 import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
+import { FixedFloatApiError } from "../packages/js/node/src/swap/fixedfloat-transport.ts";
 import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import {
   createTestkitReceiveClient,
@@ -904,6 +905,45 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       authorize: () => true,
       clock: () => 1000,
     });
+  }
+  // Behind the swap_* vectors: a refused /create (the engine's own API error
+  // of kind "api"), or a create the service-attached weight budget refuses
+  // after three creates in this window (3 x 50 = the 150 create gate).
+  for (const [name, failure] of [
+    ["swap_provider_refused", "refused"],
+    ["swap_weight_budget_exhausted", "weight_budget"],
+  ]) {
+    let budget;
+    const provider = {
+      name: "fixedfloat",
+      supportedPayInAssets: async () => new Set(["USDT_TRON"]),
+      invoiceExpirySeconds: () => 1800,
+      attachWeightBudget: (attached) => {
+        budget = attached;
+      },
+      createSwap: async () => {
+        if (failure === "refused") {
+          throw new FixedFloatApiError({
+            path: "create",
+            kind: "api",
+            fixedFloatCode: 1,
+            fixedFloatMessage: "Order could not be created",
+            message: "Order could not be created",
+          });
+        }
+        await budget.reserve("create");
+        throw new Error("the spent weight budget must refuse this create");
+      },
+    };
+    const failingService = await createOpenReceive({
+      client: createTestkitReceiveClient(),
+      swap: { provider },
+      clock: () => 1000,
+    });
+    if (failure === "weight_budget") {
+      for (let index = 0; index < 3; index += 1) await budget.reserve("create");
+    }
+    handlers[name] = createHttpHandler({ service: failingService, authorize: () => true, host });
   }
   for (const filename of readdirSync("spec/test-vectors/http-golden")
     .filter((name) => name !== "PLACEHOLDERS.json")

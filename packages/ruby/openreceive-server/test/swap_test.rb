@@ -1232,3 +1232,105 @@ class SwapServiceIntegrationTest < Minitest::Test
     assert_equal "amount_too_small", usdt.fetch("unavailable_reason")
   end
 end
+
+# A swap provider call that fails reaches the payer as the 502/503 the swap
+# routes declare (the JS throughProvider in service/swaps.ts), never the opaque
+# 500 "Internal server error.": a refused /create, a provider 429 or outage,
+# and this process's own weight budget, which a payer pressing Try again a few
+# times spends. Mirrors the Python and PHP swap provider failure tests.
+class SwapProviderFailureTest < Minitest::Test
+  class Log
+    attr_reader :lines
+
+    def initialize
+      @lines = []
+    end
+
+    def warn(message)
+      @lines << message
+    end
+  end
+
+  REFUSED = -> { { status: 200, body: JSON.generate("code" => 1, "msg" => "Order could not be created") } }
+
+  def setup
+    @log = Log.new
+    @routes = { "ccies" => { "ccies" => SAMPLE_CCIES }, "create" => CREATE_DATA, "order" => { "status" => "NEW" } }
+    @provider, @calls = make_provider(@routes)
+    @service = OpenReceive::Server::Service.new(
+      nwc_client: SwapServiceIntegrationTest::Wallet.new, swap_providers: [@provider],
+      price_provider: false, clock: -> { NOW }, logger: @log
+    )
+  end
+
+  def create_swap
+    @service.create_swap(
+      "reference" => "ruby-swap-failure", "amount" => { "sats" => 20_000 }, "pay_in_asset" => "USDT_TRON"
+    )
+  end
+
+  def test_a_refused_create_is_a_502_with_the_payer_sentence
+    @routes["create"] = REFUSED
+    error = assert_raises(OpenReceive::Server::ServiceError) { create_swap }
+    assert_equal [502, "INTERNAL", "The swap provider refused this request.", nil],
+                 [error.status, error.code, error.message, error.retryable]
+    # The operator still reads the provider's own words; the payer never does.
+    assert(@log.lines.any? { |line| line.include?("Order could not be created") })
+  end
+
+  def test_the_weight_budget_after_a_few_try_agains_is_a_retryable_503
+    @routes["create"] = REFUSED
+    # /ccies spent 1 and each Try again spends a create weight (50) before the
+    # provider answers, so the third press would pass the 150 create gate.
+    2.times { assert_equal 502, assert_raises(OpenReceive::Server::ServiceError) { create_swap }.status }
+    creates = @calls.count { |call| call[:path] == "create" }
+    error = assert_raises(OpenReceive::Server::ServiceError) { create_swap }
+    assert_equal [503, "INTERNAL", "The swap provider is rate limited. Please try again shortly.", true],
+                 [error.status, error.code, error.message, error.retryable]
+    assert_equal creates, @calls.count { |call| call[:path] == "create" }
+  end
+
+  def test_a_provider_outage_or_429_is_a_retryable_503
+    {
+      -> { { status: 429, body: JSON.generate("code" => 429, "msg" => "Too many requests") } } =>
+        "The swap provider is rate limited. Please try again shortly.",
+      -> { { status: 502, body: "bad gateway" } } =>
+        "The swap provider is temporarily unreachable. Please try again shortly.",
+      -> { raise Errno::ECONNREFUSED } =>
+        "The swap provider is temporarily unreachable. Please try again shortly.",
+      -> { raise Net::ReadTimeout } =>
+        "The swap provider is temporarily unreachable. Please try again shortly."
+    }.each do |answer, message|
+      setup
+      @routes["create"] = answer
+      error = assert_raises(OpenReceive::Server::ServiceError) { create_swap }
+      assert_equal [503, "INTERNAL", message, true],
+                   [error.status, error.code, error.message, error.retryable]
+    end
+  end
+
+  def test_status_and_refund_calls_map_the_same_way
+    swap_data = { "version" => 1, "provider_order" => BASE_ORDER.dup }
+    @routes["order"] = REFUSED
+    error = assert_raises(OpenReceive::Server::ServiceError) do
+      @service.get_swap(reference: "x", payment_hash: "7f" * 32, swap_data: swap_data)
+    end
+    assert_equal [502, "The swap provider refused this request."], [error.status, error.message]
+    @routes["order"] = -> { { status: 503, body: "" } }
+    error = assert_raises(OpenReceive::Server::ServiceError) do
+      @service.refund_swap(reference: "x", payment_hash: "7f" * 32, swap_data: swap_data, refund_address: TRX_ADDRESS)
+    end
+    assert_equal [503, true], [error.status, error.retryable]
+  end
+
+  def test_classify_transport_failure_matches_the_js_classes
+    api = ->(kind, status = nil) { SWAP::FixedFloatApiError.new(path: "create", kind: kind, message: "x", http_status: status) }
+    assert_equal "rate_limited", SWAP.classify_transport_failure(SWAP::WeightBudgetError.new("budget", {}))
+    assert_equal "rate_limited", SWAP.classify_transport_failure(api.call("rate_limited", 429))
+    %w[timeout network invalid_json].each { |kind| assert_equal "unreachable", SWAP.classify_transport_failure(api.call(kind)) }
+    assert_equal "unreachable", SWAP.classify_transport_failure(api.call("http", 500))
+    assert_equal "refused", SWAP.classify_transport_failure(api.call("http", 400))
+    assert_equal "refused", SWAP.classify_transport_failure(api.call("api"))
+    assert_nil SWAP.classify_transport_failure(RuntimeError.new("bug"))
+  end
+end

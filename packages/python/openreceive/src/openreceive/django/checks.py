@@ -8,6 +8,9 @@ about the install.
                     OPENRECEIVE_PREFLIGHT=1 is set (the deploy-time step:
                     `OPENRECEIVE_PREFLIGHT=1 manage.py check --deploy`), so an
                     ordinary `check` never opens a relay connection.
+  openreceive.W003  DEBUG is on and the project's own
+                    DEFAULT_EXCEPTION_REPORTER_FILTER does not hide NWC_URI /
+                    LSC_URI_* (openreceive.django.debug)
 """
 
 from __future__ import annotations
@@ -16,10 +19,13 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
+from django.conf import settings
 from django.core.checks import CheckMessage, Error, Warning, register
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.module_loading import import_string
 
 from openreceive.django import conf
+from openreceive.django.debug import DJANGO_DEFAULT_FILTER, FILTER_PATH, hides_wallet_codes
 from openreceive.server.errors import ConfigurationError
 from openreceive.server.service import sanitize_failure_message
 
@@ -73,3 +79,24 @@ def check_wallet_preflight(app_configs: Sequence[Any] | None, **kwargs: Any) -> 
     if callable(closer):
         closer()
     return []
+
+
+@register(TAG)
+def check_debug_page_filter(app_configs: Sequence[Any] | None, **kwargs: Any) -> list[CheckMessage]:
+    if not settings.DEBUG:
+        return []
+    path = str(getattr(settings, "DEFAULT_EXCEPTION_REPORTER_FILTER", DJANGO_DEFAULT_FILTER))
+    try:
+        filter_class = import_string(path)
+    except ImportError:
+        return []  # Django reports an unimportable setting itself.
+    if hides_wallet_codes(filter_class):
+        return []
+    return [
+        Warning(
+            f"DEFAULT_EXCEPTION_REPORTER_FILTER ({path}) does not hide NWC_URI or LSC_URI_*: "
+            "with DEBUG on, Django's error page would print the wallet codes in full.",
+            hint=f"Subclass {FILTER_PATH}, or drop the setting so OpenReceive installs it.",
+            id="openreceive.W003",
+        )
+    ]

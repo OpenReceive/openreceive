@@ -24,6 +24,12 @@ module OpenReceive
       # compares against already-normalized names from WalletInfo.summarize.
       SPEND_METHODS = WalletInfo::SPEND_METHODS
 
+      # What the payer reads when a swap provider call fails: the JS
+      # throughProvider's words, one per transport failure class.
+      SWAP_PROVIDER_REFUSED_MESSAGE = "The swap provider refused this request."
+      SWAP_PROVIDER_RATE_LIMITED_MESSAGE = "The swap provider is rate limited. Please try again shortly."
+      SWAP_PROVIDER_UNREACHABLE_MESSAGE = "The swap provider is temporarily unreachable. Please try again shortly."
+
       attr_reader :price_currencies
 
       # `swap_providers: nil` (the default) auto-builds FixedFloat-compatible
@@ -270,10 +276,12 @@ module OpenReceive
           "metadata" => data["metadata"],
           "expiry_seconds" => expiry
         )
-        order = stringify(call_provider(provider, :create_swap,
-          "pay_in_asset" => asset,
-          "bolt11" => checkout.fetch("bolt11"),
-          "invoice_amount_msats" => checkout.fetch("amount_msats")))
+        order = stringify(through_provider do
+          call_provider(provider, :create_swap,
+            "pay_in_asset" => asset,
+            "bolt11" => checkout.fetch("bolt11"),
+            "invoice_amount_msats" => checkout.fetch("amount_msats"))
+        end)
         swap_data = {
           "version" => 1,
           "provider_order" => order.reject { |key, _| key == "raw" }
@@ -288,7 +296,7 @@ module OpenReceive
         recovery = normalize_swap_data(swap_data)
         provider_name = recovery.fetch("provider_order").fetch("provider")
         provider = provider_by_name(provider_name)
-        current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
+        current = stringify(through_provider { call_provider(provider, :get_status, recovery.fetch("provider_order")) })
         public_swap(current, normalize_payment_hash(payment_hash), required_string(reference, "reference"))
       rescue KeyError => e
         raise ValidationError, e.message
@@ -303,11 +311,11 @@ module OpenReceive
         )
         provider_name = recovery.fetch("provider_order").fetch("provider")
         provider = provider_by_name(provider_name)
-        current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
+        current = stringify(through_provider { call_provider(provider, :get_status, recovery.fetch("provider_order")) })
         unless current["state"] == "refund_required"
           raise ConflictError, "Swap cannot be refunded from provider state #{current['state']}."
         end
-        call_provider(provider, :request_refund, current, address)
+        through_provider { call_provider(provider, :request_refund, current, address) }
         get_swap(reference: host_reference, payment_hash: hash, swap_data: recovery)
       rescue KeyError => e
         raise ValidationError, e.message
@@ -733,6 +741,30 @@ module OpenReceive
         raise
       rescue StandardError => e
         raise WalletFailureError, OpenReceive::Nwc.normalize_wallet_error(e)
+      end
+
+      # Run one outbound provider call, mapping its transport failures to the
+      # 502/503 the swap routes declare (the JS throughProvider). A provider
+      # refusal, outage, 429 or this process's weight budget is not an
+      # OpenReceive bug: unmapped, it would reach the payer as the opaque 500.
+      # The provider's own text is logged for the operator, never sent.
+      def through_provider
+        yield
+      rescue ServiceError
+        raise
+      rescue StandardError => e
+        failure = Swap.classify_transport_failure(e)
+        raise if failure.nil?
+
+        @logger&.warn("swap.provider.#{failure}: #{OpenReceive::Nwc.redact_error_text("#{e.class}: #{e.message}")}")
+        raise ServiceError.new(502, "INTERNAL", SWAP_PROVIDER_REFUSED_MESSAGE) if failure == "refused"
+
+        raise ServiceError.new(
+          503,
+          "INTERNAL",
+          failure == "rate_limited" ? SWAP_PROVIDER_RATE_LIMITED_MESSAGE : SWAP_PROVIDER_UNREACHABLE_MESSAGE,
+          retryable: true
+        )
       end
 
       def call_provider(provider, method, *args)

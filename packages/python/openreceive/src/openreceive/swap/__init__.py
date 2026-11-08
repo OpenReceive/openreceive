@@ -12,6 +12,7 @@ from openreceive.swap.fixedfloat import (
     FixedFloatProvider,
     availability_message,
     classify_quote_error,
+    classify_transport_failure,
 )
 from openreceive.swap.http import HttpTransport
 
@@ -50,6 +51,7 @@ __all__ = [
     "FixedFloatProvider",
     "availability_message",
     "classify_quote_error",
+    "classify_transport_failure",
     "providers_from_connections",
     "providers_from_environment",
 ]

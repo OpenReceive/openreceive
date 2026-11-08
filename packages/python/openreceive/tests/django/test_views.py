@@ -214,3 +214,74 @@ def test_oversized_body_is_refused_before_any_read(app: OpenReceiveApp) -> None:
         CONTENT_LENGTH=str(70_000),
     )
     assert response.status_code == 413
+
+
+def test_a_refused_swap_is_the_payer_sentence_not_a_500(
+    app: OpenReceiveApp, state: test_host.State
+) -> None:
+    from openreceive.swap.fixedfloat import FixedFloatApiError
+
+    state.provider.force_create_error(
+        FixedFloatApiError(path="create", kind="api", message="Order could not be created")
+    )
+    status, body = post(
+        Client(),
+        "/swaps",
+        {"reference": test_host.REFERENCE, "pay_in_asset": "USDT_TRON"},
+        x_test_user="alice",
+    )
+    assert status == 502, body
+    assert body["code"] == "INTERNAL"
+    assert body["message"] == "The swap provider refused this request."
+
+
+def test_a_relay_down_at_first_use_answers_the_json_503_then_recovers(
+    state: test_host.State, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from openreceive.django import conf
+
+    conf.reset()  # the first request of a fresh process builds the stack
+
+    def relay_refused() -> dict[str, Any]:
+        raise ConnectionRefusedError("[Errno 111] Connection refused")
+
+    monkeypatch.setattr(state.wallet, "preflight", relay_refused)
+    client = Client()
+    response = client.post(
+        f"{PREFIX}/checkouts",
+        data=json.dumps({"reference": test_host.REFERENCE}),
+        content_type="application/json",
+        HTTP_X_TEST_USER="alice",
+    )
+    assert response.status_code == 503
+    assert response["Content-Type"] == "application/json; charset=utf-8"
+    body = json.loads(response.content)
+    assert body == {
+        "code": "WALLET_UNAVAILABLE",
+        "message": "The payment service is not available. Please try again shortly.",
+        "retryable": True,
+        "request_id": response["x-request-id"],
+    }
+    assert "ConnectionRefusedError" in caplog.text and "could not start" in caplog.text
+    # The relay answers again: the next request builds the stack and is served.
+    monkeypatch.undo()
+    status, body = post(
+        client, "/checkouts", {"reference": test_host.REFERENCE}, x_test_user="alice"
+    )
+    assert status == 201, body
+
+
+def test_a_missing_nwc_uri_at_first_use_answers_the_json_503(
+    state: test_host.State, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from django.test import override_settings
+
+    from openreceive.django import conf
+
+    conf.reset()
+    monkeypatch.delenv("NWC_URI", raising=False)
+    with override_settings(OPENRECEIVE={"HOST": "tests.django.host.Host"}):
+        response = Client().get(f"{PREFIX}/rates")
+    assert response.status_code == 503
+    assert json.loads(response.content)["code"] == "WALLET_UNAVAILABLE"
+    conf.reset()

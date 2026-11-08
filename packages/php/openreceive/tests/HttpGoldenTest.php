@@ -74,6 +74,43 @@ final class HttpGoldenTest extends TestCase
         ), '/openreceive', new Psr17Factory());
     }
 
+    /**
+     * Behind the swap_* vectors: a refused /create (the engine's own API error
+     * of kind `api`), or a create the service-attached weight budget refuses
+     * after three creates in this window (3 x 50 = the 150 create gate).
+     */
+    private static function swapFailureService(string $failure): Service
+    {
+        $provider = new class ($failure) implements \OpenReceive\Swap\SwapProvider, \OpenReceive\Swap\SwapProviderRuntime {
+            public ?\OpenReceive\Swap\WeightBudget $budget = null;
+            public function __construct(private readonly string $failure) {}
+            public function name(): string { return 'fixedfloat'; }
+            public function supportedPayInAssets(): array { return ['USDT_TRON']; }
+            public function payInAssetCatalog(): array { return []; }
+            public function invoiceExpirySeconds(?string $payInAsset = null): int { return 1800; }
+            public function quote(string $payInAsset, int $invoiceAmountMsats): array { throw new \LogicException('not quoted'); }
+            public function createSwap(string $payInAsset, string $bolt11, int $invoiceAmountMsats): array
+            {
+                if ($this->failure === 'refused') {
+                    throw new \OpenReceive\Swap\FixedFloatApiError('create', 'api', 'Order could not be created', null, 1, 'Order could not be created');
+                }
+                $this->budget?->reserve('create');
+                throw new \LogicException('the spent weight budget must refuse this create');
+            }
+            public function getStatus(array $order): array { throw new \LogicException('not polled'); }
+            public function requestRefund(array $order, string $refundAddress): void {}
+            public function attachSwapCache(\OpenReceive\Swap\TransientCache $cache): void {}
+            public function attachWeightBudget(\OpenReceive\Swap\WeightBudget $budget): void { $this->budget = $budget; }
+        };
+        $service = new Service(new FakeWallet(static fn (): int => 1000), false, [$provider], ['USD'], static fn (): int => 1000);
+        if ($failure === 'weight_budget') {
+            for ($i = 0; $i < 3; $i++) {
+                $provider->budget?->reserve('create');
+            }
+        }
+        return $service;
+    }
+
     private static function repositoryApp(array $vector, ReceiveNwcClient $settledWallet, array $checkout): array
     {
         $mode = $vector['handler'];
@@ -176,6 +213,8 @@ final class HttpGoldenTest extends TestCase
             }),
             // `description` rides the prepare and create responses and NOTHING else.
             'described' => self::app($service, static fn (): array => ['amount' => ['sats' => 1], 'description' => '2 kg Ataulfo mangoes']),
+            'swap_provider_refused' => self::app(self::swapFailureService('refused'), $priceOnly),
+            'swap_weight_budget_exhausted' => self::app(self::swapFailureService('weight_budget'), $priceOnly),
         ];
         $factory = new Psr17Factory();
         $paths = array_values(array_filter(glob(self::vectorsDir() . '/http-golden/*.json') ?: [], static fn (string $file): bool => basename($file) !== 'PLACEHOLDERS.json'));

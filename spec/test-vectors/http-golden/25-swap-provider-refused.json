@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "name": "swap provider refuses the order",
+  "handler": "swap_provider_refused",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/swaps",
+    "body": { "reference": "order-swap-refused", "pay_in_asset": "USDT_TRON" }
+  },
+  "expected": {
+    "status": 502,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INTERNAL",
+      "message": "The swap provider refused this request.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "The provider's create call fails with the engine's own FixedFloat API error of kind `api` (the provider answered HTTP 200 with a non-zero code, as a refused /create does). The payer reads this sentence, never the provider's text and never the opaque 500 `Internal server error.`."
+}

@@ -83,6 +83,30 @@ final class Swap
         return 'pair_temporarily_unavailable';
     }
 
+    /**
+     * A provider call's failure as `unreachable` (no answer: network, timeout,
+     * 5xx, unparsable body), `rate_limited` (a 429, or this process's own
+     * weight budget) or `refused` (the provider answered no); null when the
+     * error is not a provider transport failure at all. Twin of the JS
+     * classifySwapTransportFailure.
+     */
+    public static function classifyTransportFailure(\Throwable $error): ?string
+    {
+        if ($error instanceof WeightBudgetError) {
+            return 'rate_limited';
+        }
+        if (!$error instanceof FixedFloatApiError) {
+            return null;
+        }
+        if ($error->kind === 'rate_limited' || $error->httpStatus === 429) {
+            return 'rate_limited';
+        }
+        if (in_array($error->kind, ['timeout', 'network', 'invalid_json'], true) || ($error->httpStatus !== null && $error->httpStatus >= 500)) {
+            return 'unreachable';
+        }
+        return 'refused';
+    }
+
     private static function isAmountTooSmallMessage(string $message): bool
     {
         return str_contains($message, 'min') || str_contains($message, 'small') || str_contains($message, 'out of limits') || str_contains($message, 'limit_min');

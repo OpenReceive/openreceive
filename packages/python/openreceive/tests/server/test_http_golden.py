@@ -16,6 +16,7 @@ import pytest
 from openreceive.server.errors import ConflictError
 from openreceive.server.handler import HttpRequest, RequestHandler
 from openreceive.server.service import Service
+from openreceive.swap.fixedfloat import FixedFloatApiError
 from openreceive.testing import FakeWallet
 from tests.conftest import VECTORS_DIR
 
@@ -87,6 +88,52 @@ class SettledWallet:
         return {"transactions": [SETTLED_ROW]}
 
 
+class FailingSwapProvider:
+    """Behind the swap_* vectors: a refused /create (the engine's own API error
+    of kind `api`), or a create the service-attached weight budget refuses."""
+
+    name = "fixedfloat"
+
+    def __init__(self, failure: str) -> None:
+        self.failure = failure
+        self.budget: Any = None
+
+    def supported_pay_in_assets(self) -> list[str]:
+        return ["USDT_TRON"]
+
+    def invoice_expiry_seconds(self, pay_in_asset: str | None = None) -> int:
+        return 1800
+
+    def attach_weight_budget(self, budget: Any) -> None:
+        self.budget = budget
+
+    def create_swap(self, **_: Any) -> dict[str, Any]:
+        if self.failure == "refused":
+            raise FixedFloatApiError(
+                path="create",
+                kind="api",
+                message="Order could not be created",
+                fixedfloat_code=1,
+                fixedfloat_message="Order could not be created",
+            )
+        self.budget.reserve("create")
+        raise AssertionError("the spent weight budget must refuse this create")
+
+
+def swap_failure_service(failure: str) -> Service:
+    provider = FailingSwapProvider(failure)
+    service = Service(
+        FakeWallet(clock=lambda: 1000),
+        price_provider=False,
+        swap_providers=[provider],
+        clock=lambda: 1000,
+    )
+    if failure == "weight_budget":
+        for _ in range(3):  # three creates in this window: 150, the create gate
+            provider.budget.reserve("create")
+    return service
+
+
 def build_handler(service: Service, **overrides: Any) -> RequestHandler:
     options: dict[str, Any] = {
         "service": service,
@@ -138,6 +185,8 @@ def handlers() -> dict[str, RequestHandler]:
                 "description": "2 kg Ataulfo mangoes",
             },
         ),
+        "swap_provider_refused": build_handler(swap_failure_service("refused")),
+        "swap_weight_budget_exhausted": build_handler(swap_failure_service("weight_budget")),
     }
 
 

@@ -1297,7 +1297,50 @@ class StorageFreeServerTest < Minitest::Test
       on_checkout_created: ->(**_payment) {},
       on_paid: ->(_payment) {}
     )
+    # Behind the swap_* vectors: a refused /create (the engine's own API error
+    # of kind "api"), or a create the service-attached weight budget refuses
+    # after three creates in this window (3 x 50 = the 150 create gate).
+    failing_provider = Class.new do
+      attr_reader :budget
+
+      def initialize(failure)
+        @failure = failure
+      end
+
+      def name = "fixedfloat"
+      def supported_pay_in_assets = ["USDT_TRON"]
+      def invoice_expiry_seconds(pay_in_asset: nil) = 600 # the stub Wallet mints 600 s invoices
+
+      def attach_weight_budget(budget)
+        @budget = budget
+      end
+
+      def create_swap(pay_in_asset:, bolt11:, invoice_amount_msats:)
+        if @failure == "refused"
+          raise OpenReceive::Server::Swap::FixedFloatApiError.new(
+            path: "create", kind: "api", message: "Order could not be created",
+            fixedfloat_code: 1, fixedfloat_message: "Order could not be created"
+          )
+        end
+        @budget.reserve("create")
+        raise "the spent weight budget must refuse this create"
+      end
+    end
+    swap_failure_app = lambda do |failure|
+      provider = failing_provider.new(failure)
+      service = OpenReceive::Server::Service.new(
+        nwc_client: Wallet.new, price_provider: false, swap_providers: [provider], clock: -> { 1000 }
+      )
+      3.times { provider.budget.reserve("create") } if failure == "weight_budget"
+      OpenReceive::Server::RackApp.new(
+        service: service, authorize: ->(_context) { true },
+        resolve_checkout: ->(**_context) { { "amount" => { "sats" => 1 } } },
+        on_checkout_created: ->(**_payment) {}, on_paid: ->(_payment) {}
+      )
+    end
     apps = {
+      "swap_provider_refused" => swap_failure_app.call("refused"),
+      "swap_weight_budget_exhausted" => swap_failure_app.call("weight_budget"),
       "hook_refused" => OpenReceive::Server::RackApp.new(
         service: @service, authorize: ->(_context) { true },
         resolve_checkout: ->(**_context) { { "amount" => { "sats" => 1 } } },

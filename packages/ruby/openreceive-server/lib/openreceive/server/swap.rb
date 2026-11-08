@@ -84,6 +84,23 @@ module OpenReceive
         error.respond_to?(:weight_budget?) && error.weight_budget? == true
       end
 
+      # A provider call's failure as "unreachable" (no answer: network,
+      # timeout, 5xx, unparsable body), "rate_limited" (a 429, or this
+      # process's own weight budget) or "refused" (the provider answered no);
+      # nil when the error is not a provider transport failure at all. Twin of
+      # the JS classifySwapTransportFailure.
+      def classify_transport_failure(error)
+        return "rate_limited" if weight_budget_error?(error)
+        return nil unless error.is_a?(FixedFloatApiError)
+        return "rate_limited" if error.kind == "rate_limited" || error.http_status == 429
+        if %w[timeout network invalid_json].include?(error.kind) ||
+           (!error.http_status.nil? && error.http_status >= 500)
+          return "unreachable"
+        end
+
+        "refused"
+      end
+
       # Payer-facing copy per availability reason (mirrors
       # fixedFloatAvailabilityMessage).
       def availability_message(reason)

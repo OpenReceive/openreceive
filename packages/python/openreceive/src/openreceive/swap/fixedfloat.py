@@ -42,9 +42,9 @@ ApiLogger = Callable[[dict[str, Any]], None]
 
 
 class FixedFloatApiError(RuntimeError):
-    """Deliberately carries no `status`/`code`: the request handler duck-types
-    those for wire mapping, and a provider failure must reach the payer as the
-    redacted 500 "Internal server error." exactly like the JS engine."""
+    """Deliberately carries no `status`/`code`: the service maps it with
+    `classify_transport_failure` to the 502/503 the swap routes declare (the JS
+    throughProvider), and the provider's own text never reaches the wire."""
 
     KINDS = ("api", "http", "invalid_json", "network", "rate_limited", "timeout")
 
@@ -118,6 +118,25 @@ def classify_quote_error(error: BaseException) -> str:
     if _amount_too_large_message(message):
         return "amount_too_large"
     return "pair_temporarily_unavailable"
+
+
+def classify_transport_failure(error: BaseException) -> str | None:
+    """A provider call's failure as `unreachable` (no answer: network, timeout,
+    5xx, unparsable body), `rate_limited` (a 429, or this process's own weight
+    budget) or `refused` (the provider answered no); None when the error is not
+    a provider transport failure at all. Twin of the JS
+    classifySwapTransportFailure."""
+    if getattr(error, "weight_budget", False) is True:
+        return "rate_limited"
+    if not isinstance(error, FixedFloatApiError):
+        return None
+    if error.kind == "rate_limited" or error.http_status == 429:
+        return "rate_limited"
+    if error.kind in ("timeout", "network", "invalid_json") or (
+        error.http_status is not None and error.http_status >= 500
+    ):
+        return "unreachable"
+    return "refused"
 
 
 def _amount_too_small_message(message: str) -> bool:

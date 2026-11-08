@@ -16,6 +16,41 @@
   container, one of eight handshakes to Rizful's relay took 3.24 s. The
   engine now gives it 8 s. A relay that refuses still fails at once. The PHP
   engine got the same fix in 0.4.32.
+- Fixed (Python, PHP, Ruby): a swap the provider refuses no longer shows the
+  buyer "Internal server error.". When the provider said no to an order,
+  `POST /openreceive/swaps` answered `500 INTERNAL` and the payer read that
+  text; now it answers `502 INTERNAL` "The swap provider refused this
+  request.", the Node engine's answer. A provider 429 or outage on that call,
+  or on swap status and refunds, is `503 INTERNAL`, retryable, with "The swap
+  provider is rate limited. Please try again shortly." or "The swap provider
+  is temporarily unreachable. Please try again shortly." The provider's own
+  words go to the shop's log as a warning. The
+  WordPress, PrestaShop, FOSSBilling and Paymenter plugins bundle the PHP
+  engine and carry the fix, as do the Django, FastAPI, Flask and Rails mounts.
+- Fixed (Python, PHP, Ruby): a buyer who presses Try again on a swap a few
+  times no longer ends at "Internal server error.". Each try spends the
+  process's own budget of provider calls, so the third or fourth press within
+  a minute was refused before it reached the provider, as a 500. It is now
+  the same retryable `503` "The swap provider is rate limited. Please try
+  again shortly." that a provider 429 gives, and the budget refills after a
+  minute.
+- Fixed (Django): a checkout right after the shop starts with the wallet
+  relay down answers OpenReceive's JSON `503 WALLET_UNAVAILABLE`, retryable,
+  "The payment service is not available. Please try again shortly.", like the
+  Node mounts. It answered Django's own HTML "Server Error (500)" page, which
+  the checkout cannot read, and nothing was logged. The same holds for a
+  missing or malformed `NWC_URI`. The cause goes to the log once per request,
+  redacted, and the next request tries to start again.
+- Fixed (Django): with `DEBUG = True`, Django's error page no longer prints
+  `NWC_URI`, `LSC_URI_PRIMARY` and `LSC_URI_BACKUP` in full. `manage.py
+  runserver` copies the environment into `request.META`, and Django's filter
+  hides only names with API, AUTH, TOKEN, KEY, SECRET, PASS or SIGNATURE in
+  them. The app now installs `openreceive.django.debug.OpenReceiveExceptionReporterFilter`
+  as `DEFAULT_EXCEPTION_REPORTER_FILTER` when the project has not set its own;
+  it also hides the NWC and LSC names and any value holding a
+  `nostr+walletconnect:` or `lightning+swapconnect:` code. A project with its
+  own filter gets system check warning `openreceive.W003` while `DEBUG` is on
+  until that filter subclasses OpenReceive's.
 
 ## 0.4.32 - 2026-11-07
 

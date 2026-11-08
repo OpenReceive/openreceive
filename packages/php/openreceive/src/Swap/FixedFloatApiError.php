@@ -7,9 +7,10 @@ namespace OpenReceive\Swap;
 use OpenReceive\Http\TransportException;
 
 /**
- * A FixedFloat(-compatible) API failure. Deliberately NOT an HttpError: a
- * provider failure must reach the payer as the redacted 500 "Internal server
- * error." exactly like the JS and Ruby engines.
+ * A FixedFloat(-compatible) API failure. Deliberately NOT an HttpError: the
+ * service maps it with Swap::classifyTransportFailure to the 502/503 the swap
+ * routes declare (the JS throughProvider), and the provider's own text never
+ * reaches the wire.
  */
 final class FixedFloatApiError extends \RuntimeException
 {

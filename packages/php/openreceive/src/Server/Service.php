@@ -58,6 +58,10 @@ final class Service
     /** Maximum seconds the wallet's returned expiry may deviate from the requested expiry before a REQUIRED expiry fails closed. */
     public const INVOICE_EXPIRY_TOLERANCE_SECONDS = 60;
     public const SPEND_OVERRIDE_ENV = 'OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC';
+    /** What the payer reads when a swap provider call fails: the JS throughProvider's words. */
+    public const SWAP_PROVIDER_REFUSED_MESSAGE = 'The swap provider refused this request.';
+    public const SWAP_PROVIDER_RATE_LIMITED_MESSAGE = 'The swap provider is rate limited. Please try again shortly.';
+    public const SWAP_PROVIDER_UNREACHABLE_MESSAGE = 'The swap provider is temporarily unreachable. Please try again shortly.';
 
     /** @var list<string> */
     private readonly array $priceCurrencies;
@@ -397,7 +401,7 @@ final class Service
             'metadata' => $input['metadata'] ?? null,
             'expiry_seconds' => $expiry,
         ]);
-        $order = Records::asArray($provider->createSwap($asset, $checkout['bolt11'], $checkout['amount_msats']));
+        $order = Records::asArray($this->throughProvider(fn (): array => $provider->createSwap($asset, $checkout['bolt11'], $checkout['amount_msats'])));
         $providerOrder = $order;
         unset($providerOrder['raw']);
         return [
@@ -412,7 +416,7 @@ final class Service
     {
         $recovery = $this->normalizeSwapData($swapData);
         $provider = $this->providerByName((string) $recovery['provider_order']['provider']);
-        $current = Records::asArray($provider->getStatus($recovery['provider_order']));
+        $current = Records::asArray($this->throughProvider(fn (): array => $provider->getStatus($recovery['provider_order'])));
         return $this->publicSwap($current, $this->normalizePaymentHash($paymentHash), $this->requiredString($reference, 'reference'));
     }
 
@@ -424,11 +428,14 @@ final class Service
         $hostReference = $this->requiredString($reference, 'reference');
         $address = $this->normalizeRefundAddress($refundAddress, $recovery['provider_order']['pay_in_asset'] ?? null);
         $provider = $this->providerByName((string) $recovery['provider_order']['provider']);
-        $current = Records::asArray($provider->getStatus($recovery['provider_order']));
+        $current = Records::asArray($this->throughProvider(fn (): array => $provider->getStatus($recovery['provider_order'])));
         if (($current['state'] ?? null) !== 'refund_required') {
             throw new ConflictError('Swap cannot be refunded from provider state ' . ($current['state'] ?? 'unknown') . '.');
         }
-        $provider->requestRefund($current, $address);
+        $this->throughProvider(static function () use ($provider, $current, $address): null {
+            $provider->requestRefund($current, $address);
+            return null;
+        });
         return $this->getSwap($hostReference, $hash, $recovery);
     }
 
@@ -738,6 +745,41 @@ final class Service
             throw new ValidationError("refundAddress is not a valid {$payInAsset} address.");
         }
         return $normalized;
+    }
+
+    /**
+     * Run one outbound provider call, mapping its transport failures to the
+     * 502/503 the swap routes declare (the JS throughProvider). A provider
+     * refusal, outage, 429 or this process's weight budget is not an
+     * OpenReceive bug: unmapped, it would reach the payer as the opaque 500.
+     * The provider's own text is logged for the operator, never sent.
+     *
+     * @template T
+     * @param callable(): T $operation
+     * @return T
+     */
+    private function throughProvider(callable $operation): mixed
+    {
+        try {
+            return $operation();
+        } catch (HttpError $error) {
+            throw $error;
+        } catch (\Throwable $error) {
+            $failure = Swap::classifyTransportFailure($error);
+            if ($failure === null) {
+                throw $error;
+            }
+            $this->logger?->warning('swap.provider.' . $failure . ': ' . Errors::redactErrorText($error::class . ': ' . $error->getMessage()));
+            if ($failure === 'refused') {
+                throw new ServiceError(502, 'INTERNAL', self::SWAP_PROVIDER_REFUSED_MESSAGE);
+            }
+            throw new ServiceError(
+                503,
+                'INTERNAL',
+                $failure === 'rate_limited' ? self::SWAP_PROVIDER_RATE_LIMITED_MESSAGE : self::SWAP_PROVIDER_UNREACHABLE_MESSAGE,
+                true,
+            );
+        }
     }
 
     /** Primary-only while healthy; backup only when primary is down, never to fill gaps for assets the primary omits. */

@@ -15,6 +15,11 @@ error contract (`{"code": "FORBIDDEN", …}`) instead of the host's HTML failure
 page — the Rails engine's `rescue_from InvalidAuthenticityToken` twin. A host
 with no CSRF middleware installed gets no CSRF check, exactly as before; the
 engine's own JSON-only and same-site gates still apply.
+
+A stack that cannot start (no NWC_URI, a malformed one, or a relay that does not
+answer the first request's wallet preflight) answers the shared 503
+`WALLET_UNAVAILABLE` contract, retryable, like the Node adapters: never Django's
+HTML 500 page, which a checkout cannot read. The next request tries again.
 """
 
 from __future__ import annotations
@@ -30,10 +35,14 @@ from django.utils.module_loading import import_string
 from django.views.decorators.csrf import csrf_exempt
 
 from openreceive.django import conf
+from openreceive.nwc.uri import NwcUriParseError
 from openreceive.server import HttpRequest, HttpResponse
-from openreceive.server.errors import ForbiddenError
+from openreceive.server.errors import ConfigurationError, ForbiddenError
+from openreceive.server.service import sanitize_failure_message
 
 CSRF_FAILURE_MESSAGE = "Invalid or missing CSRF token."
+# The Node stack's words for a stack that did not start.
+BOOT_FAILURE_MESSAGE = "The payment service is not available. Please try again shortly."
 
 _csrf_middleware_classes: list[type[CsrfViewMiddleware]] | None = None
 
@@ -101,8 +110,33 @@ def _render(response: HttpResponse) -> DjangoResponse:
     return rendered
 
 
+def _boot_failure(error: BaseException) -> HttpResponse:
+    """The first-use build failed: the payer gets the JSON contract, the
+    operator one sanitized line (the cause can quote the NWC URI)."""
+    request_id = f"req_{uuid.uuid4()}"
+    conf.log.error(
+        "[openreceive] request %s failed: OpenReceive could not start: %s "
+        "The next request tries again.",
+        request_id,
+        sanitize_failure_message(error),
+    )
+    return HttpResponse(
+        503,
+        {
+            "code": "WALLET_UNAVAILABLE",
+            "message": BOOT_FAILURE_MESSAGE,
+            "retryable": True,
+            "request_id": request_id,
+        },
+        {"content-type": "application/json; charset=utf-8", "x-request-id": request_id},
+    )
+
+
 def _dispatch(request: DjangoRequest, route: str) -> DjangoResponse:
-    app = conf.get_app()
+    try:
+        app = conf.get_app()
+    except (ConfigurationError, NwcUriParseError) as error:
+        return _render(_boot_failure(error))
     if request.method not in ("GET", "HEAD", "OPTIONS", "TRACE") and _csrf_rejected(request):
         request_id = f"req_{uuid.uuid4()}"
         return _render(app.handler.error_response(ForbiddenError(CSRF_FAILURE_MESSAGE), request_id))
