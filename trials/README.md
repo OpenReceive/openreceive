@@ -217,6 +217,16 @@ app broke the code over two lines; the secret stays whole). `--scenario mix`
 gives each run of a platform the next one, so `--runs 3` covers canonical, a
 wrapped paste and Bitcoin only.
 
+`--scenario donation` (not in the mix) is video 12's merchant: "add a donation
+page at /donate with $5, $20 and $50 and an Other field". The donation walk
+(`donationWalkChecks` in `payer.ts`) replaces the live checks, the payer walk
+and chaos: `/donate` shows the three choices and an amount field
+(`donation_page`); $20 opens a $20.00 checkout (`donation_preset_amount`) and
+pays (`donation_paid`); an amount the browser slips into the checkout's own
+request is ignored (`donation_ignores_payer_amount`); Other 7.50 opens a $7.50
+checkout (`donation_other_amount`); and 0.001 or a billion mints no invoice
+(`donation_refuses_bad_amounts`).
+
 ## Recheck
 
 `npm run trial:recheck -- --dir <kept shop> [--phases live,leaks,chaos]`

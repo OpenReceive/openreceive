@@ -20,8 +20,8 @@ import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
 import { debugPageChecks } from "./leaks.ts";
-import { payerWalkChecks } from "./payer.ts";
-import { liveShopChecks } from "./live.ts";
+import { donationWalkChecks, payerWalkChecks } from "./payer.ts";
+import { check, liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
 import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
 import { liveMedusaChecks } from "./medusa.ts";
@@ -52,7 +52,11 @@ const PROMPT_BLOCK =
   /<!-- platform-prompt:begin -->\s*```text\n([\s\S]*?)\n```\s*<!-- platform-prompt:end -->/;
 
 /** The first message: a guide's published prompt, or the platform's own template. */
-export async function openingFor(platform: Platform, directionsUrl: string): Promise<string> {
+export async function openingFor(
+  platform: Platform,
+  directionsUrl: string,
+  scenario?: Scenario,
+): Promise<string> {
   if (platform.opening_guide !== undefined) {
     const guide = await readFile(path.join(repoRoot, platform.opening_guide), "utf8");
     const prompt = guide.match(PROMPT_BLOCK)?.[1];
@@ -63,6 +67,11 @@ export async function openingFor(platform: Platform, directionsUrl: string): Pro
       ? prompt
       : prompt.replace(published, directionsUrl);
     return [platform.opening_context, text].filter(Boolean).join(" ");
+  }
+  if (scenario?.opening !== undefined && platform.opening === undefined) {
+    return scenario.opening
+      .replaceAll("{{name}}", platform.prompt_name)
+      .replaceAll("{{directions_url}}", directionsUrl);
   }
   return (
     platform.opening?.replaceAll("{{directions_url}}", directionsUrl) ??
@@ -266,7 +275,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     }
 
     const scenario: Scenario = request.scenario ?? scenarioFor("canonical", 0);
-    const opening = await openingFor(platform, request.directionsUrl);
+    const opening = await openingFor(platform, request.directionsUrl, scenario);
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
 
@@ -406,8 +415,21 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       if (prepared !== undefined) checks.push(prepared);
       log("live: the shop's own order, a checkout, a stranger");
       const wordpress = wordpressKind(platform);
-      const live =
-        platform.host === "btcpay"
+      // The donation merchant asked for /donate, not the shop's checkout: the
+      // donation walk stands in for the live checks, the payer walk and chaos.
+      const donation = scenario.kind === "donation";
+      const live = donation
+        ? request.wallet === undefined
+          ? [check("donation_page", false, "The donation walk ran.", "no trial wallet")]
+          : await donationWalkChecks({
+              baseUrl: sandbox.baseUrl,
+              directory,
+              platform,
+              wallet: request.wallet,
+              client: clientPrefix(directory),
+              reportDir,
+            })
+        : platform.host === "btcpay"
           ? await liveBtcpayChecks(directory, request.wallet?.settle)
           : platform.host === "bolt"
             ? await liveBoltChecks(directory, sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
@@ -466,7 +488,12 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       // What the payer sees: the shop's own pages in Chromium, every state of
       // the checkout read for developer words, failures forced through the
       // interceptor and the test provider. The framework fixtures only.
-      if (request.wallet !== undefined && platform.host === undefined && wordpress === undefined) {
+      if (
+        !donation &&
+        request.wallet !== undefined &&
+        platform.host === undefined &&
+        wordpress === undefined
+      ) {
         log("payer: the checkout in Chromium, paid and failing");
         checks.push(
           ...(await payerWalkChecks({
@@ -486,6 +513,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       // The chaos phase needs the shop on the trial network, where the
       // interceptor stands in for its relay and price feeds.
       if (
+        !donation &&
         request.chaos !== false &&
         platform.host === undefined &&
         request.wallet !== undefined &&

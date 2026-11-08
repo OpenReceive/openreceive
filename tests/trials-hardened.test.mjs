@@ -262,3 +262,23 @@ test("the soak fails a checkout outside a fault, growing memory or piling socket
   assert.equal(broken[1].pass, false);
   assert.equal(broken[2].pass, false);
 });
+
+test("the donation merchant opens with the video-12 ask, not the shop's checkout", async () => {
+  const { SCENARIOS } = await import("../trials/harness/scenarios.ts");
+  const { openingFor } = await import("../trials/harness/loop.ts");
+  const url = "https://openreceive.org/agent-directions/node.md";
+  const platform = { slug: "node", prompt_name: "Node.js app" };
+  const opening = await openingFor(platform, url, SCENARIOS.donation);
+  assert.match(opening, /^This is a Node\.js app\. Add a donation page at \/donate/);
+  assert.match(opening, /\$5, \$20 or \$50/);
+  assert.ok(opening.endsWith(url));
+  assert.equal(SCENARIOS.donation.kind, "donation");
+  // A platform with its own opening keeps it.
+  const own = await openingFor(
+    { ...platform, opening: "Own {{directions_url}}" },
+    url,
+    SCENARIOS.donation,
+  );
+  assert.equal(own, `Own ${url}`);
+  assert.match(await openingFor(platform, url), /Enable Bitcoin and stablecoin payments/);
+});

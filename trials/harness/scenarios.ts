@@ -25,6 +25,16 @@ export const SCENARIOS: Readonly<Record<string, Scenario>> = {
     choice: "Yes, stablecoins too.",
     paste: "env-line",
   },
+  // Video 12: a donation page with presets and an Other amount, on the shop.
+  donation: {
+    id: "donation",
+    prompt: "",
+    swaps: true,
+    choice: "Yes, stablecoins too.",
+    kind: "donation",
+    opening:
+      "This is a {{name}}. Add a donation page at /donate where visitors can give $5, $20 or $50, or type their own amount in an Other field, and pay in Bitcoin or stablecoins with OpenReceive. Leave the shop's own pages as they are. Follow these directions: {{directions_url}}",
+  },
   // A chat app broke the long code over two lines.
   "wrapped-paste": {
     id: "wrapped-paste",

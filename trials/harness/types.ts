@@ -37,6 +37,14 @@ export interface Scenario {
   readonly choice: string;
   /** How the merchant pastes a code (scenarios.ts); plain when omitted. */
   readonly paste?: "quoted" | "env-line" | "wrapped";
+  /** What the merchant asks for: the shop's checkout (default) or a donation page. */
+  readonly kind?: "shop" | "donation";
+  /**
+   * The merchant's first message, in place of the platform's default, with
+   * `{{name}}` and `{{directions_url}}` filled in. Ignored on a platform with
+   * its own opening (a hosting platform's guide prompt).
+   */
+  readonly opening?: string;
 }
 
 export interface Platform {

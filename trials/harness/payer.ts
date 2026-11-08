@@ -1184,3 +1184,245 @@ export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
   }
   return checks;
 }
+
+// ------------------------------------------------------------- donations
+
+/**
+ * The donation scenario (scenarios.ts): the merchant asked for a page at
+ * /donate with $5, $20 and $50 buttons and an Other field. Video 12's agent
+ * built one, and the directions now carry a donations rule: the amount enters
+ * through the host's own route and is saved on a row before checkout, with a
+ * floor, a cap and two decimals, refused rather than rounded, and never taken
+ * from the checkout's own request.
+ */
+const DONATION = {
+  page: "donation_page",
+  preset: "donation_preset_amount",
+  tamper: "donation_ignores_payer_amount",
+  paid: "donation_paid",
+  other: "donation_other_amount",
+  refuses: "donation_refuses_bad_amounts",
+} as const;
+
+const DONATION_SPECS = [
+  {
+    id: DONATION.page,
+    summary: "GET /donate shows a donation page with $5, $20 and $50 choices and an Other amount.",
+  },
+  {
+    id: DONATION.preset,
+    summary: "Choosing $20 opens a checkout for $20.00.",
+  },
+  {
+    id: DONATION.tamper,
+    summary:
+      "An amount the browser adds to the checkout's own request is ignored: the host's amount stands.",
+  },
+  { id: DONATION.paid, summary: "The $20 donation, once paid, shows the paid screen." },
+  { id: DONATION.other, summary: "An Other amount of 7.50 opens a checkout for $7.50." },
+  {
+    id: DONATION.refuses,
+    summary:
+      "An Other amount of 0.001 or of 1000000000 is refused before any invoice: no checkout mints one.",
+  },
+] as const;
+
+const presetChoice = (page: Page, dollars: number): Locator =>
+  page
+    .getByRole("button", { name: new RegExp(`\\$\\s?${dollars}(?:\\.00)?\\b`) })
+    .or(page.getByRole("link", { name: new RegExp(`\\$\\s?${dollars}(?:\\.00)?\\b`) }))
+    .filter({ visible: true });
+
+/** The Other field: the page's visible amount input. */
+const otherField = (page: Page): Locator =>
+  page
+    .locator(
+      'input[type="number"], input[inputmode="decimal"], input[name*="amount" i], input[id*="amount" i], input[name*="other" i]',
+    )
+    .filter({ visible: true });
+
+async function openDonate(page: Page, baseUrl: string): Promise<number> {
+  const response = await page.goto(`${baseUrl}/donate`, {
+    waitUntil: "domcontentloaded",
+    timeout: PAGE_TIMEOUT_MS,
+  });
+  return response?.status() ?? 0;
+}
+
+/** Type an Other amount and send it the way the page's own form does. */
+async function giveOther(page: Page, amount: string): Promise<void> {
+  const field = otherField(page).first();
+  await field.fill(amount);
+  const form = page.locator("form").filter({ has: field });
+  const submit = form.getByRole("button").filter({ visible: true });
+  if ((await form.count()) > 0 && (await submit.count()) > 0) {
+    // The form's own button, or the one beside the field whose name is not a preset.
+    const named = submit.filter({ hasNotText: /\$\s?\d/ });
+    await ((await named.count()) > 0 ? named : submit).last().click();
+  } else {
+    await field.press("Enter");
+  }
+}
+
+export async function donationWalkChecks(target: PayerTarget): Promise<Check[]> {
+  const walk = new Walk(path.join(target.reportDir, "payer"));
+  await mkdir(walk.dir, { recursive: true });
+  const outcome = new Outcome(DONATION_SPECS);
+  let browser: Browser;
+  try {
+    const { chromium } = await import("@playwright/test");
+    browser = await chromium.launch();
+  } catch (error) {
+    return outcome.finish(`Chromium did not start: ${message(error)}`);
+  }
+  let reason = "";
+  let stage = "/donate";
+  try {
+    // The page and a $20 preset, with an amount slipped into the checkout's request.
+    await visit(browser, async (state) => {
+      const { page } = state;
+      try {
+        const status = await openDonate(page, target.baseUrl);
+        const presets = await Promise.all(
+          [5, 20, 50].map((dollars) => presetChoice(page, dollars).count()),
+        );
+        const fields = await otherField(page).count();
+        outcome.record(
+          DONATION.page,
+          status === 200 && presets.every((count) => count > 0) && fields > 0,
+          `GET /donate ${status}; $5 ${presets[0]}, $20 ${presets[1]}, $50 ${presets[2]} button(s); ${fields} amount field(s)`,
+        );
+        await page
+          .screenshot({ path: path.join(walk.dir, "00-donate.png"), fullPage: true })
+          .catch(() => undefined);
+        stage = "the $20 choice";
+        // The browser is the payer's: it adds an amount to the checkout's own
+        // request, and the host must ignore it.
+        await page.route(/\/checkouts\/?$/, async (route) => {
+          const request = route.request();
+          if (request.method() !== "POST") return route.continue();
+          let body: Record<string, unknown> = {};
+          try {
+            body = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
+          } catch {
+            return route.continue();
+          }
+          return route.continue({
+            postData: JSON.stringify({
+              ...body,
+              amount: "0.01",
+              amount_msats: 1000,
+              fiat: { currency: "USD", value: "0.01" },
+            }),
+          });
+        });
+        await presetChoice(page, 20).first().click();
+        const first = await checkoutRendered(page);
+        if (first === "error") throw new Error("the checkout opened on an error");
+        stage = "the $20 invoice";
+        const { hash, call } = await lightningInvoice(state);
+        const invoice = await walk.capture(page, "donation-20");
+        const shown = checkoutFiatCents(invoice.text);
+        outcome.record(
+          DONATION.preset,
+          shown === 2000,
+          shown === undefined
+            ? "the invoice screen shows no dollar amount"
+            : `checkout ${formatCents(shown)}`,
+        );
+        const msats = Number(call.body?.match(/"amount_msats"\s*:\s*"?(\d+)/)?.[1] ?? Number.NaN);
+        outcome.record(
+          DONATION.tamper,
+          shown === 2000 && msats !== 1000,
+          `the request carried amount 0.01 and amount_msats 1000; the checkout shows ${shown === undefined ? "no amount" : formatCents(shown)}, the invoice is ${Number.isFinite(msats) ? `${msats} msat` : "of unknown size"}`,
+        );
+        stage = "the paid screen";
+        await target.wallet.settle(hash);
+        const paid = await waitFor(
+          async () => {
+            const view = await readCheckout(page);
+            return (view.present && saysPaid(view.text)) || (!view.present && saysPaid(view.page))
+              ? true
+              : undefined;
+          },
+          PAID_TIMEOUT_MS,
+          250,
+        );
+        if (paid) await walk.capture(page, "donation-paid");
+        outcome.record(
+          DONATION.paid,
+          paid === true,
+          paid
+            ? "the paid screen showed"
+            : `nothing said paid ${PAID_TIMEOUT_MS / 1000} s after settle`,
+        );
+      } catch (error) {
+        reason = `stopped at ${stage}: ${message(error)}${await walk.stuck(page, "donation-stuck")}`;
+      }
+    });
+
+    // Other: 7.50.
+    stage = "the Other amount";
+    await visit(browser, async (state) => {
+      const { page } = state;
+      try {
+        await openDonate(page, target.baseUrl);
+        await giveOther(page, "7.50");
+        const first = await checkoutRendered(page);
+        if (first === "error") throw new Error("the checkout opened on an error");
+        await lightningInvoice(state);
+        const view = await walk.capture(page, "donation-other");
+        const shown = checkoutFiatCents(view.text);
+        outcome.record(
+          DONATION.other,
+          shown === 750,
+          shown === undefined
+            ? "the invoice screen shows no dollar amount"
+            : `checkout ${formatCents(shown)}`,
+        );
+      } catch (error) {
+        reason = `${reason}${reason ? "; " : ""}stopped at ${stage}: ${message(error)}${await walk.stuck(page, "donation-other-stuck")}`;
+      }
+    });
+
+    // Refusals: no invoice for 0.001 or for a billion.
+    stage = "the refused amounts";
+    const minted: string[] = [];
+    for (const amount of ["0.001", "1000000000"]) {
+      await visit(browser, async (state) => {
+        const { page } = state;
+        try {
+          await openDonate(page, target.baseUrl);
+          await giveOther(page, amount);
+          // Give the page time to reach a checkout and pick Bitcoin if it can.
+          await bitcoinTile(page)
+            .first()
+            .click({ timeout: 8_000 })
+            .catch(() => undefined);
+          await new Promise((resolve) => setTimeout(resolve, 5_000));
+          const created = state.api.find(
+            (call) =>
+              call.method === "POST" &&
+              CREATE_CHECKOUT.test(call.path) &&
+              call.status >= 200 &&
+              call.status < 300,
+          );
+          if (created !== undefined) minted.push(`${amount}: ${describeCall(created)}`);
+          await walk
+            .capture(page, `donation-refused-${amount === "0.001" ? "tiny" : "huge"}`)
+            .catch(() => undefined);
+        } catch (error) {
+          minted.push(`${amount}: the walk failed: ${message(error)}`);
+        }
+      });
+    }
+    outcome.record(
+      DONATION.refuses,
+      minted.length === 0,
+      minted.length === 0 ? "no invoice for either amount" : minted.join("; "),
+    );
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+  return [...outcome.finish(reason || `stopped at ${stage}`), wordsCheck(walk.states)];
+}
