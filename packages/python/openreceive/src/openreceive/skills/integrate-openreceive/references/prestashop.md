@@ -166,8 +166,11 @@ real customer sees it and no email reaches anyone), and mint its Lightning
 invoice:
 
 ```sh
-php bin/console openreceive:test-invoice --new
+php bin/console openreceive:test-invoice --new --amount 20.00
 ```
+
+`--amount 20.00` (in the shop's currency) keeps the test order above the swap
+providers' minimums, so the user can try every method on the link you give them.
 
 To use an order that already awaits its OpenReceive payment, pass its id
 instead of `--new`. `test-invoice` goes through the same route as the order's

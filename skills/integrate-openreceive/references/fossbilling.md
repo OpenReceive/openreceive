@@ -165,8 +165,11 @@ creates once (`openreceive-test@example.invalid`, so no real client sees it
 and no email reaches anyone), and mint its Lightning invoice:
 
 ```sh
-php console.php openreceive:test-invoice --new
+php console.php openreceive:test-invoice --new --amount 20.00
 ```
+
+`--amount 20.00` (in the shop's currency) keeps the test invoice above the swap
+providers' minimums, so the user can try every method on the link you give them.
 
 To use an invoice that already exists, pass its id instead of `--new`.
 `test-invoice` goes through the same route as the invoice's payment page. It

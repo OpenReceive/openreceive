@@ -140,8 +140,11 @@ Create a small unpaid test invoice, billed to the first admin account without
 Paymenter's new-invoice email, and mint its Lightning invoice:
 
 ```sh
-php artisan openreceive:test-invoice --new
+php artisan openreceive:test-invoice --new --amount 20.00
 ```
+
+`--amount 20.00` (in the shop's currency) keeps the test invoice above the swap
+providers' minimums, so the user can try every method on the link you give them.
 
 To use an invoice that already exists, pass its id instead of `--new`.
 `test-invoice` goes through the same route as the invoice's payment dialog. It

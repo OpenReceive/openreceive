@@ -826,7 +826,7 @@
       "slug": "agent-directions-paymenter",
       "title": "Agent directions (Paymenter)",
       "category": "agent-directions",
-      "bytes": 18886
+      "bytes": 19063
     },
     {
       "path": "/guides/agent-directions-medusa",
@@ -856,7 +856,7 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "category": "agent-directions",
-      "bytes": 24725
+      "bytes": 24902
     },
     {
       "path": "/guides/agent-directions-prestashop",
@@ -866,7 +866,7 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "category": "agent-directions",
-      "bytes": 24938
+      "bytes": 25113
     },
     {
       "path": "/guides/agent-directions-odoo",
@@ -1215,7 +1215,7 @@
       "kind": "agent-directions-payload",
       "stack": "paymenter",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 18886,
+      "bytes": 19063,
       "copy_button": true,
       "self_contained": true
     },
@@ -1236,7 +1236,7 @@
       "kind": "agent-directions-payload",
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 24725,
+      "bytes": 24902,
       "copy_button": true,
       "self_contained": true
     },
@@ -1257,7 +1257,7 @@
       "kind": "agent-directions-payload",
       "stack": "prestashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 24938,
+      "bytes": 25113,
       "copy_button": true,
       "self_contained": true
     },
