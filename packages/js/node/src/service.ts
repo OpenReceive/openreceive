@@ -12,6 +12,7 @@ import {
 import { createNwcReceiveClient } from "./alby-nwc.ts";
 import { ConfigError } from "./config-error.ts";
 import { createLscSwapProvidersFromEnvironment } from "./lsc-uri.ts";
+import { normalizeNwcWalletError, WalletPreflightError } from "./nwc/errors.ts";
 import { attachLogging } from "./service/file-logger.ts";
 import { createCheckout, prepareCheckout } from "./service/checkouts.ts";
 import { createPriceFeed, listRates, quoteRates, readPriceCurrencies } from "./service/pricing.ts";
@@ -351,6 +352,19 @@ async function preflight(client: ServiceContext["options"]["client"]): Promise<v
     // sets the explicit allowSpendCapableWallet override.
     await client.preflight();
   } catch (cause) {
+    // A relay that refused, dropped or never answered says nothing about the
+    // code, so the receive-only advice would send the operator after the
+    // wrong thing. The message carries the cause: the stack's one boot line
+    // prints the message only.
+    const unreachable = unreachableWalletError(cause);
+    if (unreachable !== undefined) {
+      throw new ConfigError({
+        code: "WALLET_PREFLIGHT_FAILED",
+        message: `OpenReceive could not reach the wallet's relay at start-up (${unreachable.message}).`,
+        hint: "The relay did not answer, so the NWC code was not checked. Try again once it answers; the framework adapters try again on a later request.",
+        cause,
+      });
+    }
     throw new ConfigError({
       code: "WALLET_PREFLIGHT_FAILED",
       message: "OpenReceive wallet preflight failed.",
@@ -358,4 +372,18 @@ async function preflight(client: ServiceContext["options"]["client"]): Promise<v
       cause,
     });
   }
+}
+
+/**
+ * The normalized failure when the wallet check could not reach the wallet at
+ * all (the relay refused, dropped or never answered, or the read ran out of
+ * time); undefined when the wallet answered with something wrong. A
+ * `WalletPreflightError` is the check's own refusal, never a relay outage.
+ */
+function unreachableWalletError(cause: unknown): OpenReceiveError | undefined {
+  if (cause instanceof WalletPreflightError) return undefined;
+  const normalized = normalizeNwcWalletError(cause);
+  return normalized.code === "WALLET_UNAVAILABLE" || normalized.code === "TIMEOUT"
+    ? normalized
+    : undefined;
 }

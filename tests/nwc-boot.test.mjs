@@ -215,6 +215,72 @@ test("createOpenReceive wraps a spend-capable refusal in WALLET_PREFLIGHT_FAILED
   );
 });
 
+// Trial finding F15 (2026-11-08): with the relay refusing connections, the
+// boot error told the operator to "Use a receive-only NWC connection
+// advertising make_invoice and list_transactions", which sends them after a
+// code that was never checked.
+test("createOpenReceive says the relay was not reached, without the receive-only advice", async () => {
+  const { Nip47NetworkError } = await import("@getalby/sdk/nwc");
+  await withEnv({ NWC_URI: VALID_NWC }, async () => {
+    await assert.rejects(
+      () =>
+        createOpenReceive({
+          client: createNwcReceiveClient({
+            connectionString: VALID_NWC,
+            client: {
+              getInfo: async () => {
+                throw new Nip47NetworkError("Failed to connect to wss://relay.example/v1", "OTHER");
+              },
+              make_invoice: async () => ({}),
+              list_transactions: async () => ({ transactions: [] }),
+            },
+          }),
+          logging: { enabled: false, console: false },
+        }),
+      (error) => {
+        assert.ok(error instanceof ConfigError);
+        assert.equal(error.code, "WALLET_PREFLIGHT_FAILED");
+        assert.equal(
+          error.message,
+          "OpenReceive could not reach the wallet's relay at start-up (Failed to connect to wss://relay.example/v1).",
+        );
+        assert.equal(
+          error.hint,
+          "The relay did not answer, so the NWC code was not checked. Try again once it answers; the framework adapters try again on a later request.",
+        );
+        assert.doesNotMatch(`${error.message} ${error.hint}`, /receive-only/);
+        return true;
+      },
+    );
+  });
+});
+
+test("a wallet that answers without the receive methods keeps the receive-only advice", async () => {
+  await withEnv({ NWC_URI: VALID_NWC }, async () => {
+    await assert.rejects(
+      () =>
+        createOpenReceive({
+          client: createNwcReceiveClient({
+            connectionString: VALID_NWC,
+            client: {
+              getInfo: async () => ({ methods: ["get_info", "get_balance"] }),
+              make_invoice: async () => ({}),
+              list_transactions: async () => ({ transactions: [] }),
+            },
+          }),
+          logging: { enabled: false, console: false },
+        }),
+      (error) => {
+        assert.ok(error instanceof ConfigError);
+        assert.equal(error.message, "OpenReceive wallet preflight failed.");
+        assert.match(error.hint, /Use a receive-only NWC connection advertising make_invoice/);
+        assert.equal(error.cause?.code, "missing_required_method");
+        return true;
+      },
+    );
+  });
+});
+
 test("a caught spend-capability refusal never unlocks the client for later calls", async () => {
   let walletCalls = 0;
   let infoCalls = 0;
