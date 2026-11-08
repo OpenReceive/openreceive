@@ -231,8 +231,9 @@ def amount_text(tx: Any) -> str:
 
 
 def description(tx: Any) -> str:
-    company = tx.company_id.name or ""
-    return f"{company} {tx.reference}".strip()
+    # The bolt11 memo reaches the payer's wallet app, so it carries the order
+    # reference and not the company name.
+    return tx.reference
 
 
 def post_process(tx: Any) -> None:

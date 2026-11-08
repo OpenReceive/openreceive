@@ -38,7 +38,7 @@ class TestOpenReceive(OpenReceiveCommon):
             {
                 "currency": "USD",
                 "value": "12.50",
-                "description": f"{tx.company_id.name} {tx.reference}",
+                "description": tx.reference,
             },
         )
         self.assertIsNone(host.amount_for("NOT-A-TRANSACTION"))
