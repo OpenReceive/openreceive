@@ -61,7 +61,10 @@ import { PaymentWizard, ThemeScope, ThemeToggle } from "@openreceive/react";
 
 test("React payment wizard does not ask the payer to choose when only Lightning is on offer", () => {
   const html = renderToStaticMarkup(
-    React.createElement(PaymentWizard, { invoice: "lnbc-test", checkout: { payment_methods: [], invoices: [] } }),
+    React.createElement(PaymentWizard, {
+      invoice: "lnbc-test",
+      checkout: { payment_methods: [], invoices: [] },
+    }),
   );
   assert.match(html, /Pay this invoice/);
   assert.doesNotMatch(html, /Loading currencies/);
