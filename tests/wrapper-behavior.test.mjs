@@ -1,8 +1,10 @@
 // Real mounts of the SFC wrappers (H6): the Vue and Svelte Checkout components
-// are compiled with their framework compilers and mounted into a happy-dom
-// document, executing the same component code an app would run. The static
-// template/spread checks live in wrapper-static.test.mjs; this file exists so a
-// wrapper that compiles but throws on mount (H14/H15/H16's failure mode) fails CI.
+// are mounted into a happy-dom document, executing the same component code an
+// app would run. Vue's is the package build's own output (the SFC compiled to
+// JavaScript; `pretest:js` builds it). Svelte's is compiled here with the
+// Svelte compiler. The static template/spread checks live in
+// wrapper-static.test.mjs; this file exists so a wrapper that compiles but
+// throws on mount (H14/H15/H16's failure mode) fails CI.
 //
 // Angular is mounted in tests/angular-construct.test.mjs (it needs the
 // ng-packagr dist + JIT compiler), React has mounted behavior tests in
@@ -21,8 +23,9 @@ const { fileURLToPath, pathToFileURL } = await import("node:url");
 const { until } = await import("./helpers/lifecycle-harness.mjs");
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-// Inside the repo so bare specifiers (vue, svelte/internal/client) resolve from
-// the workspace node_modules; never committed (node_modules is ignored).
+// Inside the repo so the compiled Svelte component's bare specifiers
+// (svelte/internal/client) resolve from the workspace node_modules; never
+// committed (node_modules is ignored).
 const generatedDir = path.join(repoRoot, "node_modules", ".cache", "openreceive-wrapper-tests");
 mkdirSync(generatedDir, { recursive: true });
 
@@ -32,25 +35,23 @@ async function importGeneratedModule(name, code) {
   return import(pathToFileURL(file).href);
 }
 
+// The file a shop's bundler gets for `import Checkout from
+// "@openreceive/vue/checkout.vue"`: whatever the package's export map names.
+const vuePackageDir = path.join(repoRoot, "packages/js/vue");
+const vueCheckoutFile = path.join(
+  vuePackageDir,
+  JSON.parse(readFileSync(path.join(vuePackageDir, "package.json"), "utf8")).exports[
+    "./checkout.vue"
+  ].default,
+);
+
 /**
- * Compile packages/js/vue/src/Checkout.vue exactly as a bundler would:
- * @vue/compiler-sfc compiles <script setup> with the template inlined, then the
- * TypeScript compiler strips types. The relative ./index.js import is rewritten
- * to the package's source entry, which tsx compiles on import.
+ * The shipped Vue component, as the package build emitted it: Checkout.vue
+ * compiled to plain JavaScript by tools/package/compile-vue-sfc.mjs, importing
+ * only `vue` and the package's own dist/index.js.
  */
 async function loadVueCheckout() {
-  const file = path.join(repoRoot, "packages/js/vue/src/Checkout.vue");
-  const { parse, compileScript } = await import("vue/compiler-sfc");
-  const { descriptor, errors } = parse(readFileSync(file, "utf8"), { filename: file });
-  assert.equal(errors.length, 0, `Checkout.vue must parse: ${errors.map((e) => e.message).join()}`);
-  const script = compileScript(descriptor, { id: "wrapper-behavior-vue", inlineTemplate: true });
-  const indexUrl = pathToFileURL(path.join(repoRoot, "packages/js/vue/src/index.ts")).href;
-  const ts = (await import("typescript")).default;
-  const { outputText } = ts.transpileModule(script.content.replaceAll("./index.js", indexUrl), {
-    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-  });
-  const mod = await importGeneratedModule("checkout-vue.mjs", outputText);
-  return mod.default;
+  return (await import(pathToFileURL(vueCheckoutFile).href)).default;
 }
 
 // Node resolves the bare "svelte" specifier to the server build (no `browser`
@@ -142,6 +143,41 @@ async function assertMountedShell(container, reference, calls) {
     "with no prefix prop the element must use the documented /openreceive default",
   );
 }
+
+// The 0.4.32 Nuxt trials: the package shipped Checkout.vue as source, whose
+// `defineProps<WrapperCheckoutComponentProps>()` names an imported type. Every
+// shop's build had to resolve it with TypeScript, so a JavaScript-only app failed
+// with "Failed to load TypeScript" and TypeScript 7 with "No fs option provided".
+test("the shipped Vue component is plain JavaScript: no SFC, no type-based props", async () => {
+  assert.match(vueCheckoutFile, /\.js$/, "./checkout.vue must export the compiled module");
+  const code = readFileSync(vueCheckoutFile, "utf8");
+  assert.doesNotMatch(code, /defineProps\s*</, "a type-based defineProps needs TypeScript");
+  assert.doesNotMatch(code, /\b(defineProps|withDefaults|defineOptions)\s*\(/);
+  assert.doesNotMatch(code, /<script|<template/);
+  const specifiers = [...code.matchAll(/^import .* from ["']([^"']+)["'];?$/gm)].map((m) => m[1]);
+  assert.deepEqual(
+    [...new Set(specifiers)].sort(),
+    ["./index.js", "vue"],
+    "the component imports only vue and the package entry",
+  );
+
+  const Checkout = await loadVueCheckout();
+  assert.equal(Checkout.name, "Checkout");
+  assert.equal(typeof Checkout.setup, "function");
+  assert.equal(Checkout.props.reference.type, String);
+});
+
+// Nuxt server-renders the page first. The compiled component has no ssrRender,
+// so Vue's server renderer runs its render function: the shell must come out.
+test("the shipped Vue component server-renders the checkout shell", async () => {
+  const Checkout = await loadVueCheckout();
+  const { createSSRApp } = await import("vue");
+  const { renderToString } = await import("vue/server-renderer");
+  const html = await renderToString(createSSRApp(Checkout, { reference: "order-vue-ssr" }));
+  assert.match(html, /^<section [^>]*data-openreceive-root/);
+  assert.match(html, /<openreceive-theme-toggle[ >]/);
+  assert.match(html, /<openreceive-checkout [^>]*reference="order-vue-ssr"/);
+});
 
 test("the Vue wrapper mounts: createApp renders the checkout shell for a reference", async () => {
   const reference = "order-vue-mount";

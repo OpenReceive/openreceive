@@ -29,13 +29,7 @@
     "@openreceive/elements": "0.4.32"
   },
   "peerDependencies": {
-    "typescript": ">=5.0.0",
     "vue": ">=3.4.0"
-  },
-  "peerDependenciesMeta": {
-    "typescript": {
-      "optional": true
-    }
   },
   "exports": {
     ".": {
@@ -44,7 +38,7 @@
     },
     "./checkout.vue": {
       "types": "./dist/Checkout.vue.d.ts",
-      "default": "./dist/Checkout.vue"
+      "default": "./dist/Checkout.js"
     },
     "./styles.css": "./dist/styles.css"
   },
@@ -54,7 +48,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css Checkout.vue Checkout.vue.d.ts",
+    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/compile-vue-sfc.mjs src/Checkout.vue dist/Checkout.js && node ../../../tools/package/copy-static.mjs src dist styles.css Checkout.vue.d.ts",
     "prepack": "npm run build"
   },
   "license": "MIT",

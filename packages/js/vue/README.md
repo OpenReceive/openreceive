@@ -28,8 +28,9 @@ hook to fulfill orders; browser callbacks update the interface.
 
 ## Mount
 
-The component ships as a raw SFC on the `@openreceive/vue/checkout.vue` subpath
-(your bundler's Vue plugin compiles it); import the checkout styles once.
+Import the component from the `@openreceive/vue/checkout.vue` subpath. It ships
+compiled to JavaScript, so any Vue 3.4+ build (Vite, Nuxt, webpack) uses it as
+is, with or without TypeScript. Import the checkout styles once.
 
 ```vue
 <script setup lang="ts">

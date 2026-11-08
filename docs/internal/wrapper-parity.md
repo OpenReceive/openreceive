@@ -126,7 +126,7 @@ element's event handlers, plus the `options` escape hatch.
 | Package | How it gets the props |
 | --- | --- |
 | `@openreceive/react` | derived: `CheckoutProps extends CheckoutComponentProps` plus the React-only slots |
-| `@openreceive/vue` | derived: `defineProps<WrapperCheckoutComponentProps>()`, with `withDefaults` for the defaults a type cannot carry |
+| `@openreceive/vue` | derived: `defineProps<WrapperCheckoutComponentProps>()`, with `withDefaults` for the defaults a type cannot carry; the package build turns it into runtime props |
 | `@openreceive/svelte` | restated: `export let` (and `let { … } = $props()` under runes) is a declaration, not a type — every prop name has to be written |
 | `@openreceive/angular` | restated: `@Input()` is a decorator on a declared field; a type cannot generate fields |
 
@@ -135,13 +135,19 @@ whole reason `tests/wrapper-parity.test.mjs` still exists. It holds the Svelte
 and Angular lists to the table above. It also holds React and Vue to *deriving*
 the props, so they do not quietly grow a fourth copy.
 
-Because Vue derives its props, the shipped SFC imports its `defineProps` type.
-So the consuming toolchain must resolve types across packages.
-`@vue/compiler-sfc` does that with TypeScript's resolver. That is why
-`@openreceive/vue` declares `typescript` as an OPTIONAL peer. A JavaScript-only
-Vue app needs nothing. A TypeScript app is told what resolves the imported prop
-type. A type that cannot be resolved is a loud compile error, never a silently
-dropped prop.
+Because Vue derives its props, `Checkout.vue` imports its `defineProps` type.
+Turning that type into runtime props means resolving it across files and
+packages, and `@vue/compiler-sfc` does that only with TypeScript loaded. So the
+package build does it, never the shop: `tools/package/compile-vue-sfc.mjs`
+compiles the SFC with this repo's TypeScript into `dist/Checkout.js`, plain
+JavaScript with runtime props and an inlined render function, and the
+`./checkout.vue` export points there. Through 0.4.32 the package shipped the
+SFC as source instead, and a Nuxt app without TypeScript failed its build with
+"Failed to load TypeScript", as did one on TypeScript 7 ("No fs option
+provided to compileScript"). A type the build cannot resolve is a loud build error, never a
+silently dropped prop. `tests/wrapper-parity.test.mjs` holds the compiled prop
+list to the shared surface and checks that every Boolean prop keeps its
+explicit `undefined` default.
 
 ## Where the create-mode flow lives
 

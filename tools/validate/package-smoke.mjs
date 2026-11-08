@@ -350,14 +350,35 @@ assert(
     "@openreceive/provider-data: payTutorialImage must answer after loadPayTutorialImages"
   );
 }
-assert(
-  existsSync("node_modules/@openreceive/vue/dist/Checkout.vue"),
-  "@openreceive/vue: checkout Vue component must be packaged"
-);
-assert(
-  existsSync("node_modules/@openreceive/vue/dist/Checkout.vue.d.ts"),
-  "@openreceive/vue: checkout Vue component typings must be packaged"
-);
+// The Vue component ships compiled (tools/package/compile-vue-sfc.mjs): the
+// ./checkout.vue export is plain JavaScript with runtime props, so no shop's
+// build resolves the imported prop type, and no shop needs TypeScript for it.
+{
+  const vueManifest = JSON.parse(readFileSync("node_modules/@openreceive/vue/package.json", "utf8"));
+  const checkoutExport = vueManifest.exports["./checkout.vue"];
+  assert.equal(
+    checkoutExport.default,
+    "./dist/Checkout.js",
+    "@openreceive/vue: ./checkout.vue must export the compiled checkout component"
+  );
+  assert(
+    existsSync("node_modules/@openreceive/vue/" + checkoutExport.types),
+    "@openreceive/vue: checkout Vue component typings must be packaged"
+  );
+  const compiled = readFileSync("node_modules/@openreceive/vue/dist/Checkout.js", "utf8");
+  assert(
+    !/defineProps\\s*</.test(compiled) && /\\bprops: \\{/.test(compiled),
+    "@openreceive/vue: the shipped component must declare runtime props, not a prop type"
+  );
+  assert(
+    !existsSync("node_modules/@openreceive/vue/dist/Checkout.vue"),
+    "@openreceive/vue: the raw SFC must not ship, nothing exports it"
+  );
+  assert(
+    vueManifest.peerDependencies?.typescript === undefined,
+    "@openreceive/vue: a shop needs no TypeScript for the component"
+  );
+}
 assert(
   existsSync("node_modules/@openreceive/svelte/dist/Checkout.svelte"),
   "@openreceive/svelte: checkout Svelte component must be packaged"

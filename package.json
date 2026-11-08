@@ -59,7 +59,7 @@
     "typecheck": "tsc --noEmit",
     "check:vue": "vue-tsc --noEmit -p tsconfig.vue.json",
     "check:svelte": "svelte-check --tsconfig ./tsconfig.svelte.json",
-    "pretest:js": "npm run build -w @openreceive/core -w @openreceive/provider-data -w @openreceive/browser -w @openreceive/elements -w @openreceive/angular",
+    "pretest:js": "npm run build -w @openreceive/core -w @openreceive/provider-data -w @openreceive/browser -w @openreceive/elements -w @openreceive/angular -w @openreceive/vue",
     "test:js": "node --import tsx --test tests/*.test.mjs",
     "test:e2e": "playwright test --config tests/e2e",
     "test:workers": "node --test tests/workers/*.test.mjs",

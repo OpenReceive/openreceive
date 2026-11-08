@@ -16,7 +16,9 @@ defineOptions({
 // @openreceive/elements/wrapper-shared (snapshot mode = `checkout`, create mode
 // = `reference` + optional `prefix`), and docs/internal/wrapper-parity.md is the
 // human-readable contract. `withDefaults` still spells the defaults out — a
-// type carries none.
+// type carries none. Resolving the imported type needs TypeScript, so the
+// package build does it (tools/package/compile-vue-sfc.mjs) and ships
+// dist/Checkout.js with runtime props: a shop's build never compiles this file.
 const props = withDefaults(defineProps<WrapperCheckoutComponentProps>(), {
   options: () => ({}),
   // Explicit undefined defaults suppress Vue's absent-Boolean-prop-to-false

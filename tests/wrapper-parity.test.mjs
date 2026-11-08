@@ -107,6 +107,27 @@ test("React and Vue derive the prop surface instead of restating it", () => {
   assert.doesNotMatch(vue, /defineProps<\{/, "Vue restates the prop surface inline");
 });
 
+test("the compiled Vue component declares every shared prop at runtime", async () => {
+  // The package ships Checkout.vue compiled (tools/package/compile-vue-sfc.mjs):
+  // the build resolves the shared type into runtime props. A prop the type
+  // resolution missed would be dropped silently, so the shipped list must be
+  // exactly the shared surface plus the `options` escape hatch.
+  const { default: Checkout } = await import("../packages/js/vue/dist/Checkout.js");
+  assert.deepEqual(
+    Object.keys(Checkout.props).sort(),
+    [...SHARED_PROPS, ...HANDLERS, "options"].sort(),
+  );
+  // Vue turns an absent Boolean prop into `false` unless the prop has a default.
+  // An explicit `default: undefined` keeps it "not set", so the wrapper's
+  // `?? options.* ?? default` chains still reach the documented default.
+  for (const [prop, declaration] of Object.entries(Checkout.props)) {
+    if ([declaration.type].flat().includes(Boolean)) {
+      assert.ok(Object.hasOwn(declaration, "default"), `${prop} has no withDefaults entry`);
+      assert.equal(declaration.default, undefined, `${prop} must default to undefined`);
+    }
+  }
+});
+
 test("Svelte and Angular restate the props, because their prop syntax cannot derive them", () => {
   // `export let` and `@Input()` are declarations, not types: nothing can spread
   // WrapperCheckoutComponentProps into either. The duplication is forced

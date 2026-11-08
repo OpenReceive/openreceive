@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Fixed (Vue): a Nuxt or Vite app without TypeScript, or with TypeScript 7,
+  now builds with `@openreceive/vue`. The package shipped `Checkout.vue` as
+  source, and its props name an imported type
+  (`defineProps<WrapperCheckoutComponentProps>()`), so the shop's own Vue
+  compiler had to resolve that type across packages with TypeScript. In all
+  three Nuxt agent trials `docker compose up -d --build` stopped at
+  "[@vue/compiler-sfc] Failed to load TypeScript, which is required for
+  resolving imported types"; with TypeScript 7 installed it stopped at "No fs
+  option provided to compileScript", and the shop never started. Agents got
+  past it only by pinning or removing TypeScript, or by copying the component
+  into the app. The package build now compiles the component itself:
+  `@openreceive/vue/checkout.vue` is plain JavaScript with runtime props and a
+  render function, so any Vue 3.4+ build (Vite, Nuxt, webpack with
+  vue-loader) imports it like any other module, with or without TypeScript.
+  The import path, the props and their defaults, `styles.css` and the
+  TypeScript types are unchanged. The optional `typescript` peer is gone.
 - Fixed (Python): a FastAPI or Flask shop restarted while its wallet's relay
   refused connections now starts. The wallet check at start-up raised
   `WalletPreflightError` ("could not read wallet info …"), so Uvicorn logged
