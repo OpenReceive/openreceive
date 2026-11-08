@@ -354,7 +354,7 @@ test("characterization: lightning pending", () => {
     phase: "invoice_created",
     waiting: true,
     title: "Waiting for payment",
-    detail: "Keep this page open while we verify settlement.",
+    detail: "Keep this page open while we confirm your payment.",
     countdownPrefix: "Invoice expires in",
     expires_in_seconds: 600,
     countdownLabel: "10:00",

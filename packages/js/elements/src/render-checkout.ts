@@ -54,7 +54,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   const showSummaryMeta = statusLabel === "settled" || statusLabel === "expired";
   const stateClass = statusLabel === "settled" ? orClasses.stateSettled : orClasses.statePending;
   const stateLabel = showSummaryMeta
-    ? `<span part="state" class="${stateClass}" data-state="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>`
+    ? `<span part="state" class="${stateClass}" data-state="${escapeHtml(statusLabel)}">${escapeHtml(checkoutLabels.paymentState[statusLabel] ?? statusLabel)}</span>`
     : "";
   const status = checkoutState === undefined ? "" : renderElementPaymentStatusHtml(checkoutState);
   const statusModel =

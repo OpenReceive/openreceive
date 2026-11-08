@@ -187,7 +187,7 @@ export function PaymentState(props: PaymentStateProps): React.ReactElement {
       ),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.state]: state,
     },
-    state,
+    checkoutLabels.paymentState[state] ?? state,
   );
 }
 

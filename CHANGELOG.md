@@ -52,6 +52,13 @@
   own filter gets system check warning `openreceive.W003` while `DEBUG` is on
   until that filter subclasses OpenReceive's.
 
+- Changed (checkout): the paid screen's badge reads "Paid" (and "Expired"),
+  not the engine's "settled", and the waiting screen says "Keep this page
+  open while we confirm your payment." instead of "… while we verify
+  settlement.". The `data-state` attribute still carries `settled` and
+  `expired` for hosts and stylesheets. Every reviewer of the 2026-11-08 trial
+  round read "settled" on a payer's screen as jargon.
+
 ## 0.4.32 - 2026-11-07
 
 - Fixed (Node): one failed wallet check at start-up no longer takes payments

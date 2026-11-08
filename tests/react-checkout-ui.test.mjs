@@ -102,8 +102,10 @@ test("React payment state primitive renders current state", () => {
     }),
   );
 
+  // The attribute keeps the engine's word; the payer reads "Paid".
   assert.match(html, /data-openreceive-state="settled"/);
-  assert.match(html, />settled</);
+  assert.match(html, />Paid</);
+  assert.doesNotMatch(html, />settled</);
 });
 
 test("React checkout supports design-system component and class slots", () => {

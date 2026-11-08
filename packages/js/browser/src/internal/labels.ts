@@ -17,12 +17,20 @@ export const checkoutLabels = {
   bitcoinLightningInvoice: "Bitcoin Lightning invoice",
   paymentStatus: {
     waitingTitle: "Waiting for payment",
-    waitingDetail: "Keep this page open while we verify settlement.",
+    waitingDetail: "Keep this page open while we confirm your payment.",
     settledTitle: "Payment received",
     settledDetail: "Thank you. Your payment is confirmed.",
     expiredTitle: "Invoice expired",
     expiredDetail: "Create a fresh invoice to keep going.",
   },
+  /**
+   * The payment's state as the payer reads it. The checkout's `data-state`
+   * attribute keeps the engine's word (settled, expired) for hosts and CSS;
+   * "settled" on the screen read as jargon to every 2026-11-08 trial reviewer.
+   */
+  paymentState: { settled: "Paid", expired: "Expired", pending: "Pending" } as Readonly<
+    Record<string, string>
+  >,
   countdownPrefix: "Invoice expires in",
   startOver: "Start over",
   wizardTitle: "Pay this invoice",
