@@ -5,6 +5,7 @@ This is the full file; follow it from Step 0.
 ```sh
 # READ THIS FIRST: this file is 36 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/astro/full.md
+# If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/astro/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
 

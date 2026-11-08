@@ -127,7 +127,7 @@ Create a pending test order for the first published download, billed to the
 first administrator, and mint its Lightning invoice from the terminal:
 
 ```sh
-wp openreceive test-invoice --new
+wp openreceive test-invoice --new --amount=20.00
 ```
 
 To use an order that already exists, pass `edd-<order id>` instead of
