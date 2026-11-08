@@ -65,6 +65,15 @@ export class Visitor implements CheckoutClient {
     return { cookie: [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; ") };
   }
 
+  /**
+   * What a browser sends with every POST from the shop's own page. SvelteKit
+   * refuses a form POST without a matching Origin (its CSRF check), and so may
+   * any framework an agent configures; a buyer's browser always sends one.
+   */
+  private browserOrigin(pagePath: string): Record<string, string> {
+    return { origin: new URL(this.base).origin, referer: `${this.base}${pagePath}` };
+  }
+
   async page(pathname: string): Promise<string> {
     const response = await fetch(`${this.base}${pathname}`, { headers: this.cookieHeader() });
     this.remember(response);
@@ -85,7 +94,11 @@ export class Visitor implements CheckoutClient {
     if (token !== undefined) form.set(token.name, token.value);
     const response = await fetch(`${this.base}/orders`, {
       method: "POST",
-      headers: { ...this.cookieHeader(), "content-type": "application/x-www-form-urlencoded" },
+      headers: {
+        ...this.cookieHeader(),
+        ...this.browserOrigin("/"),
+        "content-type": "application/x-www-form-urlencoded",
+      },
       body: form,
       redirect: "manual",
     });
@@ -164,6 +177,7 @@ export class Visitor implements CheckoutClient {
     await this.page(pagePath);
     const headers: Record<string, string> = {
       ...this.cookieHeader(),
+      ...this.browserOrigin(pagePath),
       "content-type": "application/json",
     };
     // Django and Flask-WTF read X-CSRFToken, Rails and Laravel X-CSRF-Token;
