@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (WordPress + WooCommerce)
 
 ```sh
-# READ THIS FIRST: this file is 23 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 24 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/woocommerce/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -42,7 +42,8 @@ the user through the quickstart's admin screens instead.
 ## Step 0 — ask for the two codes, one question at a time
 
 Before anything else, check one thing: whether OpenReceive is already
-installed (`wp plugin is-active openreceive`). If it is, run
+installed (`wp plugin is-active openreceive && echo active || echo "not active"`;
+the bare command answers only with its exit code). If it is, run
 `wp openreceive doctor`. It prints `NWC_URI: set` or `unset` (likewise
 `LSC_URI_PRIMARY`), never the values. A code that is already set is not asked
 for again; if both are set, skip to `wp openreceive configure --enable` at
@@ -143,7 +144,10 @@ Doctor names any failed check and exits nonzero; fix it before going on.
 ## Step 3 — mint a test invoice, then stop
 
 Create a pending test order that pays with OpenReceive, then mint its
-Lightning invoice from the terminal:
+Lightning invoice from the terminal. Pick a quantity that brings the order to
+at least $20 (or the same in the store's currency): smaller orders are often
+under a swap minimum, and the user will want to try every method on the link
+you give them.
 
 ```sh
 wp wc shop_order create --user=<admin user id> --payment_method=openreceive \
@@ -179,8 +183,9 @@ provider minimum depends on the order total, and the user's own orders will
 differ. Do not list what you changed or what doctor checked. Send nothing
 after it. Do not install mail software, add containers or services, or set up
 cron. If doctor's "Reconcile scheduled" check fails, fix that. On a store with
-little traffic, add one sentence to that message: a system cron for WordPress
-scheduled work settles orders sooner, and this setup does not add one. State
+little traffic, add one sentence to that message: WordPress runs its every-minute payment check only when someone visits the
+store, so on a quiet store the user's host should call wp-cron.php every
+minute (a system cron); this setup did not add one. State
 it as a recommendation. Do not offer to set it up or end the message on a
 question.
 

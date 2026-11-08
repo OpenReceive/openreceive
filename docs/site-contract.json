@@ -806,7 +806,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agent-directions",
-      "bytes": 23397
+      "bytes": 23794
     },
     {
       "path": "/guides/agent-directions-edd",
@@ -816,7 +816,7 @@
       "slug": "agent-directions-edd",
       "title": "Agent directions (Easy Digital Downloads)",
       "category": "agent-directions",
-      "bytes": 20859
+      "bytes": 21046
     },
     {
       "path": "/guides/agent-directions-paymenter",
@@ -942,7 +942,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 23397,
+      "bytes": 23794,
       "copy_button": true,
       "self_contained": true
     },
@@ -963,7 +963,7 @@
       "kind": "agent-directions-payload",
       "stack": "edd",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 20859,
+      "bytes": 21046,
       "copy_button": true,
       "self_contained": true
     },

@@ -42,7 +42,8 @@ the user through the quickstart's admin screens instead.
 ## Step 0 — ask for the two codes, one question at a time
 
 Before anything else, check one thing: whether OpenReceive is already
-installed (`wp plugin is-active openreceive`). If it is, run
+installed (`wp plugin is-active openreceive && echo active || echo "not active"`;
+the bare command answers only with its exit code). If it is, run
 `wp openreceive doctor`. It prints `NWC_URI: set` or `unset` (likewise
 `LSC_URI_PRIMARY`), never the values. A code that is already set is not asked
 for again; if both are set, skip to `wp openreceive configure --enable` at
@@ -178,8 +179,9 @@ a provider minimum depends on the order total, and the user's own orders will
 differ. Do not list what you changed or what doctor checked. Send nothing
 after it. Do not install mail software, add containers or services, or set up
 cron. If doctor's "Reconcile scheduled" check fails, fix that. On a store with
-little traffic, add one sentence to that message: a system cron for WordPress
-scheduled work settles orders sooner, and this setup does not add one. State
+little traffic, add one sentence to that message: WordPress runs its every-minute payment check only when someone visits the
+store, so on a quiet store the user's host should call wp-cron.php every
+minute (a system cron); this setup did not add one. State
 it as a recommendation. Do not offer to set it up or end the message on a
 question.
 
