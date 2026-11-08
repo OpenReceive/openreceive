@@ -45,7 +45,14 @@ public sealed class FakeLscProviderCore
     private readonly Dictionary<string, FakeOrder> _orders = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingScript> _pendingByAsset = new(StringComparer.Ordinal);
     private readonly List<Task> _payerTasks = [];
-    private string? _nextCreateError;
+    /// <summary>Forced create errors waiting, by caller-name prefix ("" for any caller).</summary>
+    private readonly Dictionary<string, string> _createErrors = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The header the HTTP host (Program.cs) sets to the caller's name, so a forced
+    /// create error can wait for one caller. A caller cannot set it: the host overwrites it.
+    /// </summary>
+    public const string ClientHeader = "X-Fake-Lsc-Client";
     private int _rateLimitRemaining;
 
     public FakeLscProviderCore(FakeLscOptions? options = null)
@@ -125,10 +132,20 @@ public sealed class FakeLscProviderCore
         Force(assetOrOrderId, "attention", attentionReason: reason, refundReason: null);
     }
 
-    /// <summary>Make the next <c>/create</c> answer an API error envelope with this message.</summary>
-    public void ForceCreateError(string message = "Fake LSC create failed.")
+    /// <summary>
+    /// Make the next <c>/create</c> answer an API error envelope with this message. With
+    /// <paramref name="client"/>, only the next create from a caller whose name starts with
+    /// it (<see cref="ClientHeader"/>), so one shop's forced error never reaches another's.
+    /// </summary>
+    public void ForceCreateError(string message = "Fake LSC create failed.", string? client = null)
     {
-        lock (_gate) _nextCreateError = message;
+        lock (_gate) _createErrors[client ?? ""] = message;
+    }
+
+    /// <summary>Drop the forced create error for this caller prefix that no create has met yet. True when one was waiting.</summary>
+    public bool ClearCreateError(string? client = null)
+    {
+        lock (_gate) return _createErrors.Remove(client ?? "");
     }
 
     /// <summary>Make the next <paramref name="count"/> <c>/api/v2</c> calls answer HTTP 429.</summary>
@@ -206,7 +223,7 @@ public sealed class FakeLscProviderCore
         {
             "ccies" => Log(apiPath, null, Ok(Ccies())),
             "price" => Price(request),
-            "create" => Create(request),
+            "create" => Create(request, headers),
             "order" => WithOrder(apiPath, request, order => Ok(Advance(order))),
             "emergency" => WithOrder(apiPath, request, order => Emergency(order, request)),
             _ => Log(apiPath, null, Envelope(404, 404, "Not found")),
@@ -290,13 +307,17 @@ public sealed class FakeLscProviderCore
         };
     }
 
-    private FakeHttpResponse Create(JsonObject request)
+    private FakeHttpResponse Create(JsonObject request, IReadOnlyDictionary<string, string> headers)
     {
         lock (_gate)
         {
-            if (_nextCreateError is { } forced)
+            var caller = headers.TryGetValue(ClientHeader, out var name) ? name : "";
+            var scope = _createErrors.Keys
+                .Where(prefix => prefix.Length > 0 && caller.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .DefaultIfEmpty(_createErrors.ContainsKey("") ? "" : null)
+                .FirstOrDefault();
+            if (scope is not null && _createErrors.Remove(scope, out var forced))
             {
-                _nextCreateError = null;
                 return Log("create", null, Envelope(200, 1, forced));
             }
         }

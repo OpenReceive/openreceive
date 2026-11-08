@@ -275,6 +275,46 @@ public sealed class FakeLscProviderTests
     }
 
     [Fact]
+    public async Task Force_create_error_for_one_client_waits_for_that_client()
+    {
+        var (core, http) = Build();
+        core.ForceCreateError("Paused for one shop", "ortrial-node-abc-");
+
+        // A create with no caller name, or another shop's, goes through.
+        await Create(http);
+        Assert.Equal(0, (int)(await CreateAs(http, "ortrial-django-xyz-web-1.openreceive-trial"))["code"]!);
+
+        var mine = await CreateAs(http, "ortrial-node-abc-web-1.openreceive-trial");
+        Assert.Equal(1, (int)mine["code"]!);
+        Assert.Equal("Paused for one shop", (string)mine["msg"]!);
+
+        // Spent: the same shop's next create goes through.
+        Assert.Equal(0, (int)(await CreateAs(http, "ortrial-node-abc-web-1.openreceive-trial"))["code"]!);
+
+        // Two shops' forced errors wait side by side; one no create met can be cleared.
+        core.ForceCreateError("Paused for node", "ortrial-node-abc-");
+        core.ForceCreateError("Paused for django", "ortrial-django-xyz-");
+        Assert.True(core.ClearCreateError("ortrial-node-abc-"));
+        Assert.False(core.ClearCreateError("ortrial-node-abc-"));
+        Assert.Equal(0, (int)(await CreateAs(http, "ortrial-node-abc-web-1.openreceive-trial"))["code"]!);
+        Assert.Equal("Paused for django", (string)(await CreateAs(http, "ortrial-django-xyz-web-1.openreceive-trial"))["msg"]!);
+    }
+
+    private static async Task<JsonObject> CreateAs(HttpClient http, string caller)
+    {
+        var body = $$"""{"type":"fixed","fromCcy":"USDTTRC","toCcy":"BTCLN","direction":"to","amount":"0.0001","toAddress":"{{Bolt11}}"}""";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/v2/create")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("X-API-KEY", "test-key");
+        request.Headers.Add("X-API-SIGN", FakeLscProviderCore.Sign("test-secret", body));
+        request.Headers.Add(FakeLscProviderCore.ClientHeader, caller);
+        using var response = await http.SendAsync(request);
+        return (JsonObject)JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+    }
+
+    [Fact]
     public async Task Rates_xml_lists_every_pay_in_to_lightning_pair()
     {
         var (_, http) = Build();

@@ -81,7 +81,10 @@ app.MapPost("/__testkit/force-attention", (ForceRequest body) =>
     Control(() => core.ForceAttention(body.Selector, body.Reason ?? "provider_reported_emergency")));
 
 app.MapPost("/__testkit/force-create-error", (CreateErrorRequest body) =>
-    Control(() => core.ForceCreateError(body.Message ?? "Fake LSC create failed.")));
+    Control(() => core.ForceCreateError(body.Message ?? "Fake LSC create failed.", body.Client)));
+
+app.MapPost("/__testkit/clear-create-error", (ClearCreateErrorRequest? body) =>
+    Results.Json(new { ok = true, waiting = core.ClearCreateError(body?.Client) }));
 
 app.MapPost("/__testkit/rate-limit", (RateLimitRequest body) =>
     Control(() => core.RateLimitNext(body.Count)));
@@ -103,6 +106,9 @@ app.Map("{**providerPath}", async (HttpContext context) =>
     var body = await reader.ReadToEndAsync(context.RequestAborted);
     var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     foreach (var (name, values) in context.Request.Headers) headers[name] = values.ToString();
+    // Who is calling, as Docker's DNS names the container, for a forced error scoped
+    // to one shop. Always overwritten, never taken from the caller.
+    headers[FakeLscProviderCore.ClientHeader] = await CallerName(context.Connection.RemoteIpAddress);
 
     var response = await core.HandleAsync(
         context.Request.Method,
@@ -118,6 +124,22 @@ app.Map("{**providerPath}", async (HttpContext context) =>
 log.LogInformation("Fake LSC listening on {Scheme}://0.0.0.0:{Port} (payer: {Payer})",
     certPath is null ? "http" : "https", port, payerConnectionString is null ? "none" : "configured");
 app.Run();
+
+static async Task<string> CallerName(System.Net.IPAddress? address)
+{
+    if (address is null) return "";
+    if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+    try
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var entry = await System.Net.Dns.GetHostEntryAsync(address.ToString(), timeout.Token);
+        return string.IsNullOrEmpty(entry.HostName) ? address.ToString() : entry.HostName;
+    }
+    catch (Exception)
+    {
+        return address.ToString();
+    }
+}
 
 static IResult Control(Action action)
 {
@@ -158,5 +180,6 @@ static Dictionary<string, string> ParseArgs(string[] args)
 
 sealed record ScriptRequest(string Selector, string[] States);
 sealed record ForceRequest(string Selector, string? Reason);
-sealed record CreateErrorRequest(string? Message);
+sealed record CreateErrorRequest(string? Message, string? Client);
+sealed record ClearCreateErrorRequest(string? Client);
 sealed record RateLimitRequest(int Count);
