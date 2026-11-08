@@ -17,7 +17,7 @@ const { createLifecycleStack, installFastTimers, until } = await import(
 const React = (await import("react")).default;
 const { createRoot } = await import("react-dom/client");
 const { Checkout } = await import("../packages/js/react/src/index.ts");
-const { prepareCheckout } = await import("../packages/js/browser/src/index.ts");
+const { prepareCheckout, requestCheckout } = await import("../packages/js/browser/src/index.ts");
 const elements = await import("../packages/js/elements/src/index.ts");
 
 // Kept and used: leaving the clamped timers installed after the suite leaks a patched
@@ -111,6 +111,7 @@ function elementSurface(mode) {
         terminal: () => terminal,
         text: () => root().textContent ?? "",
         html: () => root().innerHTML,
+        bitcoinTile: () => root().querySelector('[data-or-method="bitcoin"]'),
         async selectUsdtTron() {
           const picker = await until(
             () => root().querySelector('[data-or-picker-select="swap:USDT"]'),
@@ -146,12 +147,10 @@ function reactSurface(mode) {
       const onSettled = () => {
         settledCount += 1;
       };
-      if (mode === "snapshot") {
-        const snapshot = await prepareCheckout({
-          reference,
-          prefix: "/openreceive",
-          fetch: stack.fetchStub,
-        });
+      if (mode === "snapshot" || mode === "minted-snapshot") {
+        // A snapshot host either prepared the amount or minted the invoice itself.
+        const load = mode === "snapshot" ? prepareCheckout : requestCheckout;
+        const snapshot = await load({ reference, prefix: "/openreceive", fetch: stack.fetchStub });
         root.render(
           React.createElement(Checkout, {
             checkout: snapshot,
@@ -171,6 +170,7 @@ function reactSurface(mode) {
         settled: () => settledCount,
         text: () => container.textContent ?? "",
         html: () => container.innerHTML,
+        bitcoinTile: () => findButton("Bitcoin"),
         async selectUsdtTron() {
           const picker = await until(() => findButton("USDT"), {
             label: `${this.name} USDT picker`,
@@ -243,6 +243,66 @@ for (const surface of SURFACES) {
       );
       const lastCheck = stack.checkCalls().at(-1);
       assert.equal(lastCheck.body?.payment_hash, swapHash);
+    } finally {
+      handle.unmount();
+      await stack.close();
+    }
+  });
+}
+
+// A shop with no swap provider: the picker gets no swap methods, so the whole page
+// depends on the checkout finishing its load with nothing but Bitcoin to offer. The
+// mint is the payer's click, never the page view (element-checkout-session: "Bitcoin
+// selection mints later").
+const NO_SWAP_SURFACES = [
+  reactSurface("create"),
+  reactSurface("minted-snapshot"),
+  elementSurface("create"),
+  elementSurface("snapshot"),
+];
+
+for (const surface of NO_SWAP_SURFACES) {
+  test(`${surface.name}: no swap provider: the checkout loads, mints on the click and turns paid`, async () => {
+    const stack = await createLifecycleStack({ noSwapProvider: true });
+    globalThis.fetch = stack.fetchStub;
+    stack.addOrder("order-no-swap", 2100);
+    // Create mode asks for the amount first and mints on the click; the snapshot
+    // surfaces are hosts that minted the invoice before rendering it.
+    const hostMintedFirst = surface.name !== "react-create" && surface.name !== "element-create";
+    const handle = await surface.mount(stack, "order-no-swap");
+    const minted = () => stack.wallet.listInvoices().length;
+    const qr = () => handle.root().querySelector("[data-openreceive-qr]");
+    try {
+      const tile = await until(() => handle.bitcoinTile() ?? (hostMintedFirst ? qr() : null), {
+        label: `${surface.name} Bitcoin tile`,
+      });
+      await settle(4);
+      assert.doesNotMatch(handle.text(), /Loading currencies/, "no stuck loading tile");
+      assert.equal(handle.root().querySelector('[role="alert"]'), null, "no error on the page");
+      assert.doesNotMatch(handle.text(), /USDT|USDC|Could not|failed/i);
+      assert.equal(minted(), hostMintedFirst ? 1 : 0, "the page view mints nothing");
+      if (!hostMintedFirst) {
+        const prepared = stack.requests.find((entry) => entry.path.endsWith("/checkouts/prepare"));
+        assert.equal(prepared?.status, 200);
+        assert.deepEqual(prepared.responseBody.payment_methods, []);
+      }
+
+      if (tile !== qr()) tile.click();
+      await until(qr, { label: `${surface.name} QR code` });
+      assert.equal(minted(), 1, "one invoice, minted by the click");
+      assert.equal(handle.root().querySelector('[role="alert"]'), null);
+
+      const hash = stack.wallet.listInvoices().at(-1).payment_hash;
+      stack.wallet.settleInvoice({ payment_hash: hash });
+      await until(() => handle.settled() > 0, { label: `${surface.name} settled callback` });
+      await until(() => PAID_PANEL_PATTERN.test(handle.text()), {
+        label: `${surface.name} paid panel`,
+      });
+      assert.deepEqual(
+        stack.settlements.map((settlement) => settlement.reference),
+        ["order-no-swap"],
+        "the paid hook fires exactly once",
+      );
     } finally {
       handle.unmount();
       await stack.close();

@@ -17,11 +17,18 @@ import { memoryPaymentsDb } from "./factories.mjs";
 export async function createLifecycleStack(options = {}) {
   const now = options.now ?? (() => Math.floor(Date.now() / 1000));
   const wallet = createTestkitReceiveClient({ now });
-  const swapProvider = createTestkitSwapProvider({ now });
+  // `noSwapProvider: true` is a shop that never configured a swap provider: no
+  // provider is injected, so the service builds its list from `env` exactly as a
+  // real install does. Any other stack gets the testkit fake provider.
+  const swapProvider = options.noSwapProvider ? undefined : createTestkitSwapProvider({ now });
   const service = await createOpenReceive({
     client: wallet,
     clock: now,
-    swap: { provider: swapProvider },
+    ...(swapProvider === undefined
+      ? { env: options.env ?? {} }
+      : { swap: { provider: swapProvider } }),
+    ...(options.logger === undefined ? {} : { logger: options.logger }),
+    ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
   });
   const db = memoryPaymentsDb();
   const orders = new Map();
@@ -38,6 +45,7 @@ export async function createLifecycleStack(options = {}) {
     // Allow-all unless a test checks how the page authenticates.
     authorize: options.authorize ?? (() => true),
     host,
+    ...(options.handlerClock === undefined ? {} : { clock: options.handlerClock }),
   });
   const requests = [];
   const fetchStub = async (input, init) => {
