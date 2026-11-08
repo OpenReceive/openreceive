@@ -199,7 +199,6 @@ export interface PaymentRepository<Transaction = unknown> {
     readonly scheduler: ReconcileScheduler;
     readonly now: number;
     readonly release?: boolean;
-    readonly intervalSeconds?: number;
   }): boolean | Promise<boolean>;
 }
 

@@ -99,8 +99,7 @@ final class MetaStore
             $rows = $this->db->query("SELECT value, rev FROM {$this->table} WHERE {$this->key()} = ? LIMIT 1", [self::RECONCILE_GATE_KEY]);
             $current = $rows === [] ? [] : self::parseGate($rows[0]['value']);
             $claimed = $current['claimed_at'] ?? null;
-            $interval = max($intervalSeconds, (int) ($current['interval_seconds'] ?? 0));
-            if (is_int($claimed) && (self::isFreshTimestamp($now, $claimed, $interval)
+            if (is_int($claimed) && (self::isFreshTimestamp($now, $claimed, $intervalSeconds)
                 || (($current['lease_until'] ?? 0) > $now && $claimed <= $now + self::CLOCK_SKEW_SECONDS))) {
                 return null;
             }
@@ -108,7 +107,7 @@ final class MetaStore
             // longer than the interval would otherwise leave the gate open on release,
             // and every sequential request after it would pay a full scan of its own.
             $finished = $current['finished_at'] ?? null;
-            if (is_int($finished) && self::isFreshTimestamp($now, $finished, $interval)) {
+            if (is_int($finished) && self::isFreshTimestamp($now, $finished, $intervalSeconds)) {
                 return null;
             }
             $state = ['version' => 1, 'claimed_at' => $now, 'token' => self::uuid(),

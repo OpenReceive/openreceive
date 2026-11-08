@@ -70,11 +70,11 @@ export async function claimMetaGate(
     // The interval also runs from the end of the last pass. A pass that takes
     // longer than the interval would otherwise leave the gate open on release,
     // and every sequential request after it would pay a full scan of its own.
-    const interval = Math.max(intervalSeconds, gate?.interval_seconds ?? 2);
     if (
       gate !== undefined &&
-      (isFreshTimestamp(now, gate.claimed_at, interval) ||
-        (gate.finished_at !== undefined && isFreshTimestamp(now, gate.finished_at, interval)))
+      (isFreshTimestamp(now, gate.claimed_at, intervalSeconds) ||
+        (gate.finished_at !== undefined &&
+          isFreshTimestamp(now, gate.finished_at, intervalSeconds)))
     )
       return null;
     if (
@@ -117,13 +117,11 @@ export async function checkpointMetaGate(
     scheduler,
     now,
     release = false,
-    intervalSeconds,
   }: {
     readonly claim: ReconcileGateClaim;
     readonly scheduler: ReconcileScheduler;
     readonly now: number;
     readonly release?: boolean;
-    readonly intervalSeconds?: number;
   },
 ): Promise<boolean> {
   if (
@@ -139,7 +137,6 @@ export async function checkpointMetaGate(
     ...gate,
     scheduler,
     lease_until: release ? 0 : gate.lease_until,
-    interval_seconds: intervalSeconds ?? gate.interval_seconds,
     finished_at: release ? now : gate.finished_at,
   });
   if (new TextEncoder().encode(value).length > 131072)

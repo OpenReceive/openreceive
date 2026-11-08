@@ -1307,7 +1307,7 @@ route handler.
 | `GET` | `(request) => Promise<Response>` | App Router GET export. Every shipped route is POST except `GET …/rates`. Exporting both lets the catch-all module serve all of them. |
 | `POST` | `(request) => Promise<Response>` | App Router POST export. Routes requests to the OpenReceive route set. |
 | `handler` | `(request) => Promise<Response>` | The same request router, for tests or a custom method map. |
-| `ready` | `Promise<void>` | All-in-one form only: resolves when the wallet client is up. |
+| `ready` | `Promise<void>` | All-in-one form only: settles when the first wallet check has finished. Rejects only for a configuration that can never work; a relay that did not answer resolves it. |
 | `close` | `() => Promise<void>` | All-in-one form only: closes the owned wallet client. |
 
 ## Persistence
@@ -1355,7 +1355,7 @@ advanced integrations. It is responsible for:
 | `findByPaymentHash` | `(hash) => Promise<PaymentRecord \| undefined>` | Required, as the durable acknowledgment. A wallet success is served only after its row is settled. |
 | `countAttemptsFromIp` | `(clientIp, sinceUnixSeconds) => number \| Promise<number>` | Attempt rows for this IP at or after that time. Used by opt-in `rateLimiting`. |
 | `claimReconcileGate` | `({ now, intervalSeconds, leaseSeconds? }) => ReconcileGateClaim \| null` | A durable compare-and-swap (CAS) claim holding a token and scheduler state, or `null` when busy. Async implementations return a Promise. |
-| `checkpointReconcileGate` | `({ claim, scheduler, now, release?, intervalSeconds? }) => boolean \| Promise<boolean>` | Saves limited keyset and scan progress, but only while the token still holds its unexpired lease. |
+| `checkpointReconcileGate` | `({ claim, scheduler, now, release? }) => boolean \| Promise<boolean>` | Saves limited keyset and scan progress, but only while the token still holds its unexpired lease. |
 | `listRepairCandidates` | `({ after?, limit? }?)` | SQL repository only. A limited, read-only report of attempts in `attention` and of swap attempts that were clearly closed too early. It contains no credentials. |
 | `requeueAttempt` | `({ paymentHash, expectedStatus, expectedUpdatedAt, reason })` | SQL repository only. Puts an attempt you have reviewed back in the queue, under the reference lock. Keeps the repair audit trail. Never changes a settled row. |
 | `markPaidOnce` | `(input, fulfill) => Promise<boolean>` | Write-once settlement. Sets `paid_at` / `settled` once and runs `fulfill` only for the first settled attempt for a reference. **Resolves `true` only for the call that won that first-settlement claim.** Later calls, such as a redelivered notification or a sibling attempt, record the settlement, skip `fulfill`, and resolve `false`. A direct caller uses that boolean to avoid doing its own work twice. |

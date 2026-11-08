@@ -234,6 +234,18 @@ final class SqlPaymentRepositoryTest extends DatabaseCase
     }
 
     #[DataProvider('dialects')]
+    public function testTheGateUsesTheIntervalOfThisClaimNotTheLastOne(string $dialect): void
+    {
+        $repo = $this->repository($dialect);
+        // Only stale invoices were pending, so the last pass paced at 12 s.
+        $claim = $repo->claimReconcileGate(1_000, 12);
+        self::assertNotNull($claim);
+        self::assertTrue($repo->checkpointReconcileGate($claim, $claim['scheduler'], 1_000, true));
+        self::assertNull($repo->claimReconcileGate(1_002, 3), 'still inside the 3 s a new invoice asks for');
+        self::assertNotNull($repo->claimReconcileGate(1_004, 3), 'a new invoice is not held to the older pace');
+    }
+
+    #[DataProvider('dialects')]
     public function testTheRateLimitBudgetCountsOnInsertedAt(string $dialect): void
     {
         $repo = $this->repository($dialect);

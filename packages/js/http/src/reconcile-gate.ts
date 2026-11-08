@@ -142,9 +142,13 @@ export async function maybeReconcilePayments(
       OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
       input.scanTimeoutMs ?? OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
     );
+    // The pace comes from what is pending now. A pass that ran just before a
+    // new invoice's row existed must not hold it to the older invoices' pace.
+    const pending = await input.host.payments.listReconcilableAttempts(null);
+    if (pending.length === 0) return { reason: "no_pending" };
     const claim = await claimReconcileGate.call(input.host.payments, {
       now,
-      intervalSeconds: minInterval,
+      intervalSeconds: reconcileIntervalSeconds(pending, now, minInterval),
       leaseSeconds: Math.ceil(timeout / 1000) + 1,
     });
     if (claim === null) return { reason: "gate_busy" };
@@ -218,13 +222,11 @@ export async function maybeReconcilePayments(
       expiresAt: attempt.expires_at,
       createdAtSource: attempt.created_at_source,
     }));
-    const intervalSeconds = reconcileIntervalSeconds(attempts, now, minInterval);
     if (
       !(await input.host.payments.checkpointReconcileGate({
         claim,
         scheduler,
         now: clock(),
-        intervalSeconds,
       }))
     )
       return { reason: "gate_busy" };
@@ -248,7 +250,6 @@ export async function maybeReconcilePayments(
               claim,
               scheduler,
               now: clock(),
-              intervalSeconds,
             }))
           )
             throw new Error("Reconciliation lease expired before finality delivery.");
@@ -288,7 +289,6 @@ export async function maybeReconcilePayments(
         scheduler,
         now: clock(),
         release: true,
-        intervalSeconds,
       }))
     )
       return { reason: "gate_busy" };

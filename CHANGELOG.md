@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Fixed (Node, PHP): a new invoice's first wallet check no longer waits for
+  the older invoices' slower pace. When only invoices older than five minutes
+  were pending, the checkout's own reconcile pass ran just before the new
+  row existed and set a 12 s interval, and later claims kept the larger of
+  that and their own, so a payment could take about 16 s to show as paid.
+  Each claim now uses the interval for what is pending at that moment (3 s
+  while any invoice is under two minutes old), as Ruby and Python already did.
+  Node reads the pending list before claiming, and a request with nothing
+  pending no longer writes to the gate. Custom repositories: Node no longer
+  passes `intervalSeconds` to `checkpointReconcileGate`.
+- Changed (Node): the `ready` promise on `createStack`, `@openreceive/express`
+  and `@openreceive/next` rejects only for what trying again cannot fix: no
+  NWC code, a malformed one, or a wallet that can spend. A relay that did not
+  answer at start now resolves it, so `await ready` before `listen()` no
+  longer stops a shop during a relay outage. Checkouts answer a retryable 503
+  and the next request after a short wait checks again, as on Python and
+  Ruby. `ready` therefore does not prove the wallet answered; run
+  `openreceive doctor` for that. `ConfigError` has a new `retryable` field.
+- Changed (checkout): a shop that only takes Lightning no longer tells the
+  payer to "Choose how you want to pay." above its one button.
+- Changed (checkout): the "Keep this order id" note no longer calls the id
+  "the way back to this payment", which shops that tie an order to the browser
+  could not honor from another one. It now says the shop can find the payment
+  with it, and that the link brings the payer back on this browser.
+- Added (WordPress): `wp openreceive test-invoice --new --amount=20.00` sets
+  the Easy Digital Downloads test order's amount, as the Paymenter,
+  FOSSBilling and PrestaShop commands do. The EDD directions use it, so the
+  test order is large enough for every payment method.
+- Changed (WordPress): the plugin's short description names ETH and SOL.
+- Docs (agent directions): the top of each file says how to save the
+  directions and read them in parts when a tool cuts long output.
 - Fixed (Vue): a Nuxt or Vite app without TypeScript, or with TypeScript 7,
   now builds with `@openreceive/vue`. The package shipped `Checkout.vue` as
   source, and its props name an imported type
@@ -138,11 +169,7 @@
   `paidAt` into a Postgres `TIMESTAMPTZ` column.
 - Docs (Node): `paidAt` in `onPaid` is Unix seconds; its type and the ORM
   guide now say so and show `to_timestamp($1)` (Postgres) and
-  `FROM_UNIXTIME(?)` (MySQL) for a timestamp column. The `ready` promise's
-  doc comment on `createStack`, `@openreceive/express` and `@openreceive/next`
-  now says it rejects when the first wallet check fails and must not be
-  awaited before `listen()`, as the deploying guide does. An agent that read
-  only the type awaited it and a relay blip at start stopped its shop.
+  `FROM_UNIXTIME(?)` (MySQL) for a timestamp column.
 - Docs (agent directions), from the 2026-11-08 trial reviews: SvelteKit 3
   takes the shop's origin from `paths.origin`, set from `ORIGIN` at build
   time, never a literal host:port and never a widened CSRF check. The Next.js

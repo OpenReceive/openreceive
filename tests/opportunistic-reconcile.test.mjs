@@ -96,7 +96,7 @@ test("disabling HTTP scans still allows the worker to settle through the shared 
           clock: () => fix.state.now,
         })
       ).reason,
-      "gate_busy",
+      "no_pending",
     );
   } finally {
     worker.stop();
@@ -187,6 +187,27 @@ test("a pass slower than the interval still shuts the gate for the next request"
   fix.state.now += 3;
   assert.equal((await check()).status, 200);
   assert.ok(fix.walks.length > walksAfterFirst, "the gate reopens a full interval later");
+});
+
+test("a new invoice is checked at its own pace, not the older invoices' slower one", async () => {
+  const fix = await fixture();
+  await createCheckout(fix, "order-abandoned");
+
+  // Only the abandoned order is pending, ten minutes on: the next create's own
+  // pass runs before its row exists and paces at 12 s.
+  fix.state.now = 1_600;
+  const checkout = await createCheckout(fix, "order-new");
+  const walksAfterCreate = fix.walks.length;
+  assert.ok(walksAfterCreate >= 1, "the create's pass scanned for the abandoned order");
+
+  fix.wallet.settleInvoice({ payment_hash: checkout.payment_hash }, { settled_at: 1_602 });
+  fix.state.now = 1_604;
+  const answer = await fix.handler(
+    postJson("/payments/check", { reference: "order-new", payment_hash: checkout.payment_hash }),
+  );
+  assert.equal(answer.status, 200);
+  assert.ok(fix.walks.length > walksAfterCreate, "the 3 s pace applies once the new row exists");
+  assert.equal((await answer.json()).status, "settled");
 });
 
 test("a throwing scan still returns user B's 200", async () => {
