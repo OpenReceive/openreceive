@@ -51,6 +51,9 @@ function run(command: string, args: readonly string[], cwd: string): Promise<voi
 }
 
 const FIXTURE_PORT = "127.0.0.1:8080:";
+// A fixture that builds its own public address in (SvelteKit's paths.origin)
+// names it with the same port, so it moves with the port.
+const FIXTURE_ORIGIN = "http://127.0.0.1:8080";
 
 /**
  * A value as a Compose env_file line reads it back. A certificate spans
@@ -142,7 +145,10 @@ export async function prepareShop(
   let fixture = await readFile(composeFile, "utf8");
   if (!fixture.includes(FIXTURE_PORT))
     throw new InfraError(`${composeFile} does not publish ${FIXTURE_PORT}.`);
-  fixture = fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:`);
+  const port = await freePort();
+  fixture = fixture
+    .replace(FIXTURE_PORT, `127.0.0.1:${port}:`)
+    .replaceAll(FIXTURE_ORIGIN, `http://127.0.0.1:${port}`);
   // A hosting platform's variables reach the web service the way a Vercel or
   // Replit deployment gets them: from outside the app. Both files sit beside
   // the shop and no file in it names them; docker.ts adds the override to

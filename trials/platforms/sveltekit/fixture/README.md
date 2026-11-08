@@ -25,5 +25,6 @@ from its environment, never from `.env`.
 
 The shop runs over plain HTTP with no proxy in front, where adapter-node takes
 every request's origin to be `https://<host>`. SvelteKit's Origin check would
-then refuse the order form, so `vite.config.ts` turns it off
-(`csrf.trustedOrigins: ['*']`).
+then refuse the order form, so the shop's public address is built in as
+`paths.origin` (`vite.config.ts`), from the `ORIGIN` build argument in
+`compose.yml`. Serve it at another address, and that argument changes with it.

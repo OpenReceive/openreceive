@@ -2,7 +2,7 @@
 # The Compose project name is the directory name. Each trial copies this
 # file into its own directory so two runs do not share a network or a volume.
 # The host port is fixed: the harness swaps 8080 for a free port per run
-# (sandbox.ts) and that address stays across a rebuild.
+# (sandbox.ts), here and in ORIGIN, and that address stays across a rebuild.
 services:
   postgres:
     image: postgres:17-alpine
@@ -18,7 +18,11 @@ services:
       timeout: 5s
       retries: 30
   web:
-    build: .
+    build:
+      context: .
+      args:
+        # The shop's public address: SvelteKit checks form posts against it.
+        ORIGIN: http://127.0.0.1:8080
     ports:
       - "127.0.0.1:8080:3000"
     environment:

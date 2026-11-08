@@ -610,6 +610,22 @@ test("cursor gets COMPOSE_FILE from the harness, but never a wallet code through
   assert.equal(env.NWC_URI, undefined);
 });
 
+test("the SvelteKit shop's built-in origin moves with its port", async () => {
+  const fixture = new URL("../trials/platforms/sveltekit/fixture", import.meta.url).pathname;
+  const directory = await prepareShop(fixture, "sveltekit-test");
+  try {
+    const compose = await readFile(path.join(directory, "compose.yml"), "utf8");
+    const port = compose.match(/"127\.0\.0\.1:(\d+):3000"/)?.[1];
+    assert.ok(port !== undefined && port !== "8080", compose);
+    assert.ok(compose.includes(`ORIGIN: http://127.0.0.1:${port}\n`), compose);
+    assert.ok(!compose.includes("127.0.0.1:8080"), compose);
+    const vite = await readFile(path.join(directory, "vite.config.ts"), "utf8");
+    assert.ok(!vite.includes("trustedOrigins"), "the fixture widens no CSRF check");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("a platform shop holds no path to the platform's variables", async () => {
   const fixture = new URL("../trials/platforms/replit/fixture", import.meta.url).pathname;
   const directory = await prepareShop(fixture, "replit-test", {

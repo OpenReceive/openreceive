@@ -11,12 +11,13 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 			adapter: adapter(),
-			csrf: {
-				// The shop is served over plain HTTP on whatever port Compose
-				// publishes, with no proxy in front. adapter-node takes the
-				// request's origin to be https://<host> unless a proxy says
-				// otherwise, so the default Origin check refused every order form.
-				trustedOrigins: ['*']
+			paths: {
+				// The shop's public address, which the Origin check on form posts
+				// compares with. Without it adapter-node takes it to be
+				// https://<host>, and this shop is served over plain HTTP with no
+				// proxy in front. Built in at `vite build`, from compose.yml's
+				// ORIGIN build argument.
+				origin: process.env.ORIGIN || undefined
 			}
 		})
 	]
