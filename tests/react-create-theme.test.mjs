@@ -19,8 +19,16 @@ async function mountFailingCreate(props) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  const createFetch = () =>
-    Promise.reject(new Error("Exchange rates are temporarily unavailable."));
+  // The engines' rate outage: an INTERNAL 503 whose sentence is the payer's.
+  const createFetch = async () =>
+    new Response(
+      JSON.stringify({
+        code: "INTERNAL",
+        message: "Exchange rates are temporarily unavailable — please try again in a moment.",
+        retryable: true,
+      }),
+      { status: 503, headers: { "content-type": "application/json" } },
+    );
   await act(async () => {
     root.render(
       React.createElement(Checkout, {
@@ -50,7 +58,10 @@ test("the create-error screen carries the locked theme and the checkout root", a
   assert.match(section.className, /\bp-4\b/);
   assert.match(section.className, /\brounded-box\b/);
   assert.match(section.textContent, /Could not start checkout\./);
-  assert.match(section.textContent, /Exchange rates are temporarily unavailable\./);
+  assert.match(
+    section.textContent,
+    /Exchange rates are temporarily unavailable — please try again in a moment\./,
+  );
   await unmount();
 });
 

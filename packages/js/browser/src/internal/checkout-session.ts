@@ -33,6 +33,7 @@ import {
   mergeAttemptIntoSnapshot,
   mergeMintedCheckout,
 } from "./checkout-merge.ts";
+import { emitBrowserLog } from "./checkout-log.ts";
 import { checkoutLabels } from "./labels.ts";
 import { postJson, startSwapRequest } from "./swap-http.ts";
 import type {
@@ -183,20 +184,135 @@ function normalizeSwapQuote(body: unknown): CheckoutPaymentMethod | undefined {
 }
 
 /**
- * What a payer reads for a failed request. The server's text travels on the
- * thrown error and is kept ("Exchange rates are temporarily unavailable — …",
- * a host's own refusal), with one exception. A wallet or relay that did not
- * answer (`WALLET_UNAVAILABLE`, `TIMEOUT`) carries text written for the shop's
- * operator, which differs by engine ("Configured NWC relays are
- * unavailable.", "NWC wallet service request timed out."), so the payer gets
- * one sentence that says to try again.
+ * Server sentences written for the payer, kept word for word. Every engine
+ * (Node, Python, PHP, Ruby) sends these exact strings, and the shop plugins
+ * add the one security-token refusal; a sentence missing here only costs the
+ * payer its precision, never shows them developer text.
  */
-export function payerErrorMessage(error: unknown, fallback: string): string {
-  const { code } = (error ?? {}) as { code?: unknown };
-  if (code === "WALLET_UNAVAILABLE" || code === "TIMEOUT") {
+const PAYER_WRITTEN_SERVER_MESSAGES: ReadonlySet<string> = new Set([
+  // INTERNAL 503, retryable: the price feed could not price the order.
+  "Exchange rates are temporarily unavailable — please try again in a moment.",
+  // INTERNAL 502/503: the swap provider's own failures (http-golden 25, 26).
+  "The swap provider refused this request.",
+  "The swap provider is rate limited. Please try again shortly.",
+  "The swap provider is temporarily unreachable. Please try again shortly.",
+  // FORBIDDEN 403 from the PrestaShop and FOSSBilling endpoints: a stale page.
+  "The page's security token is missing or old. Reload the page and try again.",
+]);
+
+/**
+ * Where {@link payerErrorMessage} logs a reworded failure: the request that
+ * failed (`checkout.prepare`, `checkout.create`, `swap.start`) and the
+ * checkout's logger (omitted means the default console logger, `false` none).
+ */
+interface PayerErrorReport {
+  readonly action: string;
+  readonly logger?: BrowserLoggerOption;
+}
+
+/**
+ * What a payer reads for a failed request.
+ *
+ * Most server text is written for the shop's developer — "Not authorized for
+ * this action. The application's authorize hook denied it; …", "payment_hash
+ * is required.", "The selected payment attempt is not a reusable pending
+ * checkout." — and the wallet's for its operator ("Configured NWC relays are
+ * unavailable."). The payer gets one sentence per kind of failure instead,
+ * picked by the error's code and HTTP status:
+ *
+ * - `WALLET_UNAVAILABLE`, `TIMEOUT` (and a plugin's `UNAVAILABLE`), a
+ *   retryable 5xx, a proxy's code-less 502/503/504: the payment service did
+ *   not answer, try again.
+ * - Any other 5xx: something went wrong, try again.
+ * - `FORBIDDEN` / `UNAUTHORIZED` / 401 / 403: only the browser or account that
+ *   placed the order can open it; reload if that is this one.
+ * - `NOT_FOUND` / 404: the order could not be found.
+ * - `CONFLICT` / 409: the payment changed; reload and try again.
+ * - `RATE_LIMITED` / 429: the server's text, which is payer-facing by contract
+ *   and host-configurable (docs/guides/rate-limiting.md).
+ * - `INVALID_REQUEST` and anything else: something went wrong, try again.
+ * - No code and no status (a network failure, a client-side check): `fallback`.
+ *
+ * The few sentences the engines write for the payer ("Exchange rates are
+ * temporarily unavailable — …", the swap provider's) are kept as they are.
+ * The original error is untouched: hosts get it through `onError` /
+ * `openreceive-error`, and with `report` a reworded failure also logs one
+ * `checkout.error.reworded` warning with the server's code, status and text.
+ */
+export function payerErrorMessage(
+  error: unknown,
+  fallback: string,
+  report?: PayerErrorReport,
+): string {
+  const sentence = payerSentence(error, fallback);
+  if (report !== undefined) logRewordedError(error, sentence, report);
+  return sentence;
+}
+
+function payerSentence(error: unknown, fallback: string): string {
+  const { code, status, retryable } = (error ?? {}) as {
+    code?: unknown;
+    status?: unknown;
+    retryable?: unknown;
+  };
+  const errorCode = typeof code === "string" && code.length > 0 ? code : undefined;
+  const httpStatus = typeof status === "number" ? status : undefined;
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (
+    errorCode === "WALLET_UNAVAILABLE" ||
+    errorCode === "TIMEOUT" ||
+    errorCode === "UNAVAILABLE"
+  ) {
     return checkoutLabels.paymentServiceUnavailable;
   }
-  return error instanceof Error && error.message.length > 0 ? error.message : fallback;
+  // Not a server's answer at all: fetch could not reach it, or a check in this
+  // browser refused first. The caller's sentence names what was being done.
+  if (errorCode === undefined && httpStatus === undefined) {
+    return fallback;
+  }
+  if (PAYER_WRITTEN_SERVER_MESSAGES.has(message)) return message;
+  if (httpStatus !== undefined && httpStatus >= 500) {
+    const gateway = errorCode === undefined && httpStatus >= 502 && httpStatus <= 504;
+    return retryable === true || gateway
+      ? checkoutLabels.paymentServiceUnavailable
+      : checkoutLabels.paymentRequestFailed;
+  }
+  if (
+    errorCode === "FORBIDDEN" ||
+    errorCode === "UNAUTHORIZED" ||
+    httpStatus === 401 ||
+    httpStatus === 403
+  ) {
+    return checkoutLabels.paymentNotYours;
+  }
+  if (errorCode === "NOT_FOUND" || httpStatus === 404) return checkoutLabels.orderNotFound;
+  if (errorCode === "CONFLICT" || httpStatus === 409) return checkoutLabels.paymentChanged;
+  if (errorCode === "RATE_LIMITED" && message.length > 0) return message;
+  return checkoutLabels.paymentRequestFailed;
+}
+
+/**
+ * The developer's copy of a failure the payer read in other words. Without it
+ * the authorize-hook hint, which used to be on the screen, reached a host that
+ * wired no `onError` only through the network panel.
+ */
+function logRewordedError(error: unknown, sentence: string, report: PayerErrorReport): void {
+  const message = error instanceof Error ? error.message : "";
+  if (message.length === 0 || message.trim() === sentence) return;
+  const { code, status } = error as { code?: unknown; status?: unknown };
+  emitBrowserLog(
+    report.logger,
+    "warn",
+    "checkout.error.reworded",
+    "A failed checkout request was shown to the payer in other words; error_message is the original.",
+    {
+      action: report.action,
+      ...(typeof status === "number" ? { status } : {}),
+      ...(typeof code === "string" ? { error_code: code } : {}),
+      error_message: message,
+      payer_message: sentence,
+    },
+  );
 }
 
 export function createCheckoutSession(options: CheckoutSessionOptions): CheckoutSession {
@@ -284,7 +400,10 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       if (!action.isCurrent()) return;
       // Surface the mint failure inline instead of silently returning to the
       // method picker.
-      wizardError = payerErrorMessage(error, MINT_FAILED);
+      wizardError = payerErrorMessage(error, MINT_FAILED, {
+        action: "checkout.create",
+        ...(options.logger === undefined ? {} : { logger: options.logger }),
+      });
       options.onError(error);
     } finally {
       if (action.isCurrent()) {
@@ -438,7 +557,10 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
   }
 
   function failSwapStart(error: unknown): void {
-    swapStartError = payerErrorMessage(error, SWAP_START_FAILED);
+    swapStartError = payerErrorMessage(error, SWAP_START_FAILED, {
+      action: "swap.start",
+      ...(options.logger === undefined ? {} : { logger: options.logger }),
+    });
     options.onError(error);
     options.onChange();
   }

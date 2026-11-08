@@ -297,7 +297,12 @@ export function createElementCheckoutSession(
       // Leave createdKey set so theme sync / host error DOM updates cannot retry-storm.
       // The payer sees an inline error with a retry button instead of an
       // infinite "Creating checkout…" spinner.
-      createError = payerErrorMessage(error, checkoutLabels.startCheckoutFailedDetail);
+      // Payer words, not the server's developer text; the original reaches
+      // `openreceive-error` and one console warning.
+      createError = payerErrorMessage(error, checkoutLabels.startCheckoutFailedDetail, {
+        action: "checkout.prepare",
+        ...(host.logger === undefined ? {} : { logger: host.logger }),
+      });
       host.dispatchError(error);
       host.render();
     } finally {

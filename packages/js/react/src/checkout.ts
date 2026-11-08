@@ -184,6 +184,8 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
 
   const onErrorRef = React.useRef(onError);
   onErrorRef.current = onError;
+  const loggerRef = React.useRef(props.logger);
+  loggerRef.current = props.logger;
   const metadataRef = React.useRef(metadata);
   metadataRef.current = metadata;
   // `createFetch` is the deprecated name of `fetch`; either one carries every request.
@@ -213,6 +215,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     // One stable CheckoutView across the mint: swapping the rendered shell
     // remounted PaymentWizard and wiped the payer's method selection.
     onSnapshot: (checkout) => setCreated({ status: "ready", checkout }),
+    ...(props.logger === undefined ? {} : { logger: props.logger }),
     onError: (error) => onErrorRef.current?.(error),
   });
 
@@ -265,7 +268,10 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         onErrorRef.current?.(error);
         setCreated({
           status: "error",
-          errorMessage: payerErrorMessage(error, checkoutLabels.startCheckoutFailedDetail),
+          errorMessage: payerErrorMessage(error, checkoutLabels.startCheckoutFailedDetail, {
+            action: "checkout.prepare",
+            ...(loggerRef.current === undefined ? {} : { logger: loggerRef.current }),
+          }),
         });
       });
     return () => {
@@ -322,10 +328,11 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         "div",
         { className: orClasses.creating },
         React.createElement("p", { role: "alert" }, "Could not start checkout."),
-        // The thrown error carries the server's payer-facing text (e.g. the
-        // rate-limit message or "Exchange rates are temporarily unavailable");
-        // payerErrorMessage swaps an operator-facing wallet message for one
-        // the payer can act on.
+        // payerErrorMessage keeps the server's payer-facing text (the
+        // rate-limit message, "Exchange rates are temporarily unavailable")
+        // and swaps developer- or operator-facing text (the authorize hook's
+        // 403, a field error, a wallet failure) for a sentence the payer can
+        // act on. The original still reaches onError and the console.
         created.errorMessage === undefined
           ? null
           : React.createElement("p", null, created.errorMessage),

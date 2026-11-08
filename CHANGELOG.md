@@ -143,6 +143,36 @@
   settlement.". The `data-state` attribute still carries `settled` and
   `expired` for hosts and stylesheets. Every reviewer of the 2026-11-08 trial
   round read "settled" on a payer's screen as jargon.
+- Fixed (checkout): a payer whose browser does not own the order no longer
+  reads the server's text for the developer. A PrestaShop trial's payer saw
+  "Not authorized for this action. The application's authorize hook denied
+  it; if this is unexpected, check that the payer's session reaches the
+  checkout routes." under "Could not start checkout.", and a field error
+  ("payment_hash is required.") or a 409's "The selected payment attempt is
+  not a reusable pending checkout." could reach the screen the same way. The
+  element and React (and the Vue, Svelte and Angular wrappers, through the
+  element) now pick the payer's sentence by error code and status, on the
+  "Could not start checkout." screen, beside the invoice's Try again and in
+  the swap address panel: a 403 or 401 reads "This payment can
+  only be opened from the browser or account that placed the order. If you
+  placed it here, reload the page and try again."; a 404 "This order could
+  not be found. Check the link, or open it from the browser or account that
+  placed the order."; a 409 "This payment changed while the page was open.
+  Reload the page and try again."; a bad request, a server bug or a code the
+  checkout does not know "Something went wrong with this payment. Please try
+  again."; a retryable 5xx or a proxy's 502/503/504 "The payment service did
+  not answer in time. Please try again.". The sentences the engines write for
+  the payer are kept: the exchange-rate and swap-provider sentences, the 429
+  text (host-configurable), and the PrestaShop and FOSSBilling "security
+  token" refusal. A failure that never reached a server ("Failed to fetch")
+  shows the screen's own "Please try again." sentence. The original text and
+  code still go to `onError` and the `openreceive-error` event, and a reworded
+  failure logs one `checkout.error.reworded` warning to the console with
+  `error_code`, `status` and `error_message`. `payerErrorMessage` takes the
+  same rules, and an optional third argument for that warning. The agent
+  trials' payer walk now fails a screen that names the authorize hook, the
+  payer's session, the checkout routes, a wire field name or a bare error code
+  such as `FORBIDDEN`.
 
 ## 0.4.32 - 2026-11-07
 

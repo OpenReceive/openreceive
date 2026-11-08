@@ -131,7 +131,8 @@ export type {
 // below, for a headless integration that drives a swap start itself.
 export { createCheckoutSession } from "./internal/checkout-session.ts";
 // The payer's text for a failed request, shared by both renderers' error
-// screens so an operator-facing wallet message never reaches a payer.
+// screens so a developer- or operator-facing server message (the authorize
+// hook's 403, a field error, a wallet failure) never reaches a payer.
 export { payerErrorMessage } from "./internal/checkout-session.ts";
 // Mounting the element: the attribute/listener factories every wrapper binding
 // is built from, the standalone shell, and the theme-toggle element.

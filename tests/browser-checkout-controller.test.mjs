@@ -729,26 +729,244 @@ test("the swap start keeps the checkout's fiat amount for the Total row", () => 
   );
 });
 
+// What the payer reads for each server answer the checkout routes can send.
+// Messages are the engines' own (packages/js/http/src, packages/js/node/src,
+// spec/test-vectors/http-golden/, the Python/PHP/Ruby servers and the shop
+// plugins' endpoints); each row is [status, code, message, retryable?].
+const MINT_FAILED = "Could not create the Lightning invoice. Please try again.";
+const answered = ([status, code, message, retryable]) =>
+  new BrowserRequestError(message, {
+    status,
+    ...(code === undefined ? {} : { code }),
+    ...(retryable === undefined ? {} : { retryable }),
+  });
+const AUTHORIZE_DENIED =
+  "Not authorized for this action. The application's authorize hook denied it; if this is " +
+  "unexpected, check that the payer's session reaches the checkout routes. " +
+  "https://openreceive.org/guides/authorization.md";
+
 test("a payer never reads the wallet's operator-facing failure text", () => {
-  const fallback = "Could not create the Lightning invoice. Please try again.";
-  for (const [code, message] of [
-    ["WALLET_UNAVAILABLE", "Configured NWC relays are unavailable."],
-    ["TIMEOUT", "NWC wallet service request timed out."],
+  for (const answer of [
+    [503, "WALLET_UNAVAILABLE", "Configured NWC relays are unavailable.", true],
+    [503, "TIMEOUT", "NWC wallet service request timed out.", true],
+    // The stack's boot failure, and the WordPress/PrestaShop/Paymenter/
+    // FOSSBilling endpoints' own code when OpenReceive is not configured.
+    [503, "WALLET_UNAVAILABLE", "The payment service is not available. Please try again shortly."],
+    [
+      503,
+      "UNAVAILABLE",
+      "Payment service is unavailable. Ask the merchant to run php artisan openreceive:doctor.",
+    ],
+    // A wallet that answered with a retryable refusal, and a storage outage.
+    [503, "RATE_LIMITED", "NWC wallet service rate limited this request.", true],
+    [
+      503,
+      "INTERNAL",
+      "Payment storage is unavailable; payer instructions were withheld. Please retry.",
+      true,
+    ],
+    // A proxy's HTML 502/504 carries no code at all.
+    [502, undefined, "Could not create checkout."],
+    [504, undefined, "Could not prepare checkout."],
   ]) {
     assert.equal(
-      payerErrorMessage(new BrowserRequestError(message, { status: 503, code }), fallback),
+      payerErrorMessage(answered(answer), MINT_FAILED),
       checkoutLabels.paymentServiceUnavailable,
+      answer[2],
     );
   }
-  // Text the server wrote for the payer is kept, INTERNAL included: the rate
-  // outage is an INTERNAL with a sentence meant for them.
-  const rates = "Exchange rates are temporarily unavailable — please try again in a moment.";
+});
+
+test("a refusal meant for the developer reads as where the order can be opened", () => {
+  for (const answer of [
+    [403, "FORBIDDEN", AUTHORIZE_DENIED],
+    [403, "FORBIDDEN", "Cross-site requests are not accepted."],
+    [403, "FORBIDDEN", "Cross-origin requests from this origin are not accepted."],
+    // Django's CSRF refusal, and a host's 401 for a signed-out payer.
+    [403, "FORBIDDEN", "Invalid or missing CSRF token."],
+    [401, "UNAUTHORIZED", "Authentication required."],
+    // A framework's own HTML 403 (no code): the same cause, the same sentence.
+    [403, undefined, "Could not prepare checkout."],
+  ]) {
+    assert.equal(
+      payerErrorMessage(answered(answer), MINT_FAILED),
+      checkoutLabels.paymentNotYours,
+      answer[2],
+    );
+  }
+  // The wallet's own UNAUTHORIZED is a 502 about the shop's wallet, not the
+  // payer's browser: it must not tell the payer to switch browsers.
   assert.equal(
-    payerErrorMessage(new BrowserRequestError(rates, { status: 503, code: "INTERNAL" }), fallback),
-    rates,
+    payerErrorMessage(
+      answered([502, "UNAUTHORIZED", "NWC wallet service rejected authorization.", false]),
+      MINT_FAILED,
+    ),
+    checkoutLabels.paymentRequestFailed,
   );
-  assert.equal(payerErrorMessage(new Error(""), fallback), fallback);
-  assert.equal(payerErrorMessage(undefined, fallback), fallback);
+});
+
+test("an unknown order and a changed payment read as such, not as the server's text", () => {
+  for (const answer of [
+    [404, "NOT_FOUND", "Unknown reference."],
+    [404, "NOT_FOUND", "Payment attempt not found for this reference."],
+    [404, "NOT_FOUND", "The selected payment attempt does not belong to this order."],
+    [404, "NOT_FOUND", "No OpenReceive route matched this method and path."],
+    [404, "NOT_FOUND", "The host order has no swap data."],
+    [404, undefined, "Could not prepare checkout."],
+  ]) {
+    assert.equal(
+      payerErrorMessage(answered(answer), MINT_FAILED),
+      checkoutLabels.orderNotFound,
+      answer[2],
+    );
+  }
+  for (const answer of [
+    [409, "CONFLICT", "The selected payment attempt is not a reusable pending checkout."],
+    [
+      409,
+      "CONFLICT",
+      "The host did not accept this payment attempt; payer instructions were withheld.",
+    ],
+    [409, "CONFLICT", "This reference is already paid."],
+    [
+      409,
+      "CONFLICT",
+      "An unpaid checkout for this payment method is already in progress for this reference.",
+    ],
+    [409, "CONFLICT", "The host payment attempt has no checkout snapshot."],
+    [409, "CONFLICT", "Swap cannot be refunded from provider state awaiting_deposit."],
+  ]) {
+    assert.equal(
+      payerErrorMessage(answered(answer), MINT_FAILED),
+      checkoutLabels.paymentChanged,
+      answer[2],
+    );
+  }
+});
+
+test("a malformed request, a server bug or an unknown code reads as something went wrong", () => {
+  for (const answer of [
+    [400, "INVALID_REQUEST", "payment_hash is required."],
+    [400, "INVALID_REQUEST", "reference is required."],
+    [400, "INVALID_REQUEST", "Unexpected request field for this route: amount."],
+    [400, "INVALID_REQUEST", "metadata is too large for NIP-47."],
+    [405, "INVALID_REQUEST", "This OpenReceive route does not support that HTTP method."],
+    [413, "INVALID_REQUEST", "Request body is too large."],
+    [415, "INVALID_REQUEST", "Request content type must be application/json."],
+    [400, "SOMETHING_NEW", "A code this browser bundle predates."],
+    [500, "INTERNAL", "Internal server error."],
+    [500, "INTERNAL", "The host resolved this order without an amount."],
+    [503, "INTERNAL", "No configured swap provider supports USDT_TRX."],
+    [
+      502,
+      "UNSUPPORTED_METHOD",
+      "Error with the backing NWC wallet: it did not honor the requested invoice expiry.",
+    ],
+    [502, "INVOICE_EXPIRED", "NWC wallet reported that the invoice is expired.", false],
+    // A framework's HTML 500 is a host bug, not a gateway that did not answer.
+    [500, undefined, "Could not create checkout."],
+  ]) {
+    assert.equal(
+      payerErrorMessage(answered(answer), MINT_FAILED),
+      checkoutLabels.paymentRequestFailed,
+      answer[2],
+    );
+  }
+});
+
+test("sentences the engines write for the payer are kept as sent", () => {
+  for (const answer of [
+    [
+      503,
+      "INTERNAL",
+      "Exchange rates are temporarily unavailable — please try again in a moment.",
+      true,
+    ],
+    [502, "INTERNAL", "The swap provider refused this request."],
+    [503, "INTERNAL", "The swap provider is rate limited. Please try again shortly.", true],
+    [
+      503,
+      "INTERNAL",
+      "The swap provider is temporarily unreachable. Please try again shortly.",
+      true,
+    ],
+    [
+      403,
+      "FORBIDDEN",
+      "The page's security token is missing or old. Reload the page and try again.",
+    ],
+    // The 429 text is payer-facing by contract and host-configurable
+    // (docs/guides/rate-limiting.md).
+    [429, "RATE_LIMITED", "Too many payment attempts. Please try again later.", true],
+    [429, "RATE_LIMITED", "Too many payment attempts — try again in an hour.", true],
+    [429, "RATE_LIMITED", "Too many requests.", true],
+  ]) {
+    assert.equal(payerErrorMessage(answered(answer), MINT_FAILED), answer[2], answer[2]);
+  }
+});
+
+test("a failure no server answered reads as the caller's own sentence", () => {
+  // fetch could not reach the server, or a check in this browser refused first.
+  assert.equal(payerErrorMessage(new TypeError("Failed to fetch"), MINT_FAILED), MINT_FAILED);
+  assert.equal(
+    payerErrorMessage(
+      new Error("Swap response did not include provider instructions."),
+      MINT_FAILED,
+    ),
+    MINT_FAILED,
+  );
+  assert.equal(payerErrorMessage(new Error(""), MINT_FAILED), MINT_FAILED);
+  assert.equal(payerErrorMessage(undefined, MINT_FAILED), MINT_FAILED);
+  // A code on a plain object still classifies, as it does on the wire error.
+  assert.equal(
+    payerErrorMessage({ code: "FORBIDDEN", message: AUTHORIZE_DENIED }, MINT_FAILED),
+    checkoutLabels.paymentNotYours,
+  );
+});
+
+test("a reworded failure logs the server's code, status and text once", () => {
+  const logs = [];
+  const logger = (entry) => logs.push(entry);
+  const error = answered([403, "FORBIDDEN", AUTHORIZE_DENIED]);
+  assert.equal(
+    payerErrorMessage(error, MINT_FAILED, { action: "checkout.create", logger }),
+    checkoutLabels.paymentNotYours,
+  );
+  assert.deepEqual(logs, [
+    {
+      level: "warn",
+      event: "checkout.error.reworded",
+      message:
+        "A failed checkout request was shown to the payer in other words; error_message is the original.",
+      action: "checkout.create",
+      status: 403,
+      error_code: "FORBIDDEN",
+      error_message: AUTHORIZE_DENIED,
+      payer_message: checkoutLabels.paymentNotYours,
+    },
+  ]);
+  // The error itself is untouched: onError hands the developer this object.
+  assert.equal(error.message, AUTHORIZE_DENIED);
+  assert.equal(error.code, "FORBIDDEN");
+
+  // Nothing to log when the payer read the server's own words, when there was
+  // no server text, or when the caller asked for no report.
+  logs.length = 0;
+  const rates = "Exchange rates are temporarily unavailable — please try again in a moment.";
+  payerErrorMessage(answered([503, "INTERNAL", rates, true]), MINT_FAILED, {
+    action: "checkout.prepare",
+    logger,
+  });
+  payerErrorMessage(new Error(""), MINT_FAILED, { action: "checkout.create", logger });
+  payerErrorMessage(answered([403, "FORBIDDEN", AUTHORIZE_DENIED]), MINT_FAILED);
+  assert.deepEqual(logs, []);
+  // `logger: false` silences it like every other checkout log.
+  assert.doesNotThrow(() =>
+    payerErrorMessage(answered([403, "FORBIDDEN", AUTHORIZE_DENIED]), MINT_FAILED, {
+      action: "checkout.create",
+      logger: false,
+    }),
+  );
 });
 
 /** Every string value in a log entry, at any nesting depth. */

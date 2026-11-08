@@ -79,11 +79,33 @@ export const checkoutLabels = {
   tryAgain: "Try again",
   /**
    * Shown instead of the server's text when the wallet or its relay did not
-   * answer (`WALLET_UNAVAILABLE`, `TIMEOUT`). Those messages are written for
-   * the shop's operator ("Configured NWC relays are unavailable."), and mean
-   * nothing to a payer. See `payerErrorMessage`.
+   * answer (`WALLET_UNAVAILABLE`, `TIMEOUT`, a retryable 5xx, a proxy's
+   * 502/503/504). Those messages are written for the shop's operator
+   * ("Configured NWC relays are unavailable."), and mean nothing to a payer.
+   * See `payerErrorMessage`.
    */
   paymentServiceUnavailable: "The payment service did not answer in time. Please try again.",
+  /**
+   * The four below stand in for server text written for the shop's developer,
+   * which a payer must never read: "Not authorized for this action. The
+   * application's authorize hook denied it; …", "payment_hash is required.",
+   * "The selected payment attempt is not a reusable pending checkout.".
+   * `payerErrorMessage` picks one by error code and HTTP status; the original
+   * text still reaches the host's `onError` / `openreceive-error` and the
+   * console. A refusal (403) or an unknown order (404) usually means the
+   * payer's session does not own the order: another browser, a lost cookie,
+   * a sign-in that expired.
+   */
+  paymentNotYours:
+    "This payment can only be opened from the browser or account that placed the order. " +
+    "If you placed it here, reload the page and try again.",
+  orderNotFound:
+    "This order could not be found. Check the link, or open it from the browser or account " +
+    "that placed the order.",
+  /** A 409: the payment moved on under the page (paid, replaced, or refused by the shop). */
+  paymentChanged: "This payment changed while the page was open. Reload the page and try again.",
+  /** A malformed request, a refusal the payer cannot act on, or a code this checkout does not know. */
+  paymentRequestFailed: "Something went wrong with this payment. Please try again.",
   /** Under "Could not start checkout." when the server sent nothing a payer can use. */
   startCheckoutFailedDetail: "Please try again.",
   payWithLightningInstead: "Pay with Lightning instead",

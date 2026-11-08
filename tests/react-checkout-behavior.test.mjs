@@ -440,10 +440,15 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
     const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
     if (url.pathname === "/openreceive/swaps") {
       swapStartPosts += 1;
-      return new Response(JSON.stringify({ message: "Swap provider is unavailable." }), {
-        status: 503,
-        headers: { "content-type": "application/json" },
-      });
+      // The engines' provider-outage answer, whose sentence is the payer's.
+      return new Response(
+        JSON.stringify({
+          code: "INTERNAL",
+          message: "The swap provider is temporarily unreachable. Please try again shortly.",
+          retryable: true,
+        }),
+        { status: 503, headers: { "content-type": "application/json" } },
+      );
     }
     return stack.fetchStub(input, init);
   };
@@ -460,7 +465,7 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
       label: "continue button",
     });
     cont.click();
-    await until(() => handle.text().includes("Swap provider is unavailable."), {
+    await until(() => handle.text().includes("The swap provider is temporarily unreachable."), {
       label: "swap start failure",
     });
     assert.equal(
@@ -474,7 +479,7 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
       label: "back breadcrumb",
     });
     back.click();
-    await until(() => !handle.text().includes("Swap provider is unavailable."), {
+    await until(() => !handle.text().includes("The swap provider is temporarily unreachable."), {
       label: "failure cleared on leaving the focused flow",
     });
   } finally {
@@ -523,6 +528,71 @@ test("a failed Lightning mint shows payer words and a Try again that mints", asy
     assert.doesNotMatch(handle.text(), new RegExp(checkoutLabels.paymentServiceUnavailable));
   } finally {
     handle.unmount();
+  }
+});
+
+// Agent trials, 2026-11-08: the real handler's 403 for a session that does not
+// own the order names the authorize hook, the session and the checkout routes.
+// That is the developer's text; the payer reads where the order can be opened,
+// and the developer gets the original through onError and one console warning.
+test("a refused checkout shows the payer sentence, not the authorize-hook text", async () => {
+  const stack = await createLifecycleStack({ authorize: () => false });
+  stack.addOrder("order-not-yours", 2000);
+  globalThis.fetch = stack.fetchStub;
+  const errors = [];
+  const logs = [];
+  const handle = mount(
+    React.createElement(Checkout, {
+      reference: "order-not-yours",
+      onError: (error) => errors.push(error),
+      logger: (entry) => logs.push(entry),
+    }),
+  );
+  try {
+    await until(() => handle.text().includes("Could not start checkout."), {
+      label: "the refused prepare",
+    });
+    assert.ok(handle.text().includes(checkoutLabels.paymentNotYours), handle.text());
+    assert.doesNotMatch(handle.text(), /hook|session|route|FORBIDDEN|openreceive\.org/);
+
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, "FORBIDDEN");
+    assert.equal(errors[0].status, 403);
+    assert.match(errors[0].message, /authorize hook denied it/);
+    const reworded = logs.filter((entry) => entry.event === "checkout.error.reworded");
+    assert.equal(reworded.length, 1);
+    assert.equal(reworded[0].level, "warn");
+    assert.equal(reworded[0].action, "checkout.prepare");
+    assert.equal(reworded[0].error_code, "FORBIDDEN");
+    assert.equal(reworded[0].status, 403);
+    assert.equal(reworded[0].error_message, errors[0].message);
+    assert.equal(reworded[0].payer_message, checkoutLabels.paymentNotYours);
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+test("a refused Lightning mint shows the payer sentence beside Try again", async () => {
+  // Prepare passes and the mint is refused: the session's own failure path.
+  const stack = await createLifecycleStack({
+    authorize: ({ action }) => action !== "checkout.create",
+  });
+  stack.addOrder("order-mint-refused", 2000);
+  globalThis.fetch = stack.fetchStub;
+  const handle = mount(
+    React.createElement(Checkout, { reference: "order-mint-refused", onError: () => {} }),
+  );
+  try {
+    (await until(() => handle.button("Bitcoin"), { label: "method grid" })).click();
+    await until(() => handle.text().includes(checkoutLabels.paymentNotYours), {
+      label: "mint refusal",
+    });
+    assert.doesNotMatch(handle.text(), /hook|session|route|FORBIDDEN/);
+    assert.ok(handle.button(checkoutLabels.tryAgain), "Try again beside the sentence");
+  } finally {
+    handle.unmount();
+    await stack.close();
   }
 });
 

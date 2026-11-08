@@ -55,9 +55,25 @@ function jsonResponse(body, status = 200) {
   };
 }
 
+/** A route handler's error answer: the engine's JSON error body under a non-2xx status. */
+class ErrorAnswer {
+  constructor(status, body) {
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/** The swap provider outage every engine answers with: payer text, kept as sent. */
+const PROVIDER_UNREACHABLE = new ErrorAnswer(503, {
+  code: "INTERNAL",
+  message: "The swap provider is temporarily unreachable. Please try again shortly.",
+  retryable: true,
+});
+
 /**
  * Fetch stub recording every call. `routes` maps a path suffix to a handler that
- * returns a body (or a promise of one, for deliberately slow endpoints).
+ * returns a body (or a promise of one, for deliberately slow endpoints), or an
+ * {@link ErrorAnswer} for a server's refusal.
  */
 function createFetchStub(routes) {
   const calls = [];
@@ -68,7 +84,10 @@ function createFetchStub(routes) {
     calls.push({ path, body });
     const handler = Object.entries(routes).find(([suffix]) => path.endsWith(suffix))?.[1];
     if (handler === undefined) throw new Error(`Unexpected request to ${path}`);
-    return jsonResponse(await handler(body));
+    const answer = await handler(body);
+    return answer instanceof ErrorAnswer
+      ? jsonResponse(answer.body, answer.status)
+      : jsonResponse(answer);
   };
   fetchStub.calls = calls;
   fetchStub.pathCount = (suffix) => calls.filter((call) => call.path.endsWith(suffix)).length;
@@ -233,6 +252,85 @@ test("a mint the wallet did not answer shows payer words and a Try again that mi
       label: "minted invoice after Try again",
     });
     assert.equal(element.shadowRoot.querySelector('[part="wizard-error"]'), null);
+  } finally {
+    element.remove();
+  }
+});
+
+// Agent trials, 2026-11-08: a payer whose session did not own the order read
+// the handler's 403 text, written for the developer ("The application's
+// authorize hook denied it; … the payer's session reaches the checkout
+// routes"). The payer reads where the order can be opened; the developer still
+// gets the server's code and text on `openreceive-error`.
+const AUTHORIZE_DENIED = new ErrorAnswer(403, {
+  code: "FORBIDDEN",
+  message:
+    "Not authorized for this action. The application's authorize hook denied it; if this is " +
+    "unexpected, check that the payer's session reaches the checkout routes. " +
+    "https://openreceive.org/guides/authorization.md",
+});
+
+test("a refused prepare shows the payer where the order opens, not the authorize hook", async () => {
+  const { checkoutLabels } = await import("../packages/js/browser/src/headless.ts");
+  globalThis.fetch = createFetchStub({ "/checkouts/prepare": () => AUTHORIZE_DENIED });
+  const element = document.createElement("openreceive-checkout");
+  const errors = [];
+  element.addEventListener("openreceive-error", (event) => errors.push(event.detail.error));
+  element.setAttribute("reference", "order-not-yours");
+  element.setAttribute("prefix", "/openreceive");
+  document.body.appendChild(element);
+  try {
+    const panel = await untilLocal(
+      () => element.shadowRoot?.querySelector("[data-openreceive-create-error]"),
+      { label: "create-error screen" },
+    );
+    assert.match(panel.textContent, /Could not start checkout\./);
+    assert.ok(panel.textContent.includes(checkoutLabels.paymentNotYours));
+    assert.doesNotMatch(panel.textContent, /hook|session|route|FORBIDDEN/);
+    // The developer's copy is the server's own, code and all.
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, "FORBIDDEN");
+    assert.equal(errors[0].status, 403);
+    assert.equal(errors[0].message, AUTHORIZE_DENIED.body.message);
+  } finally {
+    element.remove();
+  }
+});
+
+test("a refused mint and a refused swap start show the payer sentence", async () => {
+  const { checkoutLabels } = await import("../packages/js/browser/src/headless.ts");
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-refused-later", "SOL_SOL"),
+    "/checkouts": () => AUTHORIZE_DENIED,
+    "/swaps/quote": () => AUTHORIZE_DENIED,
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const element = mount({ reference: "order-refused-later", prefix: "/openreceive" });
+  try {
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))
+    ).click();
+    const alert = await untilLocal(() => element.shadowRoot.querySelector('[part="wizard-error"]'));
+    assert.ok(alert.textContent.includes(checkoutLabels.paymentNotYours));
+    assert.doesNotMatch(alert.textContent, /hook|session|route/);
+
+    element.remove();
+    const again = mount({ reference: "order-refused-later", prefix: "/openreceive" });
+    try {
+      (
+        await untilLocal(() => again.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'), {
+          label: "SOL swap-start button",
+        })
+      ).click();
+      const swapError = await untilLocal(
+        () => again.shadowRoot.querySelector('[part="swap-error"]'),
+        { label: "swap-start failure" },
+      );
+      assert.ok(swapError.textContent.includes(checkoutLabels.paymentNotYours));
+      assert.doesNotMatch(swapError.textContent, /hook|session|route/);
+    } finally {
+      again.remove();
+    }
   } finally {
     element.remove();
   }
@@ -975,7 +1073,7 @@ test("retrying a failed swap start replaces the error with the preparing spinner
     "/swaps/quote": (body) => swapQuoteBody(body.pay_in_asset),
     "/swaps": () => {
       starts += 1;
-      if (starts === 1) throw new Error("Swap provider is unavailable.");
+      if (starts === 1) return PROVIDER_UNREACHABLE;
       return retry.promise;
     },
     "/payments/check": () => ({ status: "pending" }),
@@ -990,7 +1088,7 @@ test("retrying a failed swap start replaces the error with the preparing spinner
     );
     asset.click();
     await untilLocal(
-      () => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."),
+      () => element.shadowRoot?.innerHTML.includes(PROVIDER_UNREACHABLE.body.message),
       {
         label: "inline swap-start failure",
       },
@@ -1037,7 +1135,7 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
     "/swaps": (body) => {
       starts += 1;
       if (body.pay_in_asset === "SOL_SOL") return swapStartBody("SOL_SOL", "e".repeat(64));
-      throw new Error("Swap provider is unavailable.");
+      return PROVIDER_UNREACHABLE;
     },
     "/checkouts": () => checkoutBody("order-two-coins", 5_000_000, "f".repeat(64)),
     "/payments/check": () => ({ status: "pending" }),
@@ -1065,7 +1163,7 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
     );
     eth.click();
     await untilLocal(
-      () => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."),
+      () => element.shadowRoot?.innerHTML.includes(PROVIDER_UNREACHABLE.body.message),
       {
         label: "ETH swap-start failure",
       },
