@@ -117,6 +117,7 @@ $hash = $created->get_data()['checkout']['payment_hash'];
 $methods = Cli::methodLines($created->get_data()['payment_methods']);
 $check(in_array('  USDT on Tron: available', $methods, true) && $methods[1] === '  Bitcoin Lightning: available', 'test-invoice lists the checkout methods: ' . implode(' | ', $methods));
 $check(Cli::methodLines([]) === ['Checkout methods: Bitcoin Lightning only (no swap provider configured).'], 'test-invoice says when checkout is Lightning only');
+$check(Cli::isTestAmount('20.00') && Cli::isTestAmount('5') && !Cli::isTestAmount('0') && !Cli::isTestAmount('20.001') && !Cli::isTestAmount('-5') && !Cli::isTestAmount(true), 'test-invoice --amount takes a positive amount with at most two decimals');
 $check(count($repo->listForReference($reference)) === 1, 'attempt persisted before response');
 ob_start(); (new Gateway())->receipt_page($order->get_id()); $lightningMarkup = ob_get_clean();
 $check(str_contains($lightningMarkup, 'resume-payment-rail="lightning"') && str_contains($lightningMarkup, $hash), 'Lightning receipt resumes on its own rail');

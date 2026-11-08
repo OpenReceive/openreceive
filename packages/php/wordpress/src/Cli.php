@@ -70,10 +70,12 @@ final class Cli
      * : An unpaid WooCommerce order whose payment method is openreceive, or edd-<id> for an Easy Digital Downloads order.
      * [--new]
      * : Easy Digital Downloads: first create a pending test order for the first download, billed to the first administrator.
+     * [--amount=<amount>]
+     * : With --new, the test order's amount, such as 20.00. Default: the download's price.
      */
     public function test_invoice(array $args, array $options = []): void
     {
-        $id = isset($options['new']) ? self::newEddOrder() : (string) ($args[0] ?? '');
+        $id = isset($options['new']) ? self::newEddOrder($options['amount'] ?? null) : (string) ($args[0] ?? '');
         if (str_starts_with($id, EddOrderHost::PREFIX)) { self::eddInvoice($id); return; }
         $order = OrderHost::order($id);
         if (!$order || !$order->needs_payment()) {
@@ -98,15 +100,21 @@ final class Cli
             number_format(intdiv((int) $checkout['amount_msats'], 1000)), $order->get_total(), $order->get_currency(), gmdate('Y-m-d H:i', (int) $checkout['expires_at'])));
     }
 
-    /** A pending Easy Digital Downloads order for the first published download, billed to the first administrator. */
-    private static function newEddOrder(): string
+    public static function isTestAmount(mixed $amount): bool
     {
+        return is_string($amount) && preg_match('/\A[0-9]{1,9}(\.[0-9]{1,2})?\z/', $amount) === 1 && (float) $amount > 0;
+    }
+
+    /** A pending Easy Digital Downloads order for the first published download, billed to the first administrator. */
+    private static function newEddOrder(mixed $amount): string
+    {
+        if ($amount !== null && !self::isTestAmount($amount)) { \WP_CLI::error('--amount must be a positive amount such as 20.00.'); }
         if (!StoreHost::edd()) { \WP_CLI::error('--new creates an Easy Digital Downloads order, and Easy Digital Downloads is not active. For WooCommerce, pass an order id.'); }
         $download = get_posts(['post_type' => 'download', 'post_status' => 'publish', 'numberposts' => 1, 'orderby' => 'ID', 'order' => 'ASC']);
         $admin = get_users(['role' => 'administrator', 'number' => 1, 'orderby' => 'ID']);
         if ($download === [] || $admin === []) { \WP_CLI::error('Easy Digital Downloads has no published download, or the site has no administrator, to make a test order with.'); }
         $id = (int) $download[0]->ID;
-        $price = (float) edd_get_download_price($id);
+        $price = $amount === null ? (float) edd_get_download_price($id) : (float) $amount;
         $user = $admin[0];
         $item = ['id' => $id, 'quantity' => 1, 'options' => []];
         $order = edd_insert_payment([

@@ -24,6 +24,14 @@ fi
 wp eval 'update_option("woocommerce_openreceive_settings", get_option("openreceive_cli_test_settings")); delete_option("openreceive_cli_test_settings");'
 wp openreceive configure --enable
 wp openreceive doctor
+# The Easy Digital Downloads test order takes the amount the directions give it.
+output="$(wp openreceive test-invoice --new --amount=20.00)"
+if [[ "$output" != *"for 20.00 "* ]]; then
+  echo "test-invoice --new did not use --amount: $output" >&2; exit 1
+fi
+if wp openreceive test-invoice --new --amount=free >/dev/null 2>&1; then
+  echo "test-invoice --new accepted an amount that is not one" >&2; exit 1
+fi
 if output="$(wp openreceive configure --nwc-uri=opaque-cli-test 2>&1)"; then
   echo "configure accepted a credential argument" >&2; exit 1
 fi
