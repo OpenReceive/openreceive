@@ -38,10 +38,10 @@ export interface NextHandlers {
   /** The underlying framework-agnostic handler, if you need it directly. */
   readonly handler: HttpHandler;
   /**
-   * All-in-one form only: resolves when the owned service and handler are up;
-   * rejects if the first wallet check failed. Requests check again either way,
-   * so never await it at the top level of a route file: a relay blip at start
-   * would fail the module. Await it in a health check, or log it.
+   * All-in-one form only: settles when the first boot has finished. It rejects
+   * only for a configuration that can never work (no code, a bad one, a wallet
+   * that can spend). A relay that did not answer resolves it, and requests
+   * check again, so it does not prove the wallet answered.
    */
   readonly ready?: Promise<void>;
   /** All-in-one form only: closes the service the adapter created. */

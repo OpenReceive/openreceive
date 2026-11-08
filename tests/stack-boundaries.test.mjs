@@ -131,6 +131,44 @@ test("a failed boot answers 503 and leaves no unhandled rejection", async () => 
   }
 });
 
+test("a relay that does not answer at start resolves ready and answers 503", async () => {
+  const lines = [];
+  const stack = createStack({
+    // Nothing listens on port 1, so the relay refuses at once.
+    wallet: {
+      nwc: `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2F127.0.0.1%3A1&secret=${"b".repeat(64)}`,
+    },
+    storage: { payments: stubPayments(), onPaid: async () => {} },
+    amountFor: () => ({ sats: 1000 }),
+    authorize,
+    onBootFailure: (line) => lines.push(line),
+  });
+  await stack.ready;
+  assert.match(lines[0], /could not reach the wallet's relay/);
+  const response = await stack.handler(
+    new Request("http://localhost/openreceive/checkouts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reference: "order-1" }),
+    }),
+  );
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "WALLET_UNAVAILABLE");
+  await stack.close();
+});
+
+test("a code that can never work rejects ready", async () => {
+  const stack = createStack({
+    wallet: { nwc: "not-a-wallet-code" },
+    storage: { payments: stubPayments(), onPaid: async () => {} },
+    amountFor: () => ({ sats: 1000 }),
+    authorize,
+    onBootFailure: () => {},
+  });
+  await assert.rejects(stack.ready, { name: "ConfigError" });
+  await stack.close();
+});
+
 test("a failed boot is retried by the first request after the wait, and serves it", async () => {
   let clock = 0;
   let attempts = 0;

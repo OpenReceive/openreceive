@@ -95,16 +95,16 @@ the pass that runs during requests.
 If the NWC connection is missing or can spend funds, OpenReceive refuses to
 take payments.
 
-On Node, the adapters check the wallet on the first request. Await that check
-in a deploy health check. Express and Next expose a `ready` promise. On
-Fastify, use `await fastify.ready()`.
+On Node, the adapters check the wallet on the first request. Express and Next
+expose a `ready` promise that settles when that first check has finished.
+On Fastify, use `await fastify.ready()`.
 
-Never await `ready` before `app.listen()`, or at the top level of the server
-file. `ready` rejects when the first check fails, and a relay that is slow for
-a moment at start would then crash the whole shop, its own pages included,
-until someone restarts it. Unawaited, a failed first check only answers
-checkout requests with a retryable 503, and the adapter checks the wallet again
-on the next request (1 s, doubling to 60 s), so payments come back on their own.
+`ready` rejects only for what trying again cannot fix: no NWC code, a malformed
+one, or a wallet that can spend. A relay that does not answer resolves it, so a
+relay outage never stops a shop from starting. Checkouts answer a retryable
+503, and the adapter checks the wallet again on the next request (1 s, doubling
+to 60 s), so payments come back on their own. `ready` therefore does not prove
+the wallet answered. Run `openreceive doctor` for that.
 
 The Rails engine checks the wallet when the app boots in production. So a bad
 `NWC_URI` stops the deploy instead of showing customers a 500. Asset
@@ -148,8 +148,8 @@ as on Rails, FastAPI and Flask.
 ### Where boot failures go
 
 If boot fails, later requests answer `503 WALLET_UNAVAILABLE`, and
-`await ready` rejects. On the Node adapters, pass `onBootFailure` to send that
-one line to your logger.
+`await ready` rejects when the configuration can never work. On the Node
+adapters, pass `onBootFailure` to send that one line to your logger.
 
 ## Node in Docker
 

@@ -362,6 +362,7 @@ async function preflight(client: ServiceContext["options"]["client"]): Promise<v
         code: "WALLET_PREFLIGHT_FAILED",
         message: `OpenReceive could not reach the wallet's relay at start-up (${unreachable.message}).`,
         hint: "The relay did not answer, so the NWC code was not checked. Try again once it answers; the framework adapters try again on a later request.",
+        retryable: true,
         cause,
       });
     }

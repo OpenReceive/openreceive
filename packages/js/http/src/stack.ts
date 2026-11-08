@@ -1,5 +1,5 @@
 import { compact, redactSecrets } from "@openreceive/core";
-import { createOpenReceive, type OpenReceive } from "@openreceive/node";
+import { ConfigError, createOpenReceive, type OpenReceive } from "@openreceive/node";
 import { createRequestId, errorResponse, HttpError } from "./errors.ts";
 import type { CreateHttpHandlerOptions, HttpHandler } from "./handler.ts";
 import { createHttpHandler } from "./handler.ts";
@@ -75,11 +75,12 @@ export interface Stack {
    */
   readonly handler: HttpHandler;
   /**
-   * Resolves when the first boot is up; rejects if the first boot failed, and
-   * a relay that is slow for a moment at start is enough. The stack boots
-   * again on a later request either way, so never await `ready` before
-   * `listen()` or at the top level of the server file: the rejection would
-   * stop the process. Await it in a health check, or log it.
+   * Settles when the first boot has finished. It rejects only for what trying
+   * again cannot fix: no NWC code, a malformed one, a wallet that can spend or
+   * lacks the receive methods. A relay that did not answer resolves it, as a
+   * shop should still start: checkouts answer 503 and the first request after
+   * a short wait boots again. So it is safe to await before `listen()`, and
+   * it does not prove the wallet answered; `openreceive doctor` does.
    */
   readonly ready: Promise<void>;
   /** Closes the service if the stack created it. */
@@ -169,8 +170,15 @@ export function createStack<Transaction = unknown>(
   // `ready` is a promise of its own: a host that never awaits it must not get
   // an unhandled rejection when boot fails, which ends a Node process and a
   // Deno isolate. Requests already answer that failure with a 503. It reports
-  // the first boot; requests keep retrying after it.
-  const ready = boot.first.then(() => undefined);
+  // the first boot; requests keep retrying after it. A service the host passed
+  // in is never retried, so its failure always rejects.
+  const ready = boot.first.then(
+    () => undefined,
+    (error: unknown) => {
+      if (wallet.service === undefined && error instanceof ConfigError && error.retryable) return;
+      throw error;
+    },
+  );
   ready.catch(() => {});
 
   return {

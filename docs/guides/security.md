@@ -60,8 +60,9 @@ adapters do this on the first request instead. It checks three things:
 2. It speaks an encryption mode the library supports.
 3. It does not advertise spend methods.
 
-If any check fails, your application does not start. Await the adapter's
-`ready` promise in a deploy health check. Tests can
+If the wallet answers and any check fails, your application refuses payments.
+On Node, the adapter's `ready` promise rejects. A relay that does not answer is
+not a failed check: payments wait and try again. Tests can
 [inject a fake wallet](host-testing.md#inject-a-fake-wallet-client)
 and skip NWC entirely.
 
