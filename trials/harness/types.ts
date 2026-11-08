@@ -37,6 +37,11 @@ export interface Scenario {
   readonly choice: string;
   /** How the merchant pastes a code (scenarios.ts); plain when omitted. */
   readonly paste?: "quoted" | "env-line" | "wrapped";
+  /**
+   * Serve the directions cut off after this many bytes, with the kind of marker
+   * a coding agent's tool leaves. Needs --serve-directions.
+   */
+  readonly directionsCutAt?: number;
   /** What the merchant asks for: the shop's checkout (default) or a donation page. */
   readonly kind?: "shop" | "donation";
   /**

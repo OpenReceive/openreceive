@@ -13,6 +13,7 @@ import {
   containsSecret,
   evaluate,
   outputCheck,
+  readPastCutCheck,
   scopeViolation,
 } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
@@ -295,7 +296,16 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     }
 
     const scenario: Scenario = request.scenario ?? scenarioFor("canonical", 0);
-    const opening = await openingFor(platform, request.directionsUrl, scenario);
+    if (scenario.directionsCutAt !== undefined && !request.directionsUrl.includes("127.0.0.1")) {
+      throw new InfraError("The directions-cut scenario needs --serve-directions.");
+    }
+    const opening = await openingFor(
+      platform,
+      scenario.directionsCutAt === undefined
+        ? request.directionsUrl
+        : `${request.directionsUrl}?cut=${scenario.directionsCutAt}`,
+      scenario,
+    );
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
 
@@ -402,6 +412,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     checks.push(
       ...commandChecks(turns, writes, platform.doctor !== ""),
       ...closingChecks(turns, platform.closing_max_lines ?? 5),
+      ...(scenario.directionsCutAt === undefined ? [] : [readPastCutCheck(turns)]),
     );
     // BTCPay's health check is a page in its UI: read the store the agent configured instead.
     if (platform.host === "btcpay") checks.push(...(await btcpayChecks(directory, scenario.swaps)));

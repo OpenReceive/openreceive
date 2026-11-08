@@ -35,6 +35,15 @@ export const SCENARIOS: Readonly<Record<string, Scenario>> = {
     opening:
       "This is a {{name}}. Add a donation page at /donate where visitors can give $5, $20 or $50, or type their own amount in an Other field, and pay in Bitcoin or stablecoins with OpenReceive. Leave the shop's own pages as they are. Follow these directions: {{directions_url}}",
   },
+  // A coding agent's tool often shows about 10 KB of one command's output, and
+  // the directions are four times that. Not in `mix`: it needs --serve-directions.
+  "directions-cut": {
+    id: "directions-cut",
+    prompt: "",
+    swaps: true,
+    choice: "Yes, stablecoins too.",
+    directionsCutAt: 10_000,
+  },
   // A chat app broke the long code over two lines.
   "wrapped-paste": {
     id: "wrapped-paste",

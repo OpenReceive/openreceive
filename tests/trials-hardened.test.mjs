@@ -347,3 +347,27 @@ test("a wait the caller never reaches rejects without an unhandled rejection", a
     process.off("unhandledRejection", onUnhandled);
   }
 });
+
+test("the directions-cut scenario cuts on a line, says so, and is told apart from reading on", async () => {
+  const { cutDirections } = await import("../trials/harness/serve.ts");
+  const { readPastCutCheck } = await import("../trials/harness/checks.ts");
+  const { SCENARIOS } = await import("../trials/harness/scenarios.ts");
+  const body = Buffer.from("first line\nsecond line\nthird line\n");
+  const cut = cutDirections(body, 15).toString();
+  assert.match(cut, /^first line\n\n\[output truncated: showing the first 11 of 34 bytes\]\n$/);
+  assert.equal(cutDirections(body, 1000), body, "a short file is left alone");
+  assert.equal(SCENARIOS["directions-cut"].directionsCutAt, 10_000);
+
+  const after = (tools) => readPastCutCheck([{ role: "agent", text: "", tools }]).pass;
+  const shell = (command) => ({ type: "shell", command });
+  assert.equal(after([shell("curl -fsSL http://127.0.0.1:4000/node.md?cut=10000")]), false);
+  assert.equal(
+    after([shell("curl -o /tmp/d.md https://openreceive.org/agent-directions/node/full.md")]),
+    true,
+  );
+  assert.equal(after([shell("curl -fsSL http://127.0.0.1:4000/node.md")]), true);
+  assert.equal(
+    after([{ type: "fetch", url: "https://openreceive.org/agent-directions/node/full.md" }]),
+    true,
+  );
+});

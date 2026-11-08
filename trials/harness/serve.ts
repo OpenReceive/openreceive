@@ -8,11 +8,26 @@ export interface ServedDirectory {
   close: () => Promise<void>;
 }
 
-/** Serve the working tree's directions on 127.0.0.1. The agent fetches them by URL. */
+/** The directions as a tool that shows `bytes` of output leaves them: whole lines, then a marker. */
+export function cutDirections(body: Buffer, bytes: number): Buffer {
+  if (body.length <= bytes) return body;
+  const end = body.lastIndexOf(10, bytes);
+  return Buffer.concat([
+    body.subarray(0, end + 1),
+    Buffer.from(`\n[output truncated: showing the first ${end + 1} of ${body.length} bytes]\n`),
+  ]);
+}
+
+/**
+ * Serve the working tree's directions on 127.0.0.1. The agent fetches them by
+ * URL. `?cut=<bytes>` answers the way a tool that truncates output would.
+ */
 export async function serveDirectory(directory: string): Promise<ServedDirectory> {
   const root = path.resolve(directory);
   const server: Server = createServer((request, response) => {
-    const pathname = decodeURIComponent((request.url ?? "/").split("?")[0] ?? "/");
+    const [rawPath, query] = (request.url ?? "/").split("?");
+    const pathname = decodeURIComponent(rawPath ?? "/");
+    const cut = Number(new URLSearchParams(query).get("cut") ?? "0");
     const file = path.resolve(root, `.${pathname}`);
     if (!file.startsWith(`${root}${path.sep}`) || !file.endsWith(".md")) {
       response.writeHead(404);
@@ -22,7 +37,7 @@ export async function serveDirectory(directory: string): Promise<ServedDirectory
     void readFile(file)
       .then((body) => {
         response.writeHead(200, { "content-type": "text/markdown; charset=utf-8" });
-        response.end(body);
+        response.end(cut > 0 ? cutDirections(body, cut) : body);
       })
       .catch(() => {
         response.writeHead(404);
