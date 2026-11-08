@@ -456,11 +456,26 @@ function checkWordpressPublishWorkflow(relativePath, workflow) {
   }
 }
 
+/**
+ * The one job that runs other Nodes on purpose: ci.yml's node-floor, which
+ * builds on .nvmrc and then runs the packages on the oldest Nodes their
+ * engines field allows, from its matrix.
+ */
+const NODE_FLOOR_JOBS = new Set(["ci.yml node-floor"]);
+/** The Actions expression the node-floor job sets its Node from. */
+const NODE_FLOOR_VERSION = ["$", "{{ matrix.node }}"].join("");
+
 function checkNodeSetup(relativePath, workflow) {
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
     for (const step of job.steps ?? []) {
       if (typeof step.uses !== "string" || !step.uses.startsWith("actions/setup-node")) continue;
+      if (
+        NODE_FLOOR_JOBS.has(`${path.basename(relativePath)} ${jobName}`) &&
+        step.with?.["node-version"] === NODE_FLOOR_VERSION
+      ) {
+        continue;
+      }
       expect(
         step.with?.["node-version-file"] === ".nvmrc" && step.with?.["node-version"] === undefined,
         `${relativePath}: ${jobName} setup-node must use node-version-file: .nvmrc (single source of truth)`,
