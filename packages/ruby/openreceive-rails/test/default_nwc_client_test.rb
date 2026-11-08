@@ -45,6 +45,10 @@ class OpenReceiveDefaultNwcClientTest < Minitest::Test
     # The wrapped object is the gem's own client, not a stand-in: this is the
     # assertion that fails when nwc-ruby is not installed.
     assert_instance_of ::NwcRuby::Client, client.instance_variable_get(:@client)
+    # The per-call budget is the adapter's 12 s, not the gem's 30 s: a relay
+    # that accepts the connection and never answers costs a checkout 12 s.
+    assert_equal 12, OpenReceive::NwcRubyReceiveClient::REQUEST_TIMEOUT_SECONDS
+    assert_equal 12, client.instance_variable_get(:@client).instance_variable_get(:@request_timeout)
     # The adapter redacts the secret it was handed; nothing may echo it back.
     refute_includes client.redacted_connection_uri.to_s, "b" * 64
   end

@@ -407,9 +407,7 @@ module OpenReceive
       rescue OpenReceive::NwcUriParseError => e
         raise ConfigurationError, invalid_nwc_message(e.message)
       end
-      OpenReceive::NwcRubyReceiveClient.new(
-        client: build_nwc_ruby_client(connection), connection_uri: connection
-      )
+      build_nwc_ruby_client(connection)
     end
 
     # Mirrors the JS core formatMissingNwcMessage: what is missing, the
@@ -434,9 +432,11 @@ module OpenReceive
       ].join("\n")
     end
 
+    # The adapter's from_uri sets nwc-ruby's per-call budget
+    # (NwcRubyReceiveClient::REQUEST_TIMEOUT_SECONDS, 12 s) instead of the
+    # gem's 30 s, so a relay that never answers costs a checkout 12 s.
     def build_nwc_ruby_client(connection)
-      require "nwc_ruby"
-      ::NwcRuby::Client.from_uri(connection)
+      OpenReceive::NwcRubyReceiveClient.from_uri(connection)
     rescue LoadError
       raise ConfigurationError,
             "Install nwc-ruby (add `gem \"nwc-ruby\"` to the Gemfile) or configure " \

@@ -62,8 +62,8 @@ rescue LoadError
   exit 0
 end
 
-raw_client = NwcRuby::Client.from_uri(nwc)
-client = OpenReceive::NwcRubyReceiveClient.new(client: raw_client, connection_uri: nwc)
+# The client the Rails engine builds, with its per-call budget.
+client = OpenReceive::NwcRubyReceiveClient.from_uri(nwc)
 info = client.preflight
 # preflight always reports the advertised methods; a smoke run that proceeded
 # with [] would fail later with a misleading "missing required methods".

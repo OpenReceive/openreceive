@@ -14,7 +14,34 @@ module OpenReceive
   # declares snake_case keyword arguments, and spells the list_transactions
   # window `until_ts` because `until` is a Ruby keyword.
   class NwcRubyReceiveClient
+    # nwc-ruby's `request_timeout:` is one budget per call: the info fetch,
+    # the relay handshake and the wallet's reply. Its default of 30 s is how
+    # long a checkout waited for its 503 on a relay that accepts the connection
+    # and never answers. 12 s brings that near the other engines (Python
+    # 10 s, Node 8 s, PHP about 6 s) and still leaves a slow wallet room:
+    # relay handshakes measured 0.6 to 3.2 s, a call that has not read the
+    # info event yet makes two of them (the info event, then the request),
+    # and the wallet's own make_invoice reply takes a few seconds more. A
+    # relay that refuses fails fast either way; the gem retries it inside the
+    # same budget.
+    REQUEST_TIMEOUT_SECONDS = 12
+
     attr_reader :redacted_connection_uri
+
+    # The adapter over a nwc-ruby client built from a connection URI, with
+    # REQUEST_TIMEOUT_SECONDS. The Rails engine builds its default client here;
+    # a Rack host passes the result to OpenReceive::Server::Service. Requires
+    # the nwc-ruby gem, which this gem does not depend on.
+    def self.from_uri(connection_uri, request_timeout: REQUEST_TIMEOUT_SECONDS, **options)
+      # The engine's own parser first, so a malformed code fails as
+      # OpenReceive::NwcUriParseError, not as whatever the gem raises.
+      OpenReceive.parse_nwc_uri(connection_uri)
+      require "nwc_ruby"
+      new(
+        client: ::NwcRuby::Client.from_uri(connection_uri, request_timeout: request_timeout, **options),
+        connection_uri: connection_uri
+      )
+    end
 
     def initialize(client:, connection_uri: nil)
       @client = client
