@@ -14,7 +14,7 @@
     "@openreceive/browser": "0.4.33",
     "@openreceive/provider-data": "0.4.33",
     "@openreceive/react": "0.4.33",
-    "@tabler/icons-react": "^3.49.0",
+    "@tabler/icons-react": "^3.50.0",
     "@vitejs/plugin-react": "^4.7.0",
     "mobx": "^6.15.0",
     "mobx-keystone": "^1.21.0",
