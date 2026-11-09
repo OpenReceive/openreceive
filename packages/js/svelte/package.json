@@ -30,7 +30,7 @@
     "@openreceive/elements": "0.4.33"
   },
   "peerDependencies": {
-    "svelte": ">=5.0.0"
+    "svelte": "^5.57.3"
   },
   "exports": {
     ".": {
