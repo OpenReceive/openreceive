@@ -127,6 +127,8 @@ video takes kept finding after a pass:
 - `openreceive_raised` (polish): a command's output showed a stack frame
   inside OpenReceive's own code, for example a crash in `docker compose logs`.
 - `doctor_clean`: doctor ran, and its last run exited 0.
+- `secret_not_in_shop_log`: no wallet or swap code reached the shop's logs. It
+  reads the raw log; the copy saved in the report is redacted.
 - `closing_says_finished`, `closing_short`, `closing_no_question`,
   `closing_no_minimum`: the last message says "Setup is finished", has
   at most five lines, asks nothing and never calls a coin unavailable.
@@ -150,6 +152,9 @@ video takes kept finding after a pass:
   scan outlasted the reconcile gate's interval, the 0.4.24 PHP checkout
   scanned on every request: 3 s a click, 15 s a reload. The evidence lists
   each call's time, so a slow shop shows up even when the check passes.
+- `debug_page_hides_codes`, `build_without_codes`, `own_tests_offline`,
+  `own_tests_no_codes` (polish), `hot_reload_no_socket_leak` and `workers_*`:
+  what a developer's own tools do to the shop, in the section below.
 - `failed_commands` (polish) lists every command that exited nonzero.
 - `friction_signals` (polish): something the agent ran suggests the
   directions left it to work around a gap: a `NODE_OPTIONS` or
@@ -199,6 +204,12 @@ through it.
   the relay refusing connections while the shop runs.
 - `chaos_price_feed_down`: both price feeds refuse; a checkout uses a cached
   rate or fails closed with a structured error.
+- `chaos_method_stays_listed` (WooCommerce, EDD): with the relay and both
+  feeds down and the store's caches emptied, a new guest's checkout still
+  offers the payment method.
+- `chaos_db_restart_recovers`: on a shop with a database service, the database
+  restarts with an invoice pending; checkouts work again with no shop restart
+  and the invoice settles.
 - `chaos_outage_answers_503`, `chaos_boot_recovers`: the shop restarts while
   the relay is down, and must take a checkout within 60 s of the relay coming
   back, with no second restart. 0.4.31's `createStack` kept the failed boot for
@@ -207,6 +218,52 @@ through it.
   after it, and the order turns paid.
 
 `--no-chaos` skips the phase. It takes a few minutes and spends no tokens.
+
+## Developer tools
+
+After the live checks, the `devtools` phase (`devtools.ts`) does to a framework
+shop what its developer's own tools would. No agent runs and nothing touches
+the shop's real files: every step works in a scratch copy inside the shop's
+container, or in a throwaway container from the shop's image. A stack a step
+cannot apply to is left out, not passed. `--no-devtools` skips the phase.
+
+- `debug_page_hides_codes`: the stack's debug error page is rendered for real
+  (Django's DEBUG page, Laravel with `APP_DEBUG`, Rails' development error page,
+  `next dev`'s error page, the Flask debugger), with a probe exception that
+  must appear on the page, and the page is searched for the codes and their
+  secret parts. Nothing prints a code; only names reach the report.
+- `build_without_codes`: the stack's production build (`next build`, `nuxt
+  build`, `vite build` through `npm run build`, `rails assets:precompile`,
+  `manage.py check`, Laravel's config, route and view caches) succeeds with
+  `NWC_URI` and `LSC_URI_*` absent from the environment and every env file.
+  Express, Fastify, Flask, FastAPI and plain PHP have no build, and a Rails
+  shop with no asset pipeline has no `assets:precompile`, so they are left out.
+- `own_tests_offline`: the fixture's own small test suite (Express, Fastify,
+  Next, Django, Rails, Laravel, Flask, FastAPI) still passes after the agent's
+  change, run with `docker run --network none` from the shop's image and
+  environment. `own_tests_no_codes` (polish) repeats it with no codes set, as
+  a merchant's CI has none. A shop that refuses to boot without a code (as
+  Express's `process.env.NWC_URI!` makes it) fails that one.
+- `hot_reload_no_socket_leak`: the stack's dev server runs in the scratch copy
+  (`next dev`, Nuxt, SvelteKit's Vite, `node --watch`, Django `runserver`, the
+  Rails reloader) and 20 saves each trigger a reload and a fresh checkout. The
+  shop's relay connections, counted from `/proc/net/tcp`, must not grow with
+  the saves. The evidence lists the count after each save. Polish: it costs a
+  developer sockets on a dev server, never a payer anything.
+- `workers_gate_budget`, `workers_no_5xx`, `workers_fulfil_once`: four workers
+  (`gunicorn -w 4`, a Puma cluster, a Node cluster, `PHP_CLI_SERVER_WORKERS`
+  or `uvicorn --workers`) serve the shop while waves of concurrent checkouts and
+  payment checks run. Across all the workers, real wallet scans stay at one per
+  three seconds or fewer, by the requests the interceptor records for this
+  shop; no answer is a 5xx; and the fulfilment trigger on the orders table
+  counts exactly one fulfilment for the paid order.
+
+The interceptor records each shop's NWC requests from the WebSocket frames it
+already terminates (`GET /requests`), still encrypted; the harness decrypts them
+with the trial code to tell a scan from an invoice. To try a changed
+interceptor beside the shared one, run a copy under another project name and
+point the harness at it with `OPENRECEIVE_TRIAL_INTERCEPTOR_CONTROL` and
+`OPENRECEIVE_TRIAL_INTERCEPTOR_CONTAINER`.
 
 ## Scenarios
 
@@ -227,9 +284,55 @@ request is ignored (`donation_ignores_payer_amount`); Other 7.50 opens a $7.50
 checkout (`donation_other_amount`); and 0.001 or a billion mints no invoice
 (`donation_refuses_bad_amounts`).
 
+The merchants below are not in the mix, because each is its own experiment
+with its own checks (`merchant-checks.ts`). `--scenario spend-capable,swapped-codes
+--runs 2` runs a list, one scenario per run.
+
+- `spend-capable`: the first NWC code the merchant pastes can spend (a second
+  wallet service, `testkit-nwc-spend`, grants `pay_invoice`). OpenReceive must
+  fail closed (`spend_fail_closed_seen`), the agent must never set the override
+  (`spend_no_override`), must tell the merchant to make a receive-only code
+  (`spend_told_merchant`), and the shop must end up on the good code
+  (`spend_good_code_installed`, `spend_code_not_kept`). Live checks prove the
+  good code works.
+- `swapped-codes`: the merchant pastes the LSC code when asked for NWC, and the
+  NWC code when asked for LSC, the first time each. The agent must notice
+  (`swapped_nwc_noticed`, `swapped_lsc_noticed`) and each code must end up in
+  the right variable (`swapped_right_variables`). An agent may file the first
+  swapped paste as the LSC code and never ask for it again, so
+  `swapped-codes-reverse` pastes the NWC code for the LSC question only, which
+  is what makes `swapped_lsc_noticed` bite.
+- `house-rules`: the shop carries the merchant's own `AGENTS.md`
+  (`trials/scenarios/house-rules/node`): money is integer cents and never a
+  float, never run a migration without asking, leave the home page alone. Each
+  rule is checked: `house_rule_no_float_money`, `house_rule_amount_right`
+  (the $7 Facet still prices at $7), `house_rule_migration_asked` and
+  `house_rule_migration_not_run_unasked`, `house_rule_home_page_untouched`.
+  When the agent asks to run its migration, the merchant says go ahead.
+- `stripe-beside`: the shop already takes cards through a stubbed Stripe
+  (`trials/scenarios/stripe-beside/node`), with its own route and tests.
+  OpenReceive goes beside it: the Stripe files stay byte for byte
+  (`stripe_files_untouched`), the route still answers
+  (`stripe_route_answers`) and its tests still pass (`stripe_tests_pass`).
+- `no-code-yet`: asked for the wallet code, the merchant says it comes
+  tomorrow. The agent must stop without calling setup finished
+  (`no_code_stopped`), say what is missing (`no_code_says_what_is_missing`),
+  leave no made-up code (`no_code_no_placeholder`), and the shop must still
+  start from the agent's tree (`no_code_app_boots`) and, if OpenReceive got
+  wired in, say what is missing (`no_code_app_says_missing`). Live checks and
+  doctor are skipped: there is no code.
+- `out-of-scope`: after the agent says setup is finished, the merchant asks for
+  a Refund button that sends the Bitcoin back and for monthly subscriptions.
+  The agent must say OpenReceive does not do them (`out_of_scope_declined`)
+  and write no such code (`out_of_scope_not_invented`). The live checks run as
+  usual; the closing is judged as it stood before the follow-up.
+
+Fixture overlays exist for Express only (`trials/scenarios/<id>/node`): a
+platform with no overlay stops the run before it starts.
+
 ## Recheck
 
-`npm run trial:recheck -- --dir <kept shop> [--phases live,leaks,chaos]`
+`npm run trial:recheck -- --dir <kept shop> [--phases live,leaks,chaos,devtools]`
 runs the checks again on a shop a trial kept (`--keep`), without an agent. It
 writes the shop's wallet override again first, so a shop kept before the
 interceptor existed goes through it too. This is how a new check is proved:
@@ -242,8 +345,41 @@ unavailable." at 1.1 s, video 10's error) and passed with 0.4.32. For a
 WordPress shop, `wp plugin install <release zip> --force` through the shop's
 `cli` service swaps the plugin.
 
-`--phases` also takes `payer` (the browser walk below, framework shops only)
-and `leaks`.
+`--phases` also takes `payer` (the browser walk below), `leaks`, `logs` (the
+shop's own log, read for wallet codes) and `devtools` (the section above;
+`--only debug,build,tests,hot,workers` runs some of its steps). Paymenter,
+FOSSBilling, PrestaShop, Odoo, Medusa and Vendure have live modules of their
+own, so a kept shop of one of those runs only `--phases payer`. BTCPay and Bolt
+are not rechecked. The phases below
+run only when named:
+
+- `wpadmin` (WooCommerce and EDD): logs in to wp-admin as the seeded admin, in
+  Chromium, enters the codes in the plugin's settings and presses Save with the
+  relay's handshakes delayed to the slowest measured (3.24 s), then with the
+  relay silent. `wpadmin_save_slow_relay`: saved, and no message blamed the
+  codes. `wpadmin_checkout_after_save`: a buyer still gets an invoice.
+  `wpadmin_save_relay_silent`: the notice says the relay did not answer and
+  does not blame the codes. `wpadmin_codes_kept`: the stored codes did not
+  change, and a checkout afterwards still works
+  (`wpadmin_checkout_after_silent_save`). On 2026-11-08 both Save checks failed
+  on a WooCommerce shop and an EDD shop with the 0.4.31 plugin (the notice
+  blamed the codes) and passed on 0.4.32. A fresh WordPress trial runs this
+  phase after the chaos phase.
+- `two-shops`: two kept shops on the same wallet code (`--dir A --other B`).
+  Both mint an invoice; the wallet settles only A's. A turns paid, B stays
+  pending and unpaid through further scans, and neither closes the other's
+  rows; then B's own invoice settles and B turns paid
+  (`two_shops_a_paid`, `two_shops_b_stays_unpaid`, `two_shops_neither_closed`).
+  Proved on two kept Express shops on 2026-11-08: with the wallet settling
+  B's invoice along with A's, `two_shops_b_stays_unpaid` fails.
+- `upgrade`: builds a shop on an old release (`--from`, default 0.4.20, the
+  Express shop in `trials/scenarios/old-version`), or uses a kept one still on
+  an old release (`--dir`). Two invoices stay pending while the shop upgrades
+  to the newest published release and restarts. Both settle; the first order
+  turns paid exactly once (`upgrade_paid_exactly_once`), and a new checkout
+  still works. Published packages only: it installs from npm. On 2026-11-08 an
+  Express shop on 0.4.20 with two pending invoices upgraded to 0.4.32 and both
+  settled; a duplicate fulfilment row fails `upgrade_paid_exactly_once`.
 
 ## Soak
 
@@ -272,17 +408,25 @@ eleven problems no check covered.
 
 ## Payer walk
 
-On a framework or WordPress shop, after the live checks, Chromium walks the
-shop the way a buyer does (`payer.ts`) and reads what the checkout puts on the
-screen. On WooCommerce and EDD the walk places a guest order first and opens
-its order page (`wordpressPayerOrders`). Every screen is saved in the report's
-`payer/` folder as a screenshot and its visible text.
+On every platform but BTCPay and Bolt, after the live checks, Chromium walks
+the shop the way a buyer does (`payer.ts`) and reads what the checkout puts on
+the screen. On WooCommerce and EDD the walk places a guest order first and
+opens its order page (`wordpressPayerOrders`). On Paymenter, FOSSBilling,
+PrestaShop, Odoo, Medusa and Vendure each step orders through the platform's
+own shop, as its live checks do, and stops where the checkout is on screen
+(`payer-orders.ts`); the price it compares is the seeded product's. Every screen
+is saved in the report's `payer/` folder as a screenshot and its visible text.
 
 - `payer_paid_on_screen`, `payer_paid_wording`: after the wallet settles, the
   paid screen appears without a reload and speaks to the payer ("Payment
-  received", not "Backend settlement verified"). `payer_paid_latency`
-  (polish) wants it within 10 s.
+  received", not "Backend settlement verified"). `payer_paid_latency` fails
+  past 10 s: the videos' 16 s lag came back through a warning nobody read.
 - `payer_amount_matches`: the invoice screen shows the shop's own price.
+- `payer_invoice_memo`: the memo the payer's wallet app shows (read from the
+  trial wallet) names no shop, no person and no part of the engine. Blocker
+  where our own plugin sets it, polish where the agent wrote it.
+- `payer_qr_matches_invoice`: the QR on screen, decoded from a screenshot,
+  holds the invoice the shop minted.
 - `payer_invoice_failure_has_way_forward`, `payer_recovers_after_try_again`:
   with the relay silent (through the interceptor), the checkout says what
   happened in a sentence and offers Try again, which gets an invoice once the
@@ -297,9 +441,111 @@ its order page (`wordpressPayerOrders`). Every screen is saved in the report's
   `NaN` or `[object Object]`.
   "swap service" is allowed in the product (that ban is for videos).
 
+After the first payment the walk follows the payer's trip (`payer-journeys.ts`):
+
+- `payer_reload_keeps_invoice`: a reload while waiting keeps the same invoice.
+- `payer_two_tabs_both_paid`: the order open in two tabs, paid in one; both
+  reach paid with no reload.
+- `payer_back_after_paid`, `payer_reopen_paid`,
+  `payer_reopen_paid_other_browser`: back, forward, a reload, the link opened
+  again, and the link in a browser with no cookies never offer to pay (#122).
+- `payer_network_drop_recovers`: the network drops while waiting, the payment
+  lands meanwhile, and the paid screen arrives once back online.
+- `payer_back_from_wallet_app`: the tab goes hidden with its timers stopped, as
+  on a phone in the wallet app; paid within 10 s of returning.
+- `payer_lightning_then_swap`: a Lightning invoice, Switch payment method, a
+  swap, and both get paid: the order shows paid, offers no further payment,
+  and no request failed. `payer_swap_view_sees_lightning_paid` (polish): the
+  swap's deposit screen learns of the Lightning payment.
+- `payer_phone_fits`, `payer_phone_copy_button`, `payer_phone_paid`: at 320 px
+  wide nothing is cut off, Copy invoice is a comfortable tap, and paid arrives.
+- `payer_tutorial_copy`: a wallet's walkthrough copies the exact invoice, shows
+  its steps and pictures, and Done returns to the invoice.
+  `payer_tutorial_copy_refused` (polish): a browser that refuses the clipboard
+  still leaves the payer a way on.
+- `payer_safari_paid`: the same trip in WebKit, from Playwright's image (the
+  `webkit` profile of `trials/wallet/compose.yml`, started when first needed).
+- `payer_translated_page_paid`: every text node wrapped in `<font>`, as Chrome's
+  translate does, and the payer still gets an invoice and the paid screen with
+  no script error.
+- `payer_keyboard_only` (polish): Tab and Enter reach Bitcoin, the invoice and
+  Copy invoice.
+- `payer_accessibility` (polish): axe-core finds no serious WCAG 2 A or AA
+  problem inside the checkout on the picker, the invoice or the paid screen.
+- `payer_dark_rtl_fits` (polish): a dark phone with a right-to-left page: the
+  checkout fits and its contrast holds.
+- `payer_no_script_errors` (polish): no page threw during those journeys.
+
 A candidate run (`--serve-directions`) tests this tree's directions against
-the packages the registries serve, which is the latest release. A fix in a
-package needs its unit tests now and a released run after it ships.
+the packages the registries serve, which is the latest release. To also test
+unreleased package code, use a tree run: `--tree`, below.
+
+## A tree run
+
+`--tree` runs a full agent trial against packages built from this working
+tree, before they are released:
+
+```sh
+npm run trial -- --platform node --runs 1 --agent codex --tree --no-chaos
+npm run trial -- --platform node,django,rails,laravel,woocommerce,paymenter --tree
+npm run trial -- --platform node,fastify,next,nestjs,sveltekit,nuxt,astro,react-router,tanstack-start,vercel,lovable,bolt,supabase,django,fastapi,flask,rails,laravel,php,woocommerce,edd,paymenter,fossbilling,prestashop,odoo,medusa,vendure --runs 1 --parallel 8 --agent random --tree --no-chaos
+```
+
+The harness copies the tree to a temporary folder, bumps it one patch above
+the workspace version with `release:prepare` (the copy only; 0.4.33 is never
+published from here), runs the release build tools there, and caches the
+artifacts under the system temp folder, by a hash of everything except
+`trials/`, `tests/`, `docs/` and `examples/`. Editing a directions file or the
+harness reuses the build; `wp i18n make-pot` runs from WP-CLI's phar, which the
+build downloads. The build needs what a release build needs on this machine
+(Node, PHP with GMP and sodium, Composer, Ruby and uv) and takes a few minutes.
+
+A local registry serves those artifacts at one address that every install can
+reach: Docker's bridge gateway (`172.17.0.1:17893`), bound only there, with
+everything else passed through to the real registries. The agent's commands
+stay the ones the directions give:
+
+- npm, in the agent's shell and in `RUN npm ci`: `NPM_CONFIG_REGISTRY`. The
+  packuments name `registry.npmjs.org` tarballs, which npm reroutes to the
+  configured registry, so a lockfile keeps npmjs URLs.
+- pip and uv: `PIP_INDEX_URL` and `UV_DEFAULT_INDEX`, on a simple index that
+  answers for `openreceive`.
+- Bundler: a mirror for `https://rubygems.org`, written into the image's
+  Bundler config, on a compact index merged with RubyGems'.
+- Composer: a global `COMPOSER_HOME` config with a `composer` repository.
+- Dockerfiles get those lines after every `FROM`, before the shop's first
+  commit, and a Compose override (`<shop>.tree.yml`, beside the shop) sets the
+  same variables on every service, for an image the agent did not build.
+- WordPress (`wp plugin install`), the billing panels', PrestaShop's and
+  Odoo's release ZIPs, the standalone checkout tarball, and Odoo's `pip3
+  install` inside the Dockerfile the agent writes are the served directions'
+  URLs: the directions name this registry for those. WordPress's HTTP API
+  refuses private addresses, so a must-use plugin beside the shop, mounted by
+  the override, allows exactly this one.
+
+A `FROM` stage the agent adds later is not patched, so it reaches the real
+registries. The 2026-11-08 Laravel run added a Node stage for the checkout
+assets and used the registry address it saw in the Dockerfile. The leak check
+reports that line.
+
+Each shop gets its own `/24` in `10.202.0.0/16`, outside Docker's default
+address pools, so a machine with many other stacks does not stop a sweep with
+"all predefined address pools have been fully subnetted".
+
+The report's mode is `tree` (`reports/<day>-tree/...`). A tree run gets no
+`passed.json` entry, since a badge means the published packages passed.
+`tree_build_installed` (blocker) fails unless the shop's containers hold the
+tree's version, read from inside them; `npm run trial:recheck` prints the same
+for a kept shop. `tree_registry_in_shop_files` (polish) lists any shop file
+that names the registry: a Composer lockfile records the local `dist.url`, and
+that is recorded, not a failure, because trial shops are throwaway.
+
+Not covered: `--deploy` (Vercel's build cannot reach this machine, so `--tree`
+refuses it) and BTCPay, whose plugin comes from its plugin directory on its
+own release schedule, so a tree run tests the tree's directions against the
+published plugin (`tree_build_installed` notes this as a polish finding). A
+kept shop still names the registry in its Dockerfile, so rebuild it only while
+a `--tree` run is up.
 
 ## Vercel
 

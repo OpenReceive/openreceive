@@ -15,22 +15,26 @@ import {
   outputCheck,
   readPastCutCheck,
   scopeViolation,
+  shopLogCheck,
 } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
 import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
+import { devtoolsChecks } from "./devtools.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
 import { debugPageChecks } from "./leaks.ts";
 import { donationWalkChecks, payerWalkChecks } from "./payer.ts";
 import { check, liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
-import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
+import { classify, GO_AHEAD, merchantReply, newMerchantMemory } from "./merchant.ts";
+import { ownTestsUnderHouseRules, scenarioChecks, shopTree } from "./merchant-checks.ts";
 import { liveMedusaChecks } from "./medusa.ts";
 import { liveOdooChecks } from "./odoo.ts";
+import { hasPayerWalk, payerOrders } from "./payer-orders.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import { livePrestashopChecks } from "./prestashop.ts";
 import { redact } from "./redact.ts";
-import { scenarioFor } from "./scenarios.ts";
+import { overlayFor, scenarioFor } from "./scenarios.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./sandbox.ts";
 import { scanTrackedSecrets } from "./scan.ts";
@@ -42,13 +46,27 @@ import {
   liveWoocommerceChecks,
   wordpressChaosBuyers,
   wordpressKind,
-  wordpressPayerOrders,
+  wordpressMethodListing,
 } from "./wordpress.ts";
 import { loadVercelConfig, vercelChecks, vercelCodeChecks } from "./vercel.ts";
+import {
+  installedProbes,
+  installedVersions,
+  registryLeakCheck,
+  treeVersionCheck,
+} from "./installed.ts";
+import { patchShopForTree, registryLeaks, type TreeRegistry } from "./tree-registry.ts";
 import { type TrialWallet, trialWalletOverride } from "./wallet.ts";
+import { wpAdminSaveChecks } from "./wpadmin.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const trialsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+async function homePage(baseUrl: string): Promise<string> {
+  return fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(30_000) })
+    .then((response) => response.text())
+    .catch((error: unknown) => `(no answer: ${String(error)})`);
+}
 
 const PROMPT_BLOCK =
   /<!-- platform-prompt:begin -->\s*```text\n([\s\S]*?)\n```\s*<!-- platform-prompt:end -->/;
@@ -112,8 +130,12 @@ export interface LoopRequest {
   /** The test wallet the codes belong to; it can pay an invoice. */
   readonly wallet?: TrialWallet;
   readonly registerStop?: (stop: () => Promise<void>) => void;
+  /** `--tree`: the registry serving this tree's packages. */
+  readonly tree?: TreeRegistry;
   /** Run the chaos phase after the live checks (default true; `--no-chaos` turns it off). */
   readonly chaos?: boolean;
+  /** Run the dev-tools checks after the live checks (default true; `--no-devtools` turns them off). */
+  readonly devtools?: boolean;
   /** Who the merchant is (scenarios.ts); canonical when omitted. */
   readonly scenario?: Scenario;
 }
@@ -194,7 +216,7 @@ async function beforeLive(
 }
 
 export async function runDirections(request: LoopRequest): Promise<LoopResult> {
-  const { platform } = request;
+  const { platform, tree } = request;
   const fixture = path.join(trialsRoot, "platforms", platform.slug, "fixture");
   const seed = path.join(trialsRoot, "platforms", platform.slug, "seed");
   const platformCodes = platform.credential_store.kind === "platform";
@@ -229,6 +251,8 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
           platform.wallet_services ?? [platform.service ?? "wordpress"],
           request.wallet,
         ),
+    tree === undefined ? undefined : (shop) => patchShopForTree(shop, tree),
+    request.scenario === undefined ? undefined : overlayFor(request.scenario, platform.slug),
   );
   let sandbox: Awaited<ReturnType<typeof startShop>> | undefined;
   let stopped = false;
@@ -249,6 +273,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       wallet.lsc,
       wallet.lscBackup,
       wallet.nwcVercel,
+      wallet.spendNwc,
       supabase?.password,
     ].filter((value): value is string => typeof value === "string" && value.length > 0);
     const day = new Date().toISOString().slice(0, 10);
@@ -309,7 +334,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
 
-    const env = cursorEnv(process.env, shopComposeEnv(directory));
+    const env = cursorEnv(process.env, { ...shopComposeEnv(directory), ...tree?.hostEnv });
     const turns: Turn[] = [];
     const rawStreams: string[] = [];
     const writes: SeenWrite[] = [];
@@ -320,6 +345,14 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     let nextPrompt = opening;
     let done = false;
     let reason = "";
+    const memory = newMerchantMemory();
+    // What the merchant scenarios compare the finished shop against.
+    const homeBefore = scenario.houseRules === true ? await homePage(sandbox.baseUrl) : undefined;
+    const treeBefore =
+      scenario.houseRules === true || scenario.overlay === true
+        ? await shopTree(directory)
+        : undefined;
+    let treeAtFollowUp: ReadonlyMap<string, string> | undefined;
     const started = Date.now();
     const budgetMs = platform.max_minutes * 60_000;
 
@@ -361,11 +394,12 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         reason = "a turn timed out";
         break;
       }
-      let reply = merchantReply(response.text, scenario, wallet, platformCodes);
+      let reply = merchantReply(response.text, scenario, wallet, platformCodes, memory);
       if (reply === null || repeatedClosing(turns)) {
         done = true;
         break;
       }
+      if (reply === scenario.followUp) treeAtFollowUp = await shopTree(directory);
       // BTCPay installs plugins only from its own UI, so the merchant does it when asked.
       if (platform.host === "btcpay" && asksPluginInstall(response.text)) {
         const installed = await installPlugin(directory);
@@ -407,16 +441,47 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       nwc: shopNwc,
       lsc: wallet.lsc,
       lscBackup: wallet.lscBackup,
+      spendNwc: wallet.spendNwc,
     }).map((check) => (check.id === "secret_not_tracked" ? secret : check));
+    // A follow-up comes after the closing, so the closing is judged as it stood.
+    const followUpAt =
+      scenario.followUp === undefined
+        ? -1
+        : turns.findIndex((turn) => turn.role === "merchant" && turn.text === scenario.followUp);
+    const closingTurns = followUpAt === -1 ? turns : turns.slice(0, followUpAt);
     checks.push(stayedInShop(turns, repoRoot), finishedCheck(done, reason));
     checks.push(
-      ...commandChecks(turns, writes, platform.doctor !== ""),
-      ...closingChecks(turns, platform.closing_max_lines ?? 5),
+      // A merchant with no code never gets a clean doctor or a closing.
+      ...commandChecks(turns, writes, platform.doctor !== "" && scenario.noCodeYet !== true),
+      ...(scenario.noCodeYet === true
+        ? []
+        : closingChecks(closingTurns, platform.closing_max_lines ?? 5)),
       ...(scenario.directionsCutAt === undefined ? [] : [readPastCutCheck(turns)]),
     );
+    const treeChecks = async (build: TreeRegistry): Promise<Check[]> => [
+      installedProbes(platform).length === 0
+        ? {
+            id: "tree_build_installed",
+            severity: "polish",
+            pass: false,
+            summary:
+              "This shop installs nothing from the tree: BTCPay's plugin comes from its own directory.",
+          }
+        : treeVersionCheck(
+            await installedVersions(directory, platform),
+            build.build.version,
+            scenario.noCodeYet === true,
+          ),
+      registryLeakCheck(await registryLeaks(directory, build.address)),
+    ];
+    // Before the live checks, which can recreate containers: the shop as the
+    // agent left it must hold the tree's build. A platform that installs at
+    // its before-live step (Lovable rebuilds the preview) holds nothing yet.
+    const rebuildsBeforeLive = (platform.before_live?.length ?? 0) > 0;
+    if (tree !== undefined && done && !rebuildsBeforeLive) checks.push(...(await treeChecks(tree)));
     // BTCPay's health check is a page in its UI: read the store the agent configured instead.
     if (platform.host === "btcpay") checks.push(...(await btcpayChecks(directory, scenario.swaps)));
-    const secrets = [shopNwc, wallet.lsc, wallet.lscBackup].filter(
+    const secrets = [shopNwc, wallet.lsc, wallet.lscBackup, wallet.spendNwc].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
     checks.push(
@@ -438,12 +503,16 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     if (platform.deploy === "vercel" && vercel === undefined && done) {
       checks.push(...(await vercelCodeChecks(directory)));
     }
+    // A shop with no code has nothing to take a payment with; scenarioChecks
+    // below says what it must do instead.
     if (
       (platform.live === true || (platform.deploy === "vercel" && vercel === undefined)) &&
-      done
+      done &&
+      scenario.noCodeYet !== true
     ) {
       const prepared = await beforeLive(directory, platform, log);
       if (prepared !== undefined) checks.push(prepared);
+      if (tree !== undefined && rebuildsBeforeLive) checks.push(...(await treeChecks(tree)));
       log("live: the shop's own order, a checkout, a stranger");
       const wordpress = wordpressKind(platform);
       // The donation merchant asked for /donate, not the shop's checkout: the
@@ -518,9 +587,10 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       );
       // What the payer sees: the shop's own pages in Chromium, every state of
       // the checkout read for developer words, failures forced through the
-      // interceptor and the test provider. The framework fixtures only.
-      if (!donation && request.wallet !== undefined && platform.host === undefined) {
+      // interceptor and the test provider.
+      if (!donation && request.wallet !== undefined && hasPayerWalk(platform)) {
         log("payer: the checkout in Chromium, paid and failing");
+        const placeOrder = payerOrders(platform, directory, sandbox.baseUrl);
         checks.push(
           ...(await payerWalkChecks({
             baseUrl: sandbox.baseUrl,
@@ -530,15 +600,35 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
             client: clientPrefix(directory),
             reportDir,
             swaps: scenario.swaps && platform.swap_provider !== "live",
-            ...(wordpress === undefined
-              ? {}
-              : { placeOrder: wordpressPayerOrders(wordpress, sandbox.baseUrl) }),
+            ...(placeOrder === undefined ? {} : { placeOrder }),
           })),
         );
       }
       // A framework's debug page can show the codes however well the agent
-      // kept them out of its own code.
-      checks.push(...(await debugPageChecks(directory, platform)));
+      // kept them out of its own code; the rest of a developer's own tools
+      // (a build, the shop's tests, hot reload, many workers) run here too.
+      if (
+        !donation &&
+        request.devtools !== false &&
+        platform.host === undefined &&
+        request.wallet !== undefined
+      ) {
+        log("devtools: debug page, build, the shop's tests, hot reload, many workers");
+        checks.push(
+          ...ownTestsUnderHouseRules(
+            await devtoolsChecks({
+              directory,
+              platform,
+              baseUrl: sandbox.baseUrl,
+              wallet: request.wallet,
+              log,
+            }),
+            scenario,
+          ),
+        );
+      } else {
+        checks.push(...(await debugPageChecks(directory, platform)));
+      }
       // The chaos phase needs the shop on the trial network, where the
       // interceptor stands in for its relay and price feeds.
       if (
@@ -561,11 +651,43 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
               ? {}
               : {
                   newBuyer: wordpressChaosBuyers(wordpress, directory, sandbox.baseUrl),
+                  methodListing: wordpressMethodListing(wordpress, directory, sandbox.baseUrl),
                   healthPath: "/",
                 }),
           })),
         );
+        if (wordpress !== undefined) {
+          // wp-admin's own Save, with the relay slow and then silent: the
+          // agent configured the store with WP-CLI and never pressed it.
+          log("wpadmin: the settings Save, relay slow and silent");
+          checks.push(
+            ...(await wpAdminSaveChecks({
+              kind: wordpress,
+              directory,
+              baseUrl: sandbox.baseUrl,
+              nwc: shopNwc,
+              lsc: wallet.lsc,
+              interceptor: request.wallet.interceptor,
+              newBuyer: wordpressChaosBuyers(wordpress, directory, sandbox.baseUrl),
+            })),
+          );
+        }
       }
+    }
+    if (done) {
+      checks.push(
+        ...(await scenarioChecks({
+          scenario,
+          platform,
+          directory,
+          baseUrl: sandbox.baseUrl,
+          turns,
+          codes: wallet,
+          treeBefore,
+          treeAtFollowUp,
+          homeBefore,
+        })),
+      );
     }
     if (supabase !== undefined && done) checks.push(await supabaseChecks(supabase));
     if (vercel !== undefined && done) {
@@ -576,6 +698,14 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     if (platform.deploy === "local" && done) {
       checks.push(...(await localPublishChecks(directory, sandbox.baseUrl, log, paid)));
     }
+    // Every service's whole log, kept with the report whatever the result: a
+    // 5xx a buyer saw must be findable there, as a merchant would look for it.
+    const shopLog = await compose(directory, ["logs", "--no-color", "--timestamps"], 60_000, {
+      quiet: true,
+    })
+      .then((result) => `${result.stdout}\n${result.stderr}`.trim())
+      .catch((error: unknown) => `docker compose logs failed: ${String(error)}`);
+    if (done) checks.push(shopLogCheck(shopLog, uris));
     const redacted = checks.map((check) => ({
       ...check,
       evidence: check.evidence === undefined ? undefined : hide(check.evidence, uris),
@@ -603,13 +733,6 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
             })
             .catch((error: unknown) => `(no answer: ${String(error)})`)
         : undefined;
-    // Every service's whole log, kept with the report whatever the result: a
-    // 5xx a buyer saw must be findable there, as a merchant would look for it.
-    const shopLog = await compose(directory, ["logs", "--no-color", "--timestamps"], 60_000, {
-      quiet: true,
-    })
-      .then((result) => `${result.stdout}\n${result.stderr}`.trim())
-      .catch((error: unknown) => `docker compose logs failed: ${String(error)}`);
     await writeRunReport({
       directory: reportDir,
       slug: platform.slug,

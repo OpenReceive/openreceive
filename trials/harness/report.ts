@@ -103,6 +103,8 @@ export interface PlatformSummary {
   readonly directionsUrl: string;
   /** The first 12 hex digits of the directions file's SHA-256, as the agent fetched it. */
   readonly directions: string;
+  /** A `--tree` run: the version built from the working tree. */
+  readonly treeBuild?: { readonly version: string; readonly commit: string };
   readonly runs: readonly (SummaryRun & {
     readonly ok: boolean;
     readonly agent: string;
@@ -124,10 +126,17 @@ export function platformSummaryMarkdown(summary: PlatformSummary): string {
     `- agents: ${agents.join(", ")}`,
     `- mode: ${summary.mode}`,
     `- directions: ${summary.directionsUrl} (sha256 ${summary.directions})`,
-    `- packages: whatever the registries served on ${summary.day}; latest release ${summary.release}`,
+    summary.treeBuild === undefined
+      ? `- packages: whatever the registries served on ${summary.day}; latest release ${summary.release}`
+      : `- packages: built from this tree (${summary.treeBuild.commit}) as ${summary.treeBuild.version}; never published`,
     "",
   ];
-  if (passed === summary.runs.length) {
+  if (summary.treeBuild !== undefined) {
+    lines.push(
+      "A tree run is not a Tested badge: it proves unreleased packages, so it has no passed.json entry.",
+      "",
+    );
+  } else if (passed === summary.runs.length) {
     const entry = {
       trial: summary.slug,
       date: summary.day,

@@ -61,6 +61,23 @@ test("elements render display-safe checkout HTML", () => {
   assert.doesNotMatch(html, /Bank Transfer/);
 });
 
+test("a settled checkout reads Paid to the payer; data-state keeps the engine's word", () => {
+  const html = renderCheckoutHtml({
+    status: "settled",
+    invoice_id: "or_inv_paid",
+    invoice: "lnbc-paid",
+    payment_hash: "c".repeat(64),
+    amount_msats: 200000,
+    fiat_quote: { fiat: { currency: "USD", value: "0.05" } },
+    transaction_state: "settled",
+    workflow_state: "paid",
+    settled_at: Math.floor(Date.now() / 1000) - 5,
+    expires_at: Math.floor(Date.now() / 1000) + 600,
+  });
+
+  assert.match(html, /<span part="state"[^>]*data-state="settled"[^>]*>Paid<\/span>/);
+});
+
 test("elements derive waiting display from browser checkout state", () => {
   const expiredHtml = renderCheckoutHtml({
     invoice_id: "or_inv_expired",

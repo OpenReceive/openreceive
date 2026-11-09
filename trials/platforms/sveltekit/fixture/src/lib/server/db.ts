@@ -8,7 +8,9 @@ let pool: pg.Pool | undefined;
  * modules to analyse the app, and there is no database then.
  */
 export function db(): pg.Pool {
-	pool ??= new pg.Pool({ connectionString: DATABASE_URL });
+	if (pool) return pool;
+	pool = new pg.Pool({ connectionString: DATABASE_URL });
+	pool.on('error', (error) => console.error('Postgres pool error:', error.message));
 	return pool;
 }
 

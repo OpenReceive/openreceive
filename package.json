@@ -20,6 +20,7 @@
     "generate:supabase-migration": "node --import tsx tools/docs/generate-supabase-migration.mjs",
     "generate:agent-directions": "node tools/docs/generate-agent-directions.mjs",
     "generate:llms-txt": "node tools/docs/generate-llms-txt.mjs",
+    "generate:model-vectors": "node tools/attempt-model/generate.mjs",
     "generate:site-contract": "node tools/docs/generate-site-contract.mjs",
     "generate:skills": "node tools/docs/generate-skills.mjs",
     "build:docs": "npm run generate:supabase-migration && npm run generate:agent-directions && npm run generate:llms-txt && npm run generate:site-contract && npm run generate:skills && node tools/docs/build-index.mjs",
@@ -29,7 +30,7 @@
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "generate:payment-icons": "node tools/package/generate-payment-icons.mjs",
     "generate:provider-images": "node tools/package/generate-provider-images.mjs",
-    "check:generated": "node tools/codegen/generate-js-models.mjs --check && node tools/package/generate-payment-icons.mjs --check && node tools/package/generate-provider-images.mjs --check",
+    "check:generated": "node tools/codegen/generate-js-models.mjs --check && node tools/package/generate-payment-icons.mjs --check && node tools/package/generate-provider-images.mjs --check && node tools/attempt-model/generate.mjs --check",
     "check:demo-containers": "node tools/validate/check-demo-containers.mjs",
     "check:release": "node tools/validate/check-release-readiness.mjs",
     "check:workflows": "node tools/validate/check-workflows.mjs",
@@ -91,6 +92,7 @@
     "test:ci:core": "npm run check && npm run lint && npm run format:check && npm run check:workflows && npm run check:generated && npm run check:docs && npm run check:public-api && npm run typecheck && npm run check:vue && npm run check:svelte && npm run check:dead-exports && npm test && npm run test:package-smoke",
     "test:ci:release": "npm run build:packages && node tools/ci/parallel.mjs test:dotnet test:ruby test:python test:php test:ci:artifacts && npm run check:standalone",
     "test:ci": "npm run test:ci:core && npm run test:ci:release",
+    "test:model": "node --import tsx tools/attempt-model/cli.mjs",
     "test:live": "npm run test:live:nwc && npm run test:live:ruby:nwc && npm run test:live:python:nwc && npm run test:live:php:nwc",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs",
     "test:live:supabase": "OPENRECEIVE_LIVE_SUPABASE=1 node --import tsx --test --test-concurrency=1 tests/supabase/live.test.mjs",
@@ -120,7 +122,8 @@
     "test:ci:artifacts": "npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs",
     "build:standalone": "node tools/package/build-workspaces.mjs @openreceive/elements",
     "test:btcpay:latest": "node tools/dotnet/test-latest.mjs",
-    "release:artifacts": "node tools/release/github-artifacts.mjs"
+    "release:artifacts": "node tools/release/github-artifacts.mjs",
+    "test:bug-zoo": "node tools/test-strength/bug-zoo.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -153,9 +156,11 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.3.0",
     "ajv": "^8.17.1",
+    "axe-core": "4.12.1",
     "better-sqlite3": "^12.11.1",
     "esbuild": "0.28.2",
     "happy-dom": "^21.0.4",
+    "jsqr": "1.4.0",
     "knex": "^3.3.0",
     "knip": "^6.44.0",
     "mysql2": "^3.22.0",

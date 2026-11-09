@@ -22,7 +22,10 @@ export function cutDirections(body: Buffer, bytes: number): Buffer {
  * Serve the working tree's directions on 127.0.0.1. The agent fetches them by
  * URL. `?cut=<bytes>` answers the way a tool that truncates output would.
  */
-export async function serveDirectory(directory: string): Promise<ServedDirectory> {
+export async function serveDirectory(
+  directory: string,
+  rewrite?: (body: string) => string,
+): Promise<ServedDirectory> {
   const root = path.resolve(directory);
   const server: Server = createServer((request, response) => {
     const [rawPath, query] = (request.url ?? "/").split("?");
@@ -35,7 +38,8 @@ export async function serveDirectory(directory: string): Promise<ServedDirectory
       return;
     }
     void readFile(file)
-      .then((body) => {
+      .then((stored) => {
+        const body = rewrite === undefined ? stored : Buffer.from(rewrite(stored.toString("utf8")));
         response.writeHead(200, { "content-type": "text/markdown; charset=utf-8" });
         response.end(cut > 0 ? cutDirections(body, cut) : body);
       })

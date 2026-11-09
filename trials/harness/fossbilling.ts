@@ -12,6 +12,7 @@ import {
   SWAP_PRODUCT,
   swapOrderChecks,
 } from "./live.ts";
+import type { PlaceOrder } from "./payer.ts";
 import type { Check } from "./types.ts";
 import { awaitedLater } from "./promises.ts";
 
@@ -36,6 +37,8 @@ const PRODUCT_SLUGS = [
   "widget-vps-large",
 ];
 const PAYMENT_PAGE = /\/invoice\/banklink\/([0-9a-f]+)\/\d+/;
+/** Products 1 and 2 at the seed's prices, in cents (seed/seed.php). */
+export const PAYER_PRICES: readonly number[] = [700, 1250];
 
 /**
  * The stock FOSSBilling's install, owner, clients and products, before the
@@ -264,6 +267,24 @@ async function openPaymentPage(page: Page, base: string, hash: string): Promise<
   await methodLogo(page).click({ timeout: 30_000 });
   await page.locator("#paymentPrompt a:visible").first().click({ timeout: 30_000 });
   await page.waitForURL(PAYMENT_PAGE, { timeout: 60_000 });
+}
+
+/** The payer walk's way to the checkout: a client orders, and lands on the invoice's payment page. */
+export function fossbillingPayerOrders(base: string): PlaceOrder {
+  const signedIn = new WeakSet<BrowserContext>();
+  return async (page, productId) => {
+    if (!signedIn.has(page.context())) {
+      await signIn(page, base, BUYER);
+      signedIn.add(page.context());
+    }
+    await order(page, base, productId);
+    await payWithLightning(page, false);
+    return {
+      price: PAYER_PRICES[productId - 1],
+      listing: `${PRODUCT_SLUGS[productId - 1]}, as seeded`,
+      url: page.url(),
+    };
+  };
 }
 
 const hashOf = (body: string) => body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];

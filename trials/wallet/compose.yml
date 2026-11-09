@@ -5,6 +5,8 @@
 #                code works from any shop, a Vercel deployment included.
 #                Invoices are in memory and nothing can pay them: the harness
 #                marks one paid through the control API. Receive-only grants.
+#   testkit-nwc-spend  the same wallet service with pay_invoice granted, for
+#                the spend-capable merchant scenario
 #   certs        mints a private CA and fake-lsc's certificate (the BTCPay stack's script)
 #   fake-lsc     FixedFloat-compatible swap provider over HTTPS; nothing pays out
 #   interceptor  TLS proxy for the relay and price feeds, for the chaos phase
@@ -47,6 +49,41 @@ services:
       - "127.0.0.1:17890:7790"
     healthcheck:
       # Healthy once the wallet service holds its relay subscription.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/7790 &&
+          printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          grep -q '"relayConnected":true' <&3
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  # A second wallet whose code can spend (--grant pay_invoice): only the
+  # spend-capable merchant scenario uses it, and nothing ever pays through it.
+  # Started on its own, so testkit-nwc keeps its code and invoices.
+  testkit-nwc-spend:
+    image: openreceive-trial-wallet-testkit-nwc
+    build:
+      context: ../../packages/dotnet
+      dockerfile: OpenReceive.TestkitNwc/Dockerfile
+      network: host
+    restart: unless-stopped
+    command:
+      - --relay
+      - wss://relay-nwc.rizful.com/v1
+      - --memory
+      - --network
+      - mainnet
+      - --control-port
+      - "7790"
+      - --grant
+      - pay_invoice
+    ports:
+      - "127.0.0.1:17892:7790"
+    healthcheck:
       test:
         - CMD
         - bash
@@ -127,6 +164,26 @@ services:
     depends_on:
       certs:
         condition: service_completed_successfully
+
+  # Safari's engine for the payer walk. Host networking, so it reaches a shop
+  # on its published 127.0.0.1 port; loopback only. The image and the server
+  # follow the Playwright version the harness runs (wallet.ts, startWebkit).
+  webkit:
+    profiles: ["webkit"]
+    image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:-1.64.1}-noble
+    network_mode: host
+    init: true
+    user: pwuser
+    working_dir: /tmp
+    command:
+      - /bin/sh
+      - -c
+      - npx -y playwright@${PLAYWRIGHT_VERSION:-1.64.1} run-server --port 17894 --host 127.0.0.1
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/17894"]
+      interval: 2s
+      timeout: 3s
+      retries: 90
 
 volumes:
   certs:

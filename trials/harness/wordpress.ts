@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import type { ChaosBuyer } from "./chaos.ts";
+import type { ChaosBuyer, MethodListing } from "./chaos.ts";
 import type { PlacedOrder } from "./payer.ts";
 import { compose } from "./docker.ts";
 import {
@@ -104,7 +104,11 @@ class Guest {
 
   async send(
     url: string,
-    init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+    init: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+    } = {},
   ): Promise<Reply> {
     const method = init.method ?? "GET";
     const route = routeOf(method, url);
@@ -529,7 +533,7 @@ interface Store {
 }
 
 /** A PHP expression's value, read with the shop's own WP-CLI. */
-async function wpEval(directory: string, php: string): Promise<string> {
+export async function wpEval(directory: string, php: string): Promise<string> {
   const result = await compose(
     directory,
     ["run", "--rm", "-T", "--no-deps", "cli", "wp", "eval", php],
@@ -615,9 +619,10 @@ const WOOCOMMERCE: Store = {
         extensions: {},
       }),
     });
-    const result = parseJson<{ order_id?: number; payment_result?: { redirect_url?: string } }>(
-      placed.body,
-    );
+    const result = parseJson<{
+      order_id?: number;
+      payment_result?: { redirect_url?: string };
+    }>(placed.body);
     const redirect = result?.payment_result?.redirect_url;
     if (placed.status !== 200 || redirect === undefined || redirect === "") {
       throw new Error(`Place order answered ${placed.status}: ${placed.body.slice(0, 300)}`);
@@ -698,8 +703,9 @@ const FLOW_SUMMARY = "The guest's checkout flow ran to the end.";
 /** The swap pay-in assets a prepare answer marks available. */
 export function swapMethods(body: string): string[] {
   const methods =
-    parseJson<{ payment_methods?: { pay_in_asset?: string; available?: boolean }[] }>(body)
-      ?.payment_methods ?? [];
+    parseJson<{
+      payment_methods?: { pay_in_asset?: string; available?: boolean }[];
+    }>(body)?.payment_methods ?? [];
   return methods
     .filter((method) => method.available === true && typeof method.pay_in_asset === "string")
     .map((method) => method.pay_in_asset ?? "");
@@ -961,6 +967,42 @@ export function wordpressChaosBuyers(
       checkPayment: (hash: string) => client.checkPayment(placed.reference, hash),
       status: () => store.status(directory, placed.reference),
     };
+  };
+}
+
+/** Whether a new guest is offered the method, for the chaos phase's outage step. */
+export function wordpressMethodListing(
+  slug: "woocommerce" | "edd",
+  directory: string,
+  base: string,
+): MethodListing {
+  const store = slug === "edd" ? EDD : WOOCOMMERCE;
+  return {
+    async listed() {
+      let found: Listing | undefined;
+      // Placing the order is not this step's business, and needs the method.
+      const failure = await store
+        .order(new Guest(75_000), base, store.products[0], (listing) => {
+          found = listing;
+        })
+        .then(
+          () => undefined,
+          (error: unknown) => String(error),
+        );
+      return (
+        found ?? {
+          offered: false,
+          evidence: failure ?? "the store listed no methods",
+        }
+      );
+    },
+    async forgetCaches() {
+      await compose(
+        directory,
+        ["run", "--rm", "-T", "--no-deps", "cli", "wp", "transient", "delete", "--all"],
+        120_000,
+      );
+    },
   };
 }
 

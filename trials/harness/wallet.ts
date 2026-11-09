@@ -25,8 +25,14 @@ const NETWORK = "openreceive-trial";
 /** Both control ports are published on 127.0.0.1 only. */
 const TESTKIT = "http://127.0.0.1:17890";
 const FAKE_LSC = "https://127.0.0.1:17888";
-const INTERCEPTOR = "http://127.0.0.1:17891";
-const INTERCEPTOR_CONTAINER = "openreceive-trial-wallet-interceptor-1";
+// A changed interceptor runs beside the shared one under its own name and ports
+// until it is rolled out; this points the harness at it.
+const INTERCEPTOR = process.env.OPENRECEIVE_TRIAL_INTERCEPTOR_CONTROL ?? "http://127.0.0.1:17891";
+const SPEND_TESTKIT = "http://127.0.0.1:17892";
+/** Playwright's browser server, for WebKit (compose profile `webkit`). */
+const WEBKIT_ENDPOINT = "ws://127.0.0.1:17894/";
+const INTERCEPTOR_CONTAINER =
+  process.env.OPENRECEIVE_TRIAL_INTERCEPTOR_CONTAINER ?? "openreceive-trial-wallet-interceptor-1";
 /** The swap provider as a shop on the trial network reaches it. */
 const FAKE_LSC_HOST = "fake-lsc:7788";
 const UP_TIMEOUT_MS = 15 * 60 * 1000;
@@ -298,9 +304,58 @@ export async function startTrialWallet(): Promise<TrialWallet> {
   };
 }
 
+/**
+ * The spend-capable code for the spend-capable scenario, from the wallet
+ * service that grants pay_invoice. Started alone: `up` for one service leaves
+ * testkit-nwc and its invoices as they are.
+ */
+export async function spendCapableCode(): Promise<string> {
+  let uri = await fetch(`${SPEND_TESTKIT}/uri`, { signal: AbortSignal.timeout(3_000) })
+    .then((response) => response.text())
+    .catch(() => "");
+  if (!uri.trim().startsWith("nostr+walletconnect://")) {
+    await compose(
+      walletDir,
+      [...COMPOSE_ARGS, "up", "-d", "--wait", "testkit-nwc-spend"],
+      10 * 60_000,
+    );
+    uri = await fetch(`${SPEND_TESTKIT}/uri`, { signal: AbortSignal.timeout(5_000) }).then(
+      (response) => response.text(),
+    );
+  }
+  const code = uri.trim();
+  if (!code.startsWith("nostr+walletconnect://")) {
+    throw new InfraError("The spend-capable trial wallet did not hand out an NWC code.");
+  }
+  return code;
+}
+
 /** Remove the stack and its volumes; the next start mints a new CA and codes. */
 export async function stopTrialWallet(): Promise<void> {
   await compose(walletDir, [...COMPOSE_ARGS, "down", "-v", "--remove-orphans"], 120_000);
+}
+
+/**
+ * Safari's engine, from Playwright's own image: WebKit needs system libraries
+ * a host seldom has. The server stays up between trials, on host networking so
+ * it reaches each shop's 127.0.0.1 port, and its version follows the client's.
+ */
+export async function startWebkit(): Promise<import("@playwright/test").Browser> {
+  const { webkit } = await import("@playwright/test");
+  const { createRequire } = await import("node:module");
+  const { version } = createRequire(import.meta.url)("@playwright/test/package.json") as {
+    version: string;
+  };
+  const connect = () => webkit.connect(WEBKIT_ENDPOINT, { timeout: 15_000 });
+  const running = await connect().catch(() => undefined);
+  if (running !== undefined) return running;
+  await compose(
+    walletDir,
+    [...COMPOSE_ARGS, "--profile", "webkit", "up", "-d", "--wait", "webkit"],
+    10 * 60_000,
+    { env: { PLAYWRIGHT_VERSION: version } },
+  );
+  return connect();
 }
 
 /**

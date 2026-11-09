@@ -5,7 +5,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { inspectBtcpay, removeBtcpayState, setupBtcpay } from "./btcpay.ts";
-import { compose, InfraError, platformOverrideFile, walletOverrideFile } from "./docker.ts";
+import {
+  compose,
+  InfraError,
+  platformOverrideFile,
+  treeMuPluginFile,
+  treeOverrideFile,
+  walletOverrideFile,
+} from "./docker.ts";
 import { setupFossbilling } from "./fossbilling.ts";
 import { setupOdoo } from "./odoo.ts";
 import { setupPaymenter } from "./paymenter.ts";
@@ -136,10 +143,14 @@ export async function prepareShop(
   platformEnv?: Readonly<Record<string, string>>,
   service = "web",
   walletOverride?: string,
+  /** `--tree`: rewrites the fixture before the plain shop's first commit. */
+  beforeCommit?: (directory: string) => Promise<void>,
+  overlay?: string,
 ): Promise<string> {
   const id = Math.random().toString(16).slice(2, 10);
   const directory = await mkdtemp(path.join(tmpdir(), `ortrial-${slug}-${id}-`));
   await cp(fixtureDir, directory, { recursive: true });
+  if (overlay !== undefined) await cp(overlay, directory, { recursive: true });
   await fetchSources(directory);
   const composeFile = path.join(directory, "compose.yml");
   let fixture = await readFile(composeFile, "utf8");
@@ -166,6 +177,7 @@ export async function prepareShop(
   }
   if (walletOverride !== undefined) await writeFile(walletOverrideFile(directory), walletOverride);
   await writeFile(composeFile, fixture);
+  await beforeCommit?.(directory);
   await run("git", ["init", "-b", "master"], directory);
   await run("git", ["add", "-A"], directory);
   await run(
@@ -218,6 +230,8 @@ export async function removeShop(directory: string): Promise<void> {
   await rm(platformEnvFile(directory), { force: true }).catch(() => undefined);
   await rm(platformOverrideFile(directory), { force: true }).catch(() => undefined);
   await rm(walletOverrideFile(directory), { force: true }).catch(() => undefined);
+  await rm(treeOverrideFile(directory), { force: true }).catch(() => undefined);
+  await rm(treeMuPluginFile(directory), { force: true }).catch(() => undefined);
   await removeBtcpayState(directory).catch(() => undefined);
 }
 

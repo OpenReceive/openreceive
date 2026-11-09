@@ -11,7 +11,9 @@ import { renderSummary, runDirections } from "./loop.ts";
 import type { Job } from "./pool.ts";
 import { runPool } from "./pool.ts";
 import { platformSummaryMarkdown } from "./report.ts";
-import { startTrialWallet, type TrialWallet } from "./wallet.ts";
+import { spendCapableCode, startTrialWallet, type TrialWallet } from "./wallet.ts";
+import { ensureTreeBuild } from "./tree-build.ts";
+import { patchShopForTree, startTreeRegistry, type TreeRegistry } from "./tree-registry.ts";
 import { inspectShop, prepareShop, shopChecks, startShop } from "./sandbox.ts";
 import { scenarioFor } from "./scenarios.ts";
 import { serveDirectory } from "./serve.ts";
@@ -30,7 +32,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 
 function help(): void {
   console.log(`Usage: npm run trial -- --platform woocommerce|edd|node|fastify|next|nestjs|sveltekit|nuxt|astro|react-router|tanstack-start|vercel|replit|lovable|bolt|supabase|rails|django|fastapi|flask|php|laravel|btcpay|paymenter|fossbilling|prestashop|odoo|medusa|vendure [--smoke] [--runs 1] [--parallel 1] [--keep]
-       [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions] [--no-chaos] [--scenario <name>|mix]
+       [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions | --tree] [--no-chaos] [--no-devtools] [--scenario <name>|mix]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
 network, and published port, so --parallel can start several at once.
@@ -45,6 +47,8 @@ one real Supabase project. Only one trial process runs at once.
 --smoke              boot the shop, check that it is still plain, then tear it down
 --serve-directions   give the agent this working tree's docs/agents file, on 127.0.0.1
 --directions-url     give the agent this URL (default: the live openreceive.org file)
+--tree               also build this working tree's packages at an unpublished version and
+                     serve them to the shop, wherever it installs from (implies --serve-directions)
 --agent              the coding agent for each trial; a list (or random, the default:
                      cursor,codex) picks one per trial. Claude Code only when named.
 --model              the model, with a single --agent (Cursor default: grok-4.7-medium-fast;
@@ -52,9 +56,12 @@ one real Supabase project. Only one trial process runs at once.
 --deploy             deploy a Vercel trial's shop to Vercel (default: check it where it runs)
 --keep               leave the containers and the shop directory in place
 --no-chaos           skip the chaos phase (relay and price-feed faults after the live checks)
+--no-devtools        skip the dev-tools phase (debug page, build, the shop's tests, hot reload, workers)
 --scenario           the merchant: canonical (default), bitcoin-only, quoted-paste, env-line-paste,
-                     wrapped-paste, directions-cut (needs --serve-directions), or mix (each run
-                     of a platform gets the next one)
+                     wrapped-paste, donation, directions-cut (needs --serve-directions),
+                     spend-capable, swapped-codes, swapped-codes-reverse, house-rules,
+                     stripe-beside, no-code-yet, out-of-scope, a comma-separated list, or
+                     mix (each run of a platform gets the next one)
 
 Without --smoke, the agent integrates its own copy of the shop for each trial. That spends model usage and takes
 several minutes. Reports land in trials/reports/ and are not committed.
@@ -112,7 +119,7 @@ async function writeReport(
   );
 }
 
-async function smokeOne(platform: Platform, keep: boolean): Promise<void> {
+async function smokeOne(platform: Platform, keep: boolean, tree?: TreeRegistry): Promise<void> {
   const fixture = path.join(trialsRoot, "platforms", platform.slug, "fixture");
   const seed = path.join(trialsRoot, "platforms", platform.slug, "seed");
   const supabase = await loadSupabaseProject(platform);
@@ -121,6 +128,8 @@ async function smokeOne(platform: Platform, keep: boolean): Promise<void> {
     platform.slug,
     { ...platform.platform_env, ...supabase?.env },
     platform.platform_env_service ?? platform.service,
+    undefined,
+    tree === undefined ? undefined : (shop) => patchShopForTree(shop, tree),
   );
   if (supabase !== undefined) await resetSupabase(supabase);
   const sandbox = await startShop(directory, seed, platform);
@@ -158,6 +167,7 @@ async function main(): Promise<void> {
   const deploy = argv.includes("--deploy");
   const smoke = argv.includes("--smoke");
   const chaos = !argv.includes("--no-chaos");
+  const devtools = !argv.includes("--no-devtools");
   const scenarioSpec = value(argv, "--scenario") ?? "canonical";
   scenarioFor(scenarioSpec, 0);
   const pool = agentPool(value(argv, "--agent") ?? "random", value(argv, "--model"));
@@ -165,6 +175,15 @@ async function main(): Promise<void> {
   const serve = argv.includes("--serve-directions");
   if (explicitUrl !== undefined && serve) {
     throw new Error("Pass either --directions-url or --serve-directions.");
+  }
+  const wantsTree = argv.includes("--tree");
+  if (wantsTree && explicitUrl !== undefined) {
+    throw new Error("--tree serves this working tree's directions; drop --directions-url.");
+  }
+  if (wantsTree && deploy) {
+    throw new Error(
+      "--tree cannot be combined with --deploy: Vercel cannot reach this machine's registry.",
+    );
   }
   await dockerAvailable();
   let codes: MerchantCodes | undefined;
@@ -176,6 +195,12 @@ async function main(): Promise<void> {
     // wallet, which can also pay the buyer's invoice.
     wallet = await startTrialWallet();
     codes = { nwc: wallet.nwc, lsc: wallet.lsc };
+    // Only when a run will paste it: a second wallet service, started on request.
+    if (
+      scenarioSpec.split(",").some((name) => scenarioFor(name, 0).firstPaste === "spend-capable")
+    ) {
+      codes = { ...codes, spendNwc: await spendCapableCode() };
+    }
   }
   const selected = await platforms(requested);
   // BTCPay expects an NBXplorer; every BTCPay trial shares the trial chain's.
@@ -199,10 +224,16 @@ async function main(): Promise<void> {
   if (!smoke) process.on("SIGINT", onStop);
 
   let served: Awaited<ReturnType<typeof serveDirectory>> | undefined;
+  let tree: TreeRegistry | undefined;
   const agentVersions = new Map<string, string>();
   const directionsFor = new Map<string, { url: string; mode: string; sha256: string }>();
   try {
-    served = serve ? await serveDirectory(path.resolve(trialsRoot, "../docs/agents")) : undefined;
+    if (wantsTree)
+      tree = await startTreeRegistry(await ensureTreeBuild(repoRoot), await releaseVersion());
+    served =
+      serve || tree !== undefined
+        ? await serveDirectory(path.resolve(trialsRoot, "../docs/agents"), tree?.rewriteDirections)
+        : undefined;
     if (!smoke) {
       for (const { agent } of pool) agentVersions.set(agent.name, await agent.preflight());
     }
@@ -214,7 +245,11 @@ async function main(): Promise<void> {
         served?.fileUrl(`${directionsSlug}.md`) ??
         `https://openreceive.org/agent-directions/${directionsSlug}.md`;
       const mode =
-        served === undefined && !directionsUrl.includes("127.0.0.1") ? "released" : "candidate";
+        tree !== undefined
+          ? "tree"
+          : served === undefined && !directionsUrl.includes("127.0.0.1")
+            ? "released"
+            : "candidate";
       if (!smoke) {
         directionsFor.set(platform.slug, {
           url: directionsUrl,
@@ -235,7 +270,7 @@ async function main(): Promise<void> {
                 : undefined,
           run: async () => {
             if (smoke) {
-              await smokeOne(platform, keep);
+              await smokeOne(platform, keep, tree);
               return;
             }
             if (codes === undefined) throw new InfraError("Wallet codes were not loaded.");
@@ -254,10 +289,12 @@ async function main(): Promise<void> {
               keep,
               deploy,
               chaos,
+              devtools,
               scenario: scenarioFor(scenarioSpec, index),
               codes:
                 liveSwap(platform) && liveLsc !== undefined ? { ...codes, lsc: liveLsc } : codes,
               wallet,
+              tree,
               registerStop: (stop) => stops.push(stop),
             });
             results.push(result);
@@ -282,9 +319,11 @@ async function main(): Promise<void> {
       if (!smoke && results.length > 0) {
         const day = new Date().toISOString().slice(0, 10);
         const mode =
-          served === undefined && explicitUrl?.includes("127.0.0.1") !== true
-            ? "released"
-            : "candidate";
+          tree !== undefined
+            ? "tree"
+            : served === undefined && explicitUrl?.includes("127.0.0.1") !== true
+              ? "released"
+              : "candidate";
         const directory = path.join(trialsRoot, "reports", `${day}-${mode}`);
         await mkdir(directory, { recursive: true });
         await writeFile(path.join(directory, "summary.md"), renderSummary(results));
@@ -303,6 +342,9 @@ async function main(): Promise<void> {
               release,
               directionsUrl: directions.url,
               directions: directions.sha256,
+              ...(tree === undefined
+                ? {}
+                : { treeBuild: { version: tree.build.version, commit: tree.build.commit } }),
               runs: own,
             }),
           );
@@ -312,6 +354,7 @@ async function main(): Promise<void> {
   } finally {
     process.off("SIGINT", onStop);
     await served?.close();
+    await tree?.close();
     await releaseLock?.();
   }
 }

@@ -63,7 +63,11 @@ export class InterceptorControl {
   rule(
     host: string,
     mode: InterceptMode,
-    extra: { delayMs?: readonly number[]; closeAfterMs?: number; forMs?: number } = {},
+    extra: {
+      delayMs?: readonly number[];
+      closeAfterMs?: number;
+      forMs?: number;
+    } = {},
   ): Promise<unknown> {
     return this.post("/rules", { client: this.client, host, mode, ...extra });
   }
@@ -82,7 +86,9 @@ export class InterceptorControl {
       `${this.control}/stats?client=${encodeURIComponent(this.client)}`,
       { signal: AbortSignal.timeout(10_000) },
     );
-    const body = (await response.json()) as { stats?: Record<string, Record<string, number>> };
+    const body = (await response.json()) as {
+      stats?: Record<string, Record<string, number>>;
+    };
     return body.stats ?? {};
   }
 }
@@ -112,6 +118,17 @@ export interface ChaosTarget {
   readonly newBuyer?: () => Promise<ChaosBuyer>;
   /** What a restart waits for; default `/health`. */
   readonly healthPath?: string;
+  /** A store's own listing of the payment method for a new guest, where the method can vanish. */
+  readonly methodListing?: MethodListing;
+}
+
+export interface MethodListing {
+  readonly listed: () => Promise<{
+    readonly offered: boolean;
+    readonly evidence: string;
+  }>;
+  /** Forget cached wallet details and rates, so availability cannot be served from them. */
+  readonly forgetCaches: () => Promise<void>;
 }
 
 /** The services that hold the shop's wallet connection: the ones a restart must restart. */
@@ -223,20 +240,27 @@ async function flappingRelay(target: ChaosTarget, control: InterceptorControl): 
   await control.drop(RELAY);
   const rounds: string[] = [];
   let failed = 0;
+  let retried = 0;
   for (let round = 0; round < 4; round += 1) {
     if (round > 0) await sleep(5_000);
     const buyer = await newBuyer(target);
-    const answer = await buyer.createOnce();
-    if (answer.status !== 201) failed += 1;
-    rounds.push(`#${round + 1} ${brief(answer)}`);
+    const first = await buyer.createOnce();
+    // A cut mid-request may have reached the wallet, so the engine must not
+    // mint again on its own: one structured error, then the payer's Try again.
+    const again = first.status !== 201 && structuredError(first) ? await buyer.createOnce() : first;
+    if (again !== first) retried += 1;
+    if (again.status !== 201) failed += 1;
+    rounds.push(
+      `#${round + 1} ${again === first ? brief(first) : `${brief(first)}; Try again: ${brief(again)}`}`,
+    );
   }
   const stats = await control.stats();
   await control.reset();
   return check(
     "chaos_relay_flaps",
     failed === 0,
-    "With the relay cutting every connection after 4 s, every checkout still got an invoice.",
-    `${failed} of ${rounds.length} failed\n${rounds.join("\n")}\ninterceptor: ${JSON.stringify(stats)}`,
+    "With the relay cutting every connection after 4 s, every checkout got an invoice, at worst after one Try again.",
+    `${failed} of ${rounds.length} failed, ${retried} needed Try again\n${rounds.join("\n")}\ninterceptor: ${JSON.stringify(stats)}`,
   );
 }
 
@@ -325,6 +349,33 @@ async function priceFeedDown(target: ChaosTarget, control: InterceptorControl): 
 }
 
 /**
+ * WooCommerce and EDD ask whether a method is available on every page that
+ * lists one. 0.4.31 answered by building the engine and fetching a rate, so a
+ * slow relay or feed left a store with "no payment methods available". The
+ * caches go first: with a warm one the old code passes too.
+ */
+async function methodStaysListed(
+  listing: MethodListing,
+  control: InterceptorControl,
+): Promise<Check> {
+  await listing.forgetCaches();
+  for (const host of [...FEEDS, RELAY]) await control.rule(host, "refuse");
+  for (const host of [...FEEDS, RELAY]) await control.drop(host);
+  let found: { readonly offered: boolean; readonly evidence: string };
+  try {
+    found = await listing.listed();
+  } finally {
+    await control.reset();
+  }
+  return check(
+    "chaos_method_stays_listed",
+    found.offered,
+    "With the relay and both price feeds down and nothing cached, the store's checkout still offered the payment method.",
+    found.evidence,
+  );
+}
+
+/**
  * The shop restarts while its relay is down, as after a deploy during a relay
  * blip. While the relay is down a checkout gets a structured 503; once the
  * relay is back, the same process must take a checkout without another
@@ -384,6 +435,70 @@ async function pendingAcrossRestart(target: ChaosTarget, paid: PaidPath): Promis
   );
 }
 
+/** The shop's separate database service, if it has one; SQLite shops have none to restart. */
+async function databaseService(directory: string): Promise<string | undefined> {
+  const listed = await compose(directory, ["config", "--services"], 30_000, { quiet: true });
+  return listed.stdout
+    .split("\n")
+    .map((name) => name.trim())
+    .find((name) => /^(?:db|database|postgres|postgresql|mysql|mariadb)$/.test(name));
+}
+
+/**
+ * A new buyer once the shop can place orders again. A health page may not touch
+ * the database, and an order placed the moment it restarts fails in the shop's
+ * own code; only the checkout after that is what this step measures.
+ */
+async function buyerOnceDatabaseIsBack(target: ChaosTarget): ReturnType<typeof newBuyer> {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    try {
+      return await newBuyer(target);
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+      await sleep(2_000);
+    }
+  }
+}
+
+/**
+ * The database restarts under a running shop, with an invoice pending, as a
+ * managed host does at a maintenance window. The shop must take checkouts again
+ * without being restarted, and the pending invoice must still settle.
+ */
+async function databaseRestart(
+  target: ChaosTarget,
+  paid: PaidPath,
+  service: string,
+): Promise<Check> {
+  const summary =
+    "After the database restarted under the running shop, a checkout worked again with no shop restart, and the invoice pending across it settled.";
+  const buyer = await newBuyer(target);
+  const created = await buyer.createOnce();
+  const hash = created.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
+  if (created.status !== 201 || hash === undefined) {
+    return check("chaos_db_restart_recovers", false, summary, `before: ${brief(created)}`);
+  }
+  await compose(target.directory, ["restart", service], 3 * 60_000);
+  await healthy(target.baseUrl, target.healthPath ?? "/health", HEALTH_TIMEOUT_MS);
+  const after = await recovery("chaos_db_restart_checkout", await buyerOnceDatabaseIsBack(target));
+  await paid.settle(hash);
+  const started = Date.now();
+  let last: Answer | undefined;
+  while (Date.now() - started < 90_000) {
+    await sleep(3_000);
+    last = await buyer.checkPayment(hash);
+    if (last.status === 200 && /"status"\s*:\s*"settled"/.test(last.body)) break;
+  }
+  const settled = last !== undefined && /"status"\s*:\s*"settled"/.test(last.body);
+  return check(
+    "chaos_db_restart_recovers",
+    after.pass && settled,
+    summary,
+    `${after.evidence}; ${settled ? "the pending invoice settled" : `not settled: ${last === undefined ? "no answer" : brief(last)}`}`,
+  );
+}
+
 /**
  * Runs every step and returns one check (or two) per step. A step that throws
  * is a failed check with the error, and the next step still runs; the
@@ -422,12 +537,20 @@ export async function chaosChecks(target: ChaosTarget): Promise<Check[]> {
     relayDownWhileRunning(target, control),
   );
   await step(["chaos_price_feed_down"], () => priceFeedDown(target, control));
+  const { methodListing } = target;
+  if (methodListing !== undefined) {
+    await step(["chaos_method_stays_listed"], () => methodStaysListed(methodListing, control));
+  }
   await step(["chaos_outage_answers_503", "chaos_boot_recovers"], () =>
     relayDownAtStart(target, control),
   );
   const { paid } = target;
   if (paid !== undefined) {
     await step(["chaos_pending_across_restart"], () => pendingAcrossRestart(target, paid));
+    const database = await databaseService(target.directory).catch(() => undefined);
+    if (database !== undefined) {
+      await step(["chaos_db_restart_recovers"], () => databaseRestart(target, paid, database));
+    }
   }
   return checks;
 }

@@ -11,6 +11,7 @@ import {
   SWAP_PRODUCT,
   swapOrderChecks,
 } from "./live.ts";
+import type { PlaceOrder } from "./payer.ts";
 import type { Check } from "./types.ts";
 import { awaitedLater } from "./promises.ts";
 
@@ -23,6 +24,8 @@ import { awaitedLater } from "./promises.ts";
 // storefront's routes as that checkout does, with the guest's cookie.
 
 const PRODUCT_SLUGS = ["facet", "bezel", "hinge", "latch", "knob"];
+/** Products 1 and 2 at the seed's prices, in cents (fixture/server/products.csv). */
+export const PAYER_PRICES: readonly number[] = [700, 1200];
 /** The cookie the Next.js starter keeps the Vendure session token in. */
 const TOKEN_COOKIE = "vendure-auth-token";
 const CHECKOUT_CALL = /\/checkouts(?:\/prepare)?$/;
@@ -214,6 +217,23 @@ async function payAtCheckout(page: Page, base: string, pick = true): Promise<Ope
   } finally {
     page.off("request", watch);
   }
+}
+
+/** The payer walk's way to the checkout: a guest's cart, then the OpenReceive method at the storefront. */
+export function vendurePayerOrders(directory: string, base: string): PlaceOrder {
+  return async (page, productId) => {
+    const guest = await cart(directory, productId);
+    await page.context().addCookies([{ name: TOKEN_COOKIE, value: guest.token, url: base }]);
+    await payAtCheckout(page, base, false);
+    return {
+      price: PAYER_PRICES[productId - 1],
+      listing: `${PRODUCT_SLUGS[productId - 1]}, as seeded`,
+      url: page.url(),
+      // A fresh load of the checkout is back on the storefront's payment step,
+      // where the buyer picks the method again, as for any method.
+      reopen: (again) => payAtCheckout(again, base, false),
+    };
+  };
 }
 
 const hashOf = (body: string) => body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];

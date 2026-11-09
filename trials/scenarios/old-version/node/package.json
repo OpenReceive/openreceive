@@ -1,0 +1,16 @@
+{
+  "name": "widget-shop",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@openreceive/express": "0.4.20",
+    "@openreceive/http": "0.4.20",
+    "express": "^5.3.0"
+  }
+}

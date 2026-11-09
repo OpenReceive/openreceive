@@ -4,8 +4,10 @@ from types import SimpleNamespace
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import tagged
 
-from openreceive.server import HookContext
+from openreceive.nwc.errors import WalletError
+from openreceive.server import HookContext, Service
 from openreceive.storage import AttemptConflict, PaymentInsert, SettlementRecord
+from openreceive.testing import FakeWallet, StaticPriceProvider
 
 from .. import const, operations, runtime
 from ..repository import OdooPaymentRepository
@@ -193,3 +195,25 @@ class TestOpenReceive(OpenReceiveCommon):
         self.assertNotIn(TEST_NWC, text)
         self.assertIn("provider: OpenReceive", text)
         self.assertIsInstance(ok, bool)
+
+    def test_the_doctor_says_when_the_relay_did_not_answer(self):
+        # The service starts without a relay it cannot reach, and checks again
+        # on a later checkout, so nothing but this line tells the operator.
+        class DownWallet(FakeWallet):
+            def preflight(self):
+                raise WalletError(
+                    "WALLET_UNAVAILABLE", "connect: could not connect to wss://relay.example"
+                )
+
+        previous = runtime.SERVICE_FACTORY
+        runtime.SERVICE_FACTORY = lambda _codes, env: Service(
+            DownWallet(), price_provider=StaticPriceProvider(), swap_providers=[], env=env
+        )
+        try:
+            ok, lines = operations.doctor(self.env)
+        finally:
+            runtime.SERVICE_FACTORY = previous
+        self.assertFalse(ok)
+        text = "\n".join(lines)
+        self.assertIn("engine: the wallet check has not passed", text)
+        self.assertIn("could not connect to wss://relay.example", text)

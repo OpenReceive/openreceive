@@ -255,6 +255,46 @@ test("createOpenReceive says the relay was not reached, without the receive-only
   });
 });
 
+// createStack retries a failed boot; a client left open by each attempt would be
+// one relay socket per retry for the life of the process.
+test("a failed wallet check closes the client createOpenReceive built, not one the host passed", async (t) => {
+  const { NWCClient, Nip47NetworkError } = await import("@getalby/sdk/nwc");
+  let closed = 0;
+  t.mock.method(NWCClient.prototype, "getInfo", async () => {
+    throw new Nip47NetworkError("Failed to connect to wss://relay.example/v1", "OTHER");
+  });
+  t.mock.method(NWCClient.prototype, "close", () => {
+    closed += 1;
+  });
+  await withEnv({ NWC_URI: VALID_NWC }, async () => {
+    await assert.rejects(
+      () => createOpenReceive({ logging: { enabled: false, console: false } }),
+      (error) => error instanceof ConfigError && error.code === "WALLET_PREFLIGHT_FAILED",
+    );
+  });
+  assert.equal(closed, 1, "the client this call built is closed when its check fails");
+
+  let hostClosed = 0;
+  await withEnv({ NWC_URI: VALID_NWC }, async () => {
+    await assert.rejects(
+      () =>
+        createOpenReceive({
+          client: {
+            preflight: async () => {
+              throw new Nip47NetworkError("Failed to connect to wss://relay.example/v1", "OTHER");
+            },
+            close: async () => {
+              hostClosed += 1;
+            },
+          },
+          logging: { enabled: false, console: false },
+        }),
+      (error) => error instanceof ConfigError,
+    );
+  });
+  assert.equal(hostClosed, 0, "a client the host passed in stays the host's to close");
+});
+
 test("a wallet that answers without the receive methods keeps the receive-only advice", async () => {
   await withEnv({ NWC_URI: VALID_NWC }, async () => {
     await assert.rejects(

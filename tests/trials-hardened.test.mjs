@@ -9,8 +9,9 @@ import {
   structuredError,
   walletServices,
 } from "../trials/harness/chaos.ts";
+import { shopLogCheck } from "../trials/harness/checks.ts";
 import { buyerErrorChecks } from "../trials/harness/live.ts";
-import { phasesOf, slugOf } from "../trials/harness/recheck.ts";
+import { assertRecheckable, phasesOf, slugOf, stepsOf } from "../trials/harness/recheck.ts";
 import { trialWalletOverride } from "../trials/harness/wallet.ts";
 import { serverName } from "../trials/wallet/interceptor/sni.mjs";
 
@@ -113,9 +114,30 @@ test("recheck finds the platform in a kept shop's directory name", () => {
   assert.equal(slugOf("/tmp/ortrial-node-6def8e5c-HhLMKt"), "node");
   assert.equal(slugOf("/tmp/ortrial-react-router-0123abcd-AbC123"), "react-router");
   assert.throws(() => slugOf("/tmp/some-shop"), /not a kept trial shop/);
-  assert.deepEqual(phasesOf(undefined), ["live", "payer", "leaks", "chaos"]);
+  assert.deepEqual(phasesOf(undefined), ["live", "payer", "leaks", "chaos", "logs", "devtools"]);
   assert.deepEqual(phasesOf("chaos"), ["chaos"]);
+  assert.deepEqual(phasesOf("wpadmin,two-shops,upgrade"), ["wpadmin", "two-shops", "upgrade"]);
   assert.throws(() => phasesOf("live,party"), /Unknown phase "party"/);
+  assert.deepEqual(stepsOf(undefined), ["debug", "build", "tests", "hot", "workers"]);
+  assert.deepEqual(stepsOf("hot,workers"), ["hot", "workers"]);
+  assert.throws(() => stepsOf("party"), /Unknown step "party"/);
+});
+
+test("recheck walks a hosted platform as a payer, and runs nothing else on it", () => {
+  for (const host of ["paymenter", "fossbilling", "prestashop", "odoo", "medusa", "vendure"]) {
+    assert.doesNotThrow(() => assertRecheckable({ slug: host, host }, ["payer"]), host);
+    assert.throws(
+      () => assertRecheckable({ slug: host, host }, ["live", "payer"]),
+      /pass --phases payer \(not live\)/,
+      host,
+    );
+  }
+  assert.doesNotThrow(() =>
+    assertRecheckable({ slug: "node" }, ["live", "payer", "leaks", "chaos"]),
+  );
+  for (const host of ["btcpay", "bolt"]) {
+    assert.throws(() => assertRecheckable({ slug: host, host }, ["payer"]), /no payer walk/, host);
+  }
 });
 
 test("with an interceptor, a shop resolves the relay and price feeds to it", () => {
@@ -184,7 +206,8 @@ test("the Django debug-page probe reports which codes the page shows", async () 
   assert.deepEqual(probeShown("OPENRECEIVE_PROBE shown=\n"), []);
   assert.equal(probeShown("Traceback (most recent call last):"), undefined);
   assert.deepEqual(debugPageProbes({ slug: "django" }), ["django"]);
-  assert.deepEqual(debugPageProbes({ slug: "flask" }), []);
+  assert.deepEqual(debugPageProbes({ slug: "flask" }), ["flask"]);
+  assert.deepEqual(debugPageProbes({ slug: "fastify" }), []);
 });
 
 test("each merchant scenario pastes the code its own way, and mix deals them out", async () => {
@@ -370,4 +393,18 @@ test("the directions-cut scenario cuts on a line, says so, and is told apart fro
     after([{ type: "fetch", url: "https://openreceive.org/agent-directions/node/full.md" }]),
     true,
   );
+});
+
+test("a wallet code in the shop's log fails the run and is never repeated", () => {
+  const secret = "a".repeat(64);
+  const code = `nostr+walletconnect://${"b".repeat(64)}?relay=wss://r.example/v1&secret=${secret}`;
+  const clean = shopLogCheck("web-1  | listening on 3000\nweb-1  | GET /health 200", [code]);
+  assert.ok(clean.pass);
+  const whole = shopLogCheck(`web-1  | booting\nworker-1  | NWC_URI=${code}`, [code]);
+  assert.ok(!whole.pass);
+  assert.match(whole.evidence, /worker-1 line 2/);
+  assert.ok(!whole.evidence.includes(secret.slice(0, 12)));
+  // A piece of the secret is enough: a logger that cuts a line still leaks it.
+  const piece = shopLogCheck(`web-1  | secret=${secret.slice(0, 20)}`, [code]);
+  assert.ok(!piece.pass);
 });

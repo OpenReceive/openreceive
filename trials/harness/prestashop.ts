@@ -11,6 +11,7 @@ import {
   SWAP_PRODUCT,
   swapOrderChecks,
 } from "./live.ts";
+import type { PlaceOrder } from "./payer.ts";
 import type { Check } from "./types.ts";
 import { awaitedLater } from "./promises.ts";
 
@@ -27,6 +28,8 @@ const ADMIN_PASSWORD = "Widget-shop-local1";
 const BUYER = "buyer@example.test";
 const STRANGER = "stranger@example.test";
 const PRODUCTS = ["Widget Nano", "Widget Micro", "Widget Small", "Widget Medium", "Widget Large"];
+/** Products 1 and 2 at the seed's prices, in cents (seed/seed.php). */
+export const PAYER_PRICES: readonly number[] = [700, 1250];
 
 /**
  * The stock PrestaShop's install, owner, customers and products, before the
@@ -260,6 +263,24 @@ async function payWithLightning(
             body: await response.text(),
             ms: Math.round(performance.now() - started),
           },
+  };
+}
+
+/** The payer walk's way to the checkout: a customer checks out, and lands on the order confirmation page. */
+export function prestashopPayerOrders(base: string): PlaceOrder {
+  const signedIn = new WeakSet<BrowserContext>();
+  return async (page, productId) => {
+    if (!signedIn.has(page.context())) {
+      await signIn(page, base, BUYER);
+      signedIn.add(page.context());
+    }
+    await order(page, base, productId);
+    await payWithLightning(page, false);
+    return {
+      price: PAYER_PRICES[productId - 1],
+      listing: `${PRODUCTS[productId - 1]}, as seeded`,
+      url: page.url(),
+    };
   };
 }
 

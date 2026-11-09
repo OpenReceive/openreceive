@@ -297,6 +297,36 @@ test("a refused prepare shows the payer where the order opens, not the authorize
   }
 });
 
+test("a refused prepare logs the server's own words once, for the developer", async () => {
+  const { checkoutLabels } = await import("../packages/js/browser/src/headless.ts");
+  const logs = [];
+  defineElements({
+    tagName: "openreceive-checkout-logged",
+    qrEncoder,
+    logger: (entry) => logs.push(entry),
+  });
+  globalThis.fetch = createFetchStub({ "/checkouts/prepare": () => AUTHORIZE_DENIED });
+  const element = document.createElement("openreceive-checkout-logged");
+  element.setAttribute("reference", "order-logged");
+  element.setAttribute("prefix", "/openreceive");
+  document.body.appendChild(element);
+  try {
+    await untilLocal(() => element.shadowRoot?.querySelector("[data-openreceive-create-error]"), {
+      label: "create-error screen",
+    });
+    const reworded = logs.filter((entry) => entry.event === "checkout.error.reworded");
+    assert.equal(reworded.length, 1);
+    assert.equal(reworded[0].level, "warn");
+    assert.equal(reworded[0].action, "checkout.prepare");
+    assert.equal(reworded[0].error_code, "FORBIDDEN");
+    assert.equal(reworded[0].status, 403);
+    assert.equal(reworded[0].error_message, AUTHORIZE_DENIED.body.message);
+    assert.equal(reworded[0].payer_message, checkoutLabels.paymentNotYours);
+  } finally {
+    element.remove();
+  }
+});
+
 test("a refused mint and a refused swap start show the payer sentence", async () => {
   const { checkoutLabels } = await import("../packages/js/browser/src/headless.ts");
   globalThis.fetch = createFetchStub({

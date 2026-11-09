@@ -71,9 +71,16 @@ export class Visitor implements CheckoutClient {
    * What a browser sends with every POST from the shop's own page. SvelteKit
    * refuses a form POST without a matching Origin (its CSRF check), and so may
    * any framework an agent configures; a buyer's browser always sends one.
+   * Astro trusts Sec-Fetch-Site first and otherwise compares Origin with the
+   * address the container sees, so a browser's same-origin form passes where
+   * a bare fetch would get a 403.
    */
   private browserOrigin(pagePath: string): Record<string, string> {
-    return { origin: new URL(this.base).origin, referer: `${this.base}${pagePath}` };
+    return {
+      origin: new URL(this.base).origin,
+      referer: `${this.base}${pagePath}`,
+      "sec-fetch-site": "same-origin",
+    };
   }
 
   async page(pathname: string): Promise<string> {
@@ -127,6 +134,27 @@ export class Visitor implements CheckoutClient {
   /** The order's page: where the shop sent the buyer, or /orders/<id>. */
   orderPage(id: string): string {
     return this.orderPaths.get(id) ?? `/orders/${id}`;
+  }
+
+  /** A form POST from one of the shop's own pages, as a browser sends it; the redirect stays unfollowed. */
+  async submitForm(
+    pathname: string,
+    fields: Record<string, string>,
+    fromPage: string,
+  ): Promise<Response> {
+    await this.page(fromPage);
+    const response = await fetch(`${this.base}${pathname}`, {
+      method: "POST",
+      headers: {
+        ...this.cookieHeader(),
+        ...this.browserOrigin(fromPage),
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(fields),
+      redirect: "manual",
+    });
+    this.remember(response);
+    return response;
   }
 
   /**

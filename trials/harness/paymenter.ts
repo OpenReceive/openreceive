@@ -14,6 +14,7 @@ import {
   SWAP_PRODUCT,
   swapOrderChecks,
 } from "./live.ts";
+import type { PlaceOrder } from "./payer.ts";
 import type { Check } from "./types.ts";
 import { awaitedLater } from "./promises.ts";
 
@@ -37,6 +38,8 @@ const PRODUCT_SLUGS = [
   "widget-vps-large",
 ];
 const INVOICE_PATH = /\/invoices\/([^/?#]+)/;
+/** Products 1 and 2 at the seed's prices, in cents (seed/seed.php). */
+export const PAYER_PRICES: readonly number[] = [700, 1250];
 
 /** The stock Paymenter's owner, clients and products, before the agent comes (seed/seed.php). */
 export async function setupPaymenter(
@@ -247,6 +250,27 @@ async function payWithLightning(
             body: await response.text(),
             ms: Math.round(performance.now() - started),
           },
+  };
+}
+
+/** The payer walk's way to the checkout: a client orders, and the new invoice's dialog opens on it. */
+export function paymenterPayerOrders(base: string): PlaceOrder {
+  const signedIn = new WeakSet<BrowserContext>();
+  return async (page, productId) => {
+    if (!signedIn.has(page.context())) {
+      await signIn(page, base, BUYER);
+      signedIn.add(page.context());
+    }
+    await order(page, base, productId);
+    await payWithLightning(page, false);
+    return {
+      price: PAYER_PRICES[productId - 1],
+      listing: `${PRODUCT_SLUGS[productId - 1]}, as seeded`,
+      url: page.url(),
+      // A fresh load of the invoice opens Paymenter's Pay dialog again, and
+      // the buyer picks the method again, as for any gateway.
+      reopen: (again) => payWithLightning(again, false),
+    };
   };
 }
 

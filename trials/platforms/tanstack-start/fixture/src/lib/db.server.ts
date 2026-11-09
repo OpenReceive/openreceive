@@ -25,6 +25,7 @@ export function db(): Promise<pg.Pool> {
 
 async function open(): Promise<pg.Pool> {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+  pool.on('error', (error) => console.error('Postgres pool error:', error.message))
   try {
     await createTables(pool)
   } catch (error) {

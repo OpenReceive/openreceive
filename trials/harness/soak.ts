@@ -147,6 +147,21 @@ export function soakChecks(attempts: readonly Attempt[], samples: readonly Sampl
   ];
 }
 
+/**
+ * A shop with `rateLimiting` on counts its last hour of invoices per address,
+ * and a trial's live and chaos phases leave that hour full for the harness.
+ * Wait it out, or the soak measures only the limiter.
+ */
+async function waitForInvoiceBudget(newBuyer: () => Promise<ChaosBuyer>): Promise<void> {
+  const giveUp = Date.now() + 70 * 60_000;
+  while (Date.now() < giveUp) {
+    const answer = await (await newBuyer()).createOnce();
+    if (answer.status !== 429) return;
+    console.log(`${new Date().toISOString()} waiting: this address's last hour is still counted`);
+    await sleep(BUYER_EVERY_MS);
+  }
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dir = value(argv, "--dir");
@@ -176,6 +191,7 @@ async function main(): Promise<void> {
       : wordpressChaosBuyers(wordpress, directory, baseUrl);
   const control = new InterceptorControl(wallet.interceptor.control, clientPrefix(directory));
   await control.reset();
+  await waitForInvoiceBudget(newBuyer);
 
   const started = Date.now();
   const end = started + minutes * 60_000;

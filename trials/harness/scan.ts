@@ -5,9 +5,16 @@ import { containsSecret } from "./checks.ts";
 import type { SeenWrite } from "./cursor.ts";
 import type { Check } from "./types.ts";
 
-function git(cwd: string, args: readonly string[]): Promise<{ code: number; stdout: string }> {
+function git(
+  cwd: string,
+  args: readonly string[],
+  input?: string,
+): Promise<{ code: number; stdout: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn("git", [...args], { cwd });
+    // git may stop reading early on a fatal error; what it reported still counts.
+    child.stdin.on("error", () => {});
+    child.stdin.end(input);
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -21,6 +28,17 @@ function git(cwd: string, args: readonly string[]): Promise<{ code: number; stdo
 async function ignored(cwd: string, file: string): Promise<boolean> {
   const result = await git(cwd, ["check-ignore", "-q", "--", file]);
   return result.code === 0;
+}
+
+/**
+ * Which of `files` git ignores, from one process: a shop with its packages on
+ * disk holds over 100,000 files. On a fatal error the rest count as not
+ * ignored, so they are still scanned.
+ */
+async function ignoredFiles(cwd: string, files: readonly string[]): Promise<Set<string>> {
+  if (files.length === 0) return new Set();
+  const result = await git(cwd, ["check-ignore", "--stdin", "-z"], `${files.join("\0")}\0`);
+  return new Set(result.stdout.split("\0").filter((file) => file !== ""));
 }
 
 function insideShop(shop: string, file: string): boolean {
@@ -63,15 +81,17 @@ export async function scanTrackedSecrets(
     hits.push("git history");
   }
 
-  for (const file of await walk(shop)) {
-    if (await ignored(shop, path.relative(shop, file))) continue;
+  const files = (await walk(shop)).map((file) => path.relative(shop, file));
+  const skipped = await ignoredFiles(shop, files);
+  for (const file of files) {
+    if (skipped.has(file)) continue;
     let body = "";
     try {
-      body = await readFile(file, "utf8");
+      body = await readFile(path.join(shop, file), "utf8");
     } catch {
       continue;
     }
-    if (containsSecret(body, uris)) hits.push(path.relative(shop, file));
+    if (containsSecret(body, uris)) hits.push(file);
   }
 
   const unique = [...new Set(hits)];

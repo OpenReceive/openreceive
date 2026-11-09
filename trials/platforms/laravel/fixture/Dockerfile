@@ -5,10 +5,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip git libsq
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-interaction --no-scripts
+RUN composer install --no-interaction --no-scripts
 COPY . .
 RUN mkdir -p /data storage/framework/sessions storage/framework/views storage/framework/cache storage/logs bootstrap/cache \
-    && composer dump-autoload --no-dev --no-interaction \
+    && composer dump-autoload --no-interaction \
     && cp .env.example .env \
     && php artisan key:generate --force \
     && chmod +x bin/product-count bin/openreceive-installed bin/order-status

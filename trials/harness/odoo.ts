@@ -12,6 +12,7 @@ import {
   SWAP_PRODUCT,
   swapOrderChecks,
 } from "./live.ts";
+import type { PlaceOrder } from "./payer.ts";
 import type { Check } from "./types.ts";
 import { awaitedLater } from "./promises.ts";
 
@@ -31,6 +32,8 @@ const STRANGER = "stranger@example.test";
 const PREFIX = "/openreceive";
 const PRODUCT_CODES = ["facet", "bezel", "hinge", "latch", "knob"];
 const CHECKOUT_PAGE = /\/payment\/openreceive\/checkout\?reference=([^&#]+)/;
+/** Products 1 and 2 at the seed's prices, in cents (seed/seed.py). */
+export const PAYER_PRICES: readonly number[] = [700, 1200];
 
 /**
  * The stock Odoo before the agent comes: a database named shop with
@@ -198,6 +201,40 @@ async function order(page: Page, base: string, product: number): Promise<string>
     .click({ timeout: 30_000 });
   await page.waitForURL(CHECKOUT_PAGE, { timeout: 60_000 });
   return decodeURIComponent(page.url().match(CHECKOUT_PAGE)?.[1] ?? "");
+}
+
+/**
+ * Odoo hands a signed-in customer their last open cart back, so what an earlier
+ * step of the walk left unpaid would join this order and change its total.
+ */
+async function emptyCart(page: Page, base: string): Promise<void> {
+  await page.goto(`${base}/shop/cart`);
+  const remove = page.locator("a.js_delete_product:not(.o_add_wishlist)").filter({ visible: true });
+  for (let lines = await remove.count(); lines > 0; lines = await remove.count()) {
+    await remove.first().click({ timeout: 30_000 });
+    for (let wait = 0; wait < 60 && (await remove.count().catch(() => lines)) >= lines; wait += 1) {
+      await page.waitForTimeout(250);
+    }
+  }
+}
+
+/** The payer walk's way to the checkout: a customer orders, and lands on the module's checkout page. */
+export function odooPayerOrders(base: string): PlaceOrder {
+  const signedIn = new WeakSet<BrowserContext>();
+  return async (page, productId) => {
+    if (!signedIn.has(page.context())) {
+      await signIn(page, base, BUYER);
+      signedIn.add(page.context());
+    }
+    await emptyCart(page, base);
+    await order(page, base, productId);
+    await page.locator("openreceive-checkout").waitFor({ state: "attached", timeout: 30_000 });
+    return {
+      price: PAYER_PRICES[productId - 1],
+      listing: `${PRODUCT_CODES[productId - 1]}, as seeded`,
+      url: page.url(),
+    };
+  };
 }
 
 /** On the checkout page: pick Bitcoin and wait for the checkout's create call. */

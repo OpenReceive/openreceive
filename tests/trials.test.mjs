@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -468,6 +468,28 @@ test("a secret in a tracked file fails, and a gitignored .env does not", async (
   }
 });
 
+test("the secret scan asks git once, and still reads every file git does not ignore", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ortrial-scan-"));
+  const git = (...args) => execFileSync("git", args, { cwd: directory, stdio: "ignore" });
+  try {
+    git("init", "-q", "-b", "master");
+    await writeFile(path.join(directory, ".gitignore"), "node_modules/\n.env\n");
+    await mkdir(path.join(directory, "node_modules", "pkg"), { recursive: true });
+    await writeFile(path.join(directory, "node_modules", "pkg", "index.js"), nwc);
+    await writeFile(path.join(directory, ".env"), nwc);
+    for (let index = 0; index < 400; index += 1) {
+      await writeFile(path.join(directory, "node_modules", "pkg", `f${index}.js`), "x");
+    }
+    assert.equal((await scanTrackedSecrets(directory, [nwc, lsc], [])).pass, true);
+    await writeFile(path.join(directory, "a file with spaces.txt"), nwc);
+    const found = await scanTrackedSecrets(directory, [nwc, lsc], []);
+    assert.equal(found.pass, false);
+    assert.equal(found.evidence, "a file with spaces.txt");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("the directions server serves the working tree file", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ortrial-serve-"));
   await writeFile(path.join(directory, "woocommerce.md"), "step 0\n");
@@ -864,6 +886,44 @@ test("rewriting OpenReceive's installed package is a blocker; serving its files 
     "python3 - <<'PY'\nfrom pathlib import Path\np=Path('node_modules/@openreceive/node/dist/index.js')\np.write_text(p.read_text().replace('a', 'b'))\nPY",
   );
   assert.equal(commandCheckWith("no_package_patch", [inPlace]).pass, false);
+  // A Laravel agent ran sed -i on its own config, then read the package's types.
+  const nearby = shell(
+    "sed -i \"s/'rate_limiting' => false/'rate_limiting' => true/\" config/openreceive.php\ncat node_modules/@openreceive/elements/dist/index.d.ts | head -45",
+  );
+  assert.equal(commandCheckWith("no_package_patch", [nearby]).pass, true);
+  // A Grok agent wrote its migration file, then looked up the package's version.
+  const migrationFile = shell(
+    `node --input-type=module -e '\nimport { writeFileSync } from "node:fs";\nwriteFileSync("migrations/001_openreceive.sql", sql);\n' && node -p "require('./node_modules/@openreceive/http/package.json').version"`,
+  );
+  assert.equal(commandCheckWith("no_package_patch", [migrationFile]).pass, true);
+  // A write that spells out the package, or reaches it through a variable, still counts.
+  const literal = shell(
+    `node -e 'require("fs").writeFileSync("node_modules/@openreceive/http/dist/index.js", patched)'`,
+  );
+  assert.equal(commandCheckWith("no_package_patch", [literal]).pass, false);
+  const variable = shell(
+    `node -e '\nconst file = "node_modules/@openreceive/http/dist/index.js";\nrequire("fs").writeFileSync(file, patched);\n'`,
+  );
+  assert.equal(commandCheckWith("no_package_patch", [variable]).pass, false);
+  // A Codex agent's server.js: a secret file a few lines from serving the standalone folder.
+  const serving = {
+    path: "/tmp/shop/server.js",
+    content:
+      'app.use("/static/openreceive", express.static(join(root, "node_modules/@openreceive/elements/dist/standalone")));\nconst secretPath = "/data/secret";\nwriteFileSync(secretPath, randomBytes(32).toString("hex"));\n',
+  };
+  assert.equal(commandCheckWith("no_package_patch", [], [serving]).pass, true);
+  const opened = shell(
+    `python3 -c 'open("node_modules/@openreceive/http/dist/index.js", "w").write("x")'`,
+  );
+  assert.equal(commandCheckWith("no_package_patch", [opened]).pass, false);
+  const joined = shell(
+    `node -e 'fs.writeFileSync(path.join(root, "node_modules/@openreceive/http/dist/index.js"), patched)'`,
+  );
+  assert.equal(commandCheckWith("no_package_patch", [joined]).pass, false);
+  const phpVariable = shell(
+    `php -r '$file = "vendor/openreceive/openreceive/src/Host.php"; file_put_contents($file, $patched);'`,
+  );
+  assert.equal(commandCheckWith("no_package_patch", [phpVariable]).pass, false);
 });
 
 test("a stack frame inside OpenReceive's code in any output is surfaced as polish", () => {
@@ -910,6 +970,22 @@ test("doctor must have run, and its last run must be clean", () => {
     true,
   );
   assert.equal(commandCheck("doctor_clean", [shell("php bin/doctor")]).pass, true);
+  assert.equal(
+    commandCheck("doctor_clean", [
+      shell(
+        "docker compose exec -T -w /app web node node_modules/@openreceive/node/bin/openreceive.mjs doctor --db /data/shop.sqlite",
+      ),
+    ]).pass,
+    true,
+  );
+  // A later step in the same command failed, not doctor: the exit is that step's.
+  const thenDiff = `${doctor}\ngit diff --check`;
+  assert.equal(commandCheck("doctor_clean", [shell(doctor, 0), shell(thenDiff, 2)]).pass, true);
+  // With no other run to go by, an ambiguous failure still counts.
+  assert.equal(commandCheck("doctor_clean", [shell(thenDiff, 2)]).pass, false);
+  // Doctor last in a chain does speak for itself.
+  const chained = `git status --short && ${doctor}`;
+  assert.equal(commandCheck("doctor_clean", [shell(doctor, 0), shell(chained, 1)]).pass, false);
   assert.equal(commandCheck("doctor_clean", [shell("bin/rails openreceive:doctor")]).pass, true);
   // How Codex ran it in the 2026-10-10 trials: a pinned package, and argv in a spawn.
   assert.equal(
@@ -971,6 +1047,40 @@ test("the closing message says Setup is finished, stays short, and says nothing 
   assert.equal(
     closing("closing_no_minimum", "Setup is finished.\nUSDT is unavailable below the $10 minimum.")
       .pass,
+    false,
+  );
+  assert.equal(
+    closing("closing_no_minimum", "Setup is finished.\nUSDT is not available on this shop.").pass,
+    false,
+  );
+  // A Grok closing: the file a host test run wanted, nothing about what a payer can use.
+  assert.equal(
+    closing(
+      "closing_no_minimum",
+      "Setup is finished.\nThe host test run failed: that file is not available outside the container.",
+    ).pass,
+    true,
+  );
+});
+
+test("pkill is forbidden, except stopping the children of one named process", () => {
+  const platform = { ...woocommerce, forbidden: ["\\bpkill\\b"] };
+  const blocked = (command) =>
+    evaluate({
+      scenario: canonical,
+      platform,
+      nwc,
+      lsc,
+      turns: [
+        askNwc,
+        askLsc,
+        { role: "agent", text: "Setup is finished.", tools: [{ type: "shell", command }] },
+      ],
+    }).find((item) => item.id === "forbidden:\\bpkill\\b").pass === false;
+  assert.equal(blocked("pkill node"), true);
+  assert.equal(blocked("pkill -f server.js"), true);
+  assert.equal(
+    blocked("kill 460206 2>/dev/null || true; pkill -P 460206 2>/dev/null || true"),
     false,
   );
 });

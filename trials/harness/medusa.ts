@@ -11,6 +11,7 @@ import {
   SWAP_PRODUCT,
   swapOrderChecks,
 } from "./live.ts";
+import type { PlaceOrder } from "./payer.ts";
 import type { Check } from "./types.ts";
 import { awaitedLater } from "./promises.ts";
 
@@ -25,6 +26,8 @@ import { awaitedLater } from "./promises.ts";
 
 const REGION = "us";
 const PRODUCT_HANDLES = ["facet", "bezel", "hinge", "latch", "knob"];
+/** Products 1 and 2 at the seed's prices, in cents (fixture/medusa/src/scripts/seed.ts). */
+export const PAYER_PRICES: readonly number[] = [700, 1200];
 /** A payment session id in Medusa's shape that no cart has. */
 const UNKNOWN_SESSION = "payses_01JZZZZZZZZZZZZZZZZZZZZZZZ";
 const REVIEW = /step=review/;
@@ -175,6 +178,18 @@ async function reviewCheckout(
             body: await response.text(),
             ms: Math.round(performance.now() - started),
           },
+  };
+}
+
+/** The payer walk's way to the checkout: a buyer shops the storefront up to its review step. */
+export function medusaPayerOrders(base: string): PlaceOrder {
+  return async (page, productId) => {
+    await reviewCheckout(page, false, () => checkOut(page, base, productId));
+    return {
+      price: PAYER_PRICES[productId - 1],
+      listing: `${PRODUCT_HANDLES[productId - 1]}, as seeded`,
+      url: page.url(),
+    };
   };
 }
 

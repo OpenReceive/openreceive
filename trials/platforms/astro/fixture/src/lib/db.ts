@@ -7,7 +7,9 @@ let setUp: Promise<void> | undefined;
 
 /** The shop's Postgres pool, made on first use, so `astro build` never connects. */
 export function db(): pg.Pool {
-  pool ??= new pg.Pool({ connectionString: DATABASE_URL });
+  if (pool) return pool;
+  pool = new pg.Pool({ connectionString: DATABASE_URL });
+  pool.on("error", (error) => console.error("Postgres pool error:", error.message));
   return pool;
 }
 

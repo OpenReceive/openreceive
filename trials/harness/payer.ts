@@ -2,8 +2,9 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { request } from "node:https";
 import path from "node:path";
-import type { Browser, Locator, Page } from "@playwright/test";
+import type { Browser, BrowserContextOptions, Locator, Page } from "@playwright/test";
 import { SWAP_PRODUCT } from "./live.ts";
+import { journeyChecks } from "./payer-journeys.ts";
 import type { Check, Platform, Severity } from "./types.ts";
 import type { TrialWallet } from "./wallet.ts";
 
@@ -19,9 +20,10 @@ import type { TrialWallet } from "./wallet.ts";
 // The walk fits the library-stack fixture: `/` lists the products, each with
 // a form posting `product_id` to `/orders`, and the shop sends the buyer to a
 // page where the agent mounted the checkout (`<openreceive-checkout>` or
-// `@openreceive/react`). Every screen it reaches is saved under
-// `<reportDir>/payer/` as a full-page screenshot and the checkout's visible
-// text.
+// `@openreceive/react`). WordPress and the hosted platforms reach their own
+// checkout through `placeOrder` (payer-orders.ts). Every screen it reaches is
+// saved under `<reportDir>/payer/` as a full-page screenshot and the
+// checkout's visible text.
 
 /** What the walk needs about the shop under trial. */
 export interface PayerTarget {
@@ -41,17 +43,17 @@ export interface PayerTarget {
   readonly swaps?: boolean;
   /**
    * How a buyer reaches the checkout for product 1 or 2 (SWAP_PRODUCT). The
-   * framework fixtures' home-page form when omitted; a WordPress store places
-   * the order through its own checkout and opens the order page
-   * (wordpressPayerOrders in wordpress.ts).
+   * framework fixtures' home-page form when omitted; a WordPress store or a
+   * hosted platform goes through its own shop and stops where its checkout
+   * is on screen (payer-orders.ts).
    */
-  readonly placeOrder?: (page: Page, productId: number) => Promise<PlacedOrder>;
+  readonly placeOrder?: PlaceOrder;
 }
 
 /** Product 1 is the cheapest in every fixture; product 2 clears the test provider's minimum. */
-const PRODUCT = 1;
+export const PRODUCT = 1;
 /** The swap the guide promises, as live.ts makes it: USDT on Solana. */
-const SWAP_COIN = "USDT";
+export const SWAP_COIN = "USDT";
 const SWAP_NETWORK = "Solana";
 /** fake-lsc's control port on 127.0.0.1, behind the trial CA (wallet.ts's FAKE_LSC). */
 const FAKE_LSC = "https://127.0.0.1:17888";
@@ -60,18 +62,18 @@ const RELAY = "relay-nwc.rizful.com";
 /** A Compose project prefix: lowercase, ending in "-", never a wildcard. */
 const CLIENT_PREFIX = /^[a-z0-9][a-z0-9_.-]*-$/;
 
-const PAGE_TIMEOUT_MS = 30_000;
+export const PAGE_TIMEOUT_MS = 30_000;
 const INVOICE_TIMEOUT_MS = 45_000;
-const PAID_TIMEOUT_MS = 90_000;
+export const PAID_TIMEOUT_MS = 90_000;
 /**
  * The checkout polls every 3 s (OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS) and a
  * wallet scan waits for the reconcile gate's 3 s, so a healthy shop shows the
  * paid screen in well under 10 s.
  */
-const PAID_POLISH_MS = 10_000;
+export const PAID_BUDGET_MS = 10_000;
 const FAILURE_TIMEOUT_MS = 45_000;
 const RECOVERY_TIMEOUT_MS = 30_000;
-const SWAP_TIMEOUT_MS = 45_000;
+export const SWAP_TIMEOUT_MS = 45_000;
 
 // ---------------------------------------------------------------- pure helpers
 
@@ -182,7 +184,8 @@ export function formatCents(cents: number): string {
 }
 
 /** What a paid screen says, in a payer's words. */
-const PAID = /payment received|\bpaid\b|payment (?:is )?confirmed|thank you/i;
+const PAID =
+  /payment received|\bpaid\b|payment (?:is )?confirmed|thank you|\border status:?\s*completed?\b/i;
 
 /** True when `text` says the payment went through. */
 export function saysPaid(text: string): boolean {
@@ -230,7 +233,7 @@ export function relayHostsOf(nwc: string): string[] {
 // Strings, not functions: tsx keeps function names with a `__name` helper
 // that does not exist in the page.
 
-const PAGE_HELPERS = String.raw`
+export const PAGE_HELPERS = String.raw`
   const visible = (el) =>
     typeof el.checkVisibility !== "function" ||
     el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
@@ -297,13 +300,18 @@ const PAGE_HELPERS = String.raw`
   };
 `;
 
-/** The checkout's own visible text (not the host page's), and the page's for the paid fallback. */
+/**
+ * The checkout's own visible text (not the host page's), and the page's for
+ * the paid fallback. Present means it shows something: with cacheComponents,
+ * Next.js keeps the route the buyer left mounted and hidden, so an empty
+ * checkout root can sit under Vendure's order confirmation.
+ */
 const READ_CHECKOUT = String.raw`(() => {
   ${PAGE_HELPERS}
-  const roots = checkoutRoots();
+  const text = checkoutRoots().map(textOf).filter(Boolean).join("\n");
   return {
-    present: roots.length > 0,
-    text: roots.map(textOf).join("\n"),
+    present: text !== "",
+    text,
     page: document.body ? document.body.innerText : "",
   };
 })()`;
@@ -346,13 +354,13 @@ function listingScript(productId: number): string {
   })()`;
 }
 
-interface CheckoutView {
+export interface CheckoutView {
   readonly present: boolean;
   readonly text: string;
   readonly page: string;
 }
 
-function readCheckout(page: Page): Promise<CheckoutView> {
+export function readCheckout(page: Page): Promise<CheckoutView> {
   return page.evaluate<CheckoutView>(READ_CHECKOUT);
 }
 
@@ -364,13 +372,14 @@ interface State {
 }
 
 /** The screens the walk reached, saved in order under `<reportDir>/payer/`. */
-class Walk {
+export class Walk {
   readonly states: State[] = [];
   private count = 0;
   constructor(readonly dir: string) {}
 
   async capture(page: Page, name: string): Promise<CheckoutView> {
-    const view = await readCheckout(page);
+    // A hosted checkout navigates on its own once paid, which can cut a read off.
+    const view = (await waitFor(() => readCheckout(page), 10_000)) ?? (await readCheckout(page));
     this.count += 1;
     const file = `${String(this.count).padStart(2, "0")}-${name}`;
     await writeFile(
@@ -394,10 +403,14 @@ class Walk {
 }
 
 /** The checks one step owes, failed with a reason until the step sets them. */
-class Outcome {
+export class Outcome {
   private readonly set = new Map<string, Check>();
   constructor(
-    private readonly specs: readonly { id: string; summary: string; severity?: Severity }[],
+    private readonly specs: readonly {
+      id: string;
+      summary: string;
+      severity?: Severity;
+    }[],
   ) {}
 
   record(id: string, pass: boolean, evidence: string): void {
@@ -427,7 +440,7 @@ class Outcome {
   }
 }
 
-function oneLine(text: string, max = 200): string {
+export function oneLine(text: string, max = 200): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
@@ -435,11 +448,11 @@ function oneLine(text: string, max = 200): string {
 /** Playwright colours its call log; evidence is plain text. */
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
-function message(error: unknown): string {
+export function message(error: unknown): string {
   return oneLine((error instanceof Error ? error.message : String(error)).replace(ANSI, ""), 400);
 }
 
-async function waitFor<T>(
+export async function waitFor<T>(
   probe: () => Promise<T | undefined>,
   timeoutMs: number,
   intervalMs = 250,
@@ -455,7 +468,7 @@ async function waitFor<T>(
 
 // --------------------------------------------------------------- the browser
 
-interface ApiCall {
+export interface ApiCall {
   readonly method: string;
   readonly path: string;
   readonly status: number;
@@ -464,40 +477,53 @@ interface ApiCall {
   body?: string;
 }
 
-interface Visit {
+export interface Visit {
   readonly page: Page;
   /** Every answer from a checkout, swap or payment route, in order. */
   readonly api: ApiCall[];
   readonly errors: string[];
 }
 
-/** A fresh buyer: cookies of their own, a desktop window, the page's API answers recorded. */
-async function visit<T>(browser: Browser, run: (visit: Visit) => Promise<T>): Promise<T> {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+/** Record a page's checkout, swap and payment answers, and its script errors. */
+export function watchPage(page: Page, api: ApiCall[], errors: string[]): void {
+  page.on("pageerror", (error) => errors.push(message(error)));
+  page.on("response", (response) => {
+    const route = apiRoute(response.url());
+    if (route === undefined) return;
+    const call: ApiCall = {
+      method: response.request().method(),
+      path: route,
+      status: response.status(),
+      at: performance.now(),
+    };
+    api.push(call);
+    response.text().then(
+      (text) => {
+        call.body = text;
+      },
+      () => {
+        call.body = "";
+      },
+    );
+  });
+}
+
+/**
+ * A fresh buyer: cookies of their own, the page's API answers recorded. A
+ * desktop window unless `options` says otherwise; `shared` collects the script
+ * errors of every visit for the walk's own check.
+ */
+export async function visit<T>(
+  browser: Browser,
+  run: (visit: Visit) => Promise<T>,
+  options: BrowserContextOptions = { viewport: { width: 1280, height: 900 } },
+): Promise<T> {
+  const context = await browser.newContext(options);
   try {
     const page = await context.newPage();
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(message(error)));
     const api: ApiCall[] = [];
-    page.on("response", (response) => {
-      const pathname = new URL(response.url()).pathname;
-      if (!/\/(?:checkouts|swaps|payments)(?:\/|$)/.test(pathname)) return;
-      const call: ApiCall = {
-        method: response.request().method(),
-        path: pathname,
-        status: response.status(),
-        at: performance.now(),
-      };
-      api.push(call);
-      response.text().then(
-        (text) => {
-          call.body = text;
-        },
-        () => {
-          call.body = "";
-        },
-      );
-    });
+    watchPage(page, api, errors);
     return await run({ page, api, errors });
   } finally {
     await context.close().catch(() => undefined);
@@ -505,7 +531,17 @@ async function visit<T>(browser: Browser, run: (visit: Visit) => Promise<T>): Pr
 }
 
 const CREATE_CHECKOUT = /\/checkouts\/?$/;
-const CREATE_SWAP = /\/swaps\/?$/;
+export const CREATE_SWAP = /\/swaps\/?$/;
+const API_ROUTE = /\/(?:checkouts|swaps|payments)(?:\/|$)/;
+
+/**
+ * The checkout route a URL names, if any: in its path, or in `?path=`, the
+ * way PrestaShop's module controller takes it.
+ */
+export function apiRoute(href: string): string | undefined {
+  const url = new URL(href);
+  return [url.pathname, url.searchParams.get("path") ?? ""].find((route) => API_ROUTE.test(route));
+}
 
 /** The checkout's payments/check answers since `started`: when each arrived, and which said settled. */
 function pollsSince(api: readonly ApiCall[], started: number): string {
@@ -519,24 +555,24 @@ function pollsSince(api: readonly ApiCall[], started: number): string {
     .join(", ");
 }
 
-function lastCall(api: readonly ApiCall[], route: RegExp, from = 0): ApiCall | undefined {
+export function lastCall(api: readonly ApiCall[], route: RegExp, from = 0): ApiCall | undefined {
   return api
     .slice(from)
     .reverse()
     .find((call) => call.method === "POST" && route.test(call.path));
 }
 
-function describeCall(call: ApiCall | undefined): string {
+export function describeCall(call: ApiCall | undefined): string {
   return call === undefined
     ? "the page sent no create request"
     : `${call.method} ${call.path} answered ${call.status} ${oneLine(call.body ?? "", 200)}`;
 }
 
-const bitcoinTile = (page: Page): Locator =>
+export const bitcoinTile = (page: Page): Locator =>
   page.getByRole("button", { name: /^Bitcoin/ }).filter({ visible: true });
-const invoiceQr = (page: Page): Locator =>
+export const invoiceQr = (page: Page): Locator =>
   page.locator("[data-openreceive-qr]").filter({ visible: true });
-const tryAgain = (page: Page): Locator =>
+export const tryAgain = (page: Page): Locator =>
   page.getByRole("button", { name: /try again|retry/i }).filter({ visible: true });
 
 export interface PlacedOrder {
@@ -545,14 +581,22 @@ export interface PlacedOrder {
   /** The listing text the price came from. */
   readonly listing: string;
   readonly url: string;
+  /**
+   * What the buyer does on the host's own page to get back to the checkout
+   * after a fresh load, when the host asks again (Paymenter's Pay dialog).
+   */
+  readonly reopen?: (page: Page) => Promise<unknown>;
 }
 
-/** Order one product through the shop's own listing, as a buyer clicks Buy. */
+/** A platform's own way to the checkout for one product (PayerTarget.placeOrder). */
+export type PlaceOrder = (page: Page, productId: number) => Promise<PlacedOrder>;
+
 /** The buyer's way to the checkout: the target's own, or the fixture's home-page form. */
-function order(target: PayerTarget, page: Page, productId: number): Promise<PlacedOrder> {
+export function order(target: PayerTarget, page: Page, productId: number): Promise<PlacedOrder> {
   return target.placeOrder?.(page, productId) ?? placeOrder(page, target.baseUrl, productId);
 }
 
+/** Order one product through the shop's own listing, as a buyer clicks Buy. */
 async function placeOrder(page: Page, baseUrl: string, productId: number): Promise<PlacedOrder> {
   await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS });
   const near = await page.evaluate<string | null>(listingScript(productId));
@@ -570,7 +614,7 @@ async function placeOrder(page: Page, baseUrl: string, productId: number): Promi
 }
 
 /** The checkout drew its first screen: the method picker, an invoice, or an error with Try again. */
-async function checkoutRendered(page: Page): Promise<"picker" | "invoice" | "error"> {
+export async function checkoutRendered(page: Page): Promise<"picker" | "invoice" | "error"> {
   await bitcoinTile(page)
     .or(invoiceQr(page))
     .or(tryAgain(page))
@@ -581,11 +625,13 @@ async function checkoutRendered(page: Page): Promise<"picker" | "invoice" | "err
   return "error";
 }
 
-const hashOf = (body: string | undefined): string | undefined =>
+export const hashOf = (body: string | undefined): string | undefined =>
   body?.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
 
 /** Pick Bitcoin (unless the invoice is already up) and wait for the invoice and its create answer. */
-async function lightningInvoice(visitState: Visit): Promise<{ hash: string; call: ApiCall }> {
+export async function lightningInvoice(
+  visitState: Visit,
+): Promise<{ hash: string; call: ApiCall }> {
   const { page, api } = visitState;
   if ((await invoiceQr(page).count()) === 0) await bitcoinTile(page).first().click();
   const shown = await waitFor(
@@ -612,7 +658,10 @@ async function lightningInvoice(visitState: Visit): Promise<{ hash: string; call
 
 /** The error sentence the checkout shows: its alert, or the line before Try again. */
 async function errorSentence(page: Page, text: string): Promise<string> {
+  // Inside the checkout: a host page has alerts of its own (PrestaShop's "Your
+  // order is confirmed"), which would pass for the checkout's sentence.
   const alerts = await page
+    .locator("openreceive-checkout, [data-openreceive-root], [data-openreceive-checkout]")
     .getByRole("alert")
     .filter({ visible: true })
     .allInnerTexts()
@@ -685,7 +734,9 @@ async function silencedCount(target: PayerTarget): Promise<number | undefined> {
       `${target.wallet.interceptor.control}/stats?client=${encodeURIComponent(target.client)}`,
       { signal: AbortSignal.timeout(5_000) },
     );
-    const body = (await response.json()) as { stats?: Record<string, { silenced?: number }> };
+    const body = (await response.json()) as {
+      stats?: Record<string, { silenced?: number }>;
+    };
     return Object.values(body.stats ?? {}).reduce((sum, row) => sum + (row.silenced ?? 0), 0);
   } catch {
     return undefined;
@@ -750,6 +801,69 @@ async function drainCreateError(ca: string, client: string): Promise<boolean> {
   return /"waiting"\s*:\s*true/.test(answer.body);
 }
 
+/** The fixtures' store name, which a memo must not carry: the wallet's operator reads it too. */
+const SHOP_NAME = /\bwidget\s+shop\b/i;
+const EMAIL = /[^\s@]+@[^\s@]+\.[a-z]{2,}/i;
+
+/**
+ * What is wrong with a BOLT11 memo. Every wallet app shows it, and a custodial
+ * wallet's operator can read it, so it carries the order and nothing that
+ * identifies the shop or the person (46dd9917: Odoo's company name).
+ */
+export function memoProblems(memo: string): string[] {
+  return [
+    ...(SHOP_NAME.test(memo) ? ["names the shop"] : []),
+    ...(EMAIL.test(memo) ? ["carries an email address"] : []),
+    ...bannedPayerWords(memo).map((word) => `says ${word}`),
+  ];
+}
+
+/** Two spellings of one invoice: a QR may be uppercase or carry a lightning: prefix. */
+export function sameInvoice(scanned: string, invoice: string): boolean {
+  const bare = (text: string) =>
+    text
+      .trim()
+      .toLowerCase()
+      .replace(/^lightning:/, "");
+  return bare(scanned) === bare(invoice);
+}
+
+/** The memo on one of the trial wallet's invoices; undefined when the wallet has no such invoice. */
+async function walletMemo(target: PayerTarget, hash: string): Promise<string | undefined> {
+  const invoices = (await target.wallet.invoices()) as readonly {
+    payment_hash?: string;
+    description?: string | null;
+  }[];
+  const found = invoices.find((invoice) => invoice.payment_hash === hash);
+  return found === undefined ? undefined : (found.description ?? "");
+}
+
+/** Read a QR code from a PNG in a blank tab; the page has the canvas that Node lacks. */
+export async function decodeQr(browser: Browser, png: Buffer): Promise<string | undefined> {
+  const { createRequire } = await import("node:module");
+  const jsqr = createRequire(import.meta.url).resolve("jsqr/dist/jsQR.js");
+  const page = await browser.newPage();
+  try {
+    await page.addScriptTag({ path: jsqr });
+    const found = await page.evaluate<string | null>(String.raw`(async () => {
+      const image = new Image();
+      image.src = "data:image/png;base64,${png.toString("base64")}";
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const drawing = canvas.getContext("2d");
+      drawing.drawImage(image, 0, 0);
+      const { data } = drawing.getImageData(0, 0, canvas.width, canvas.height);
+      const code = window.jsQR(data, canvas.width, canvas.height);
+      return code ? code.data : null;
+    })()`);
+    return found ?? undefined;
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
 // ------------------------------------------------------------------ the steps
 
 const IDS = {
@@ -762,6 +876,8 @@ const IDS = {
   recovers: "payer_recovers_after_try_again",
   swapTotal: "payer_swap_total_matches",
   swapFailure: "payer_swap_failure_has_way_forward",
+  memo: "payer_invoice_memo",
+  qr: "payer_qr_matches_invoice",
 } as const;
 
 /** a + c: a buyer orders product 1, pays by Lightning, and watches the paid screen arrive. */
@@ -774,8 +890,7 @@ async function happyPath(browser: Browser, target: PayerTarget, walk: Walk): Pro
     },
     {
       id: IDS.latency,
-      severity: "polish",
-      summary: `The paid screen appeared within ${PAID_POLISH_MS / 1000} s of the wallet's settlement.`,
+      summary: `The paid screen appeared within ${PAID_BUDGET_MS / 1000} s of the wallet's settlement.`,
     },
     {
       id: IDS.paidWording,
@@ -785,6 +900,17 @@ async function happyPath(browser: Browser, target: PayerTarget, walk: Walk): Pro
     {
       id: IDS.amount,
       summary: "The invoice screen shows the shop's own price for the product, to the cent.",
+    },
+    {
+      id: IDS.memo,
+      // Our own plugins set the memo; on a library stack the agent writes it.
+      severity: target.placeOrder === undefined ? "polish" : "blocker",
+      summary:
+        "The memo the payer's wallet app shows names no shop, no person and no part of the engine.",
+    },
+    {
+      id: IDS.qr,
+      summary: "The QR code on the invoice screen holds the invoice the shop minted.",
     },
   ]);
   let stage = "the home page";
@@ -798,8 +924,32 @@ async function happyPath(browser: Browser, target: PayerTarget, walk: Walk): Pro
       if (first === "error") throw new Error("the checkout opened on an error");
       if (first === "picker") await walk.capture(page, "happy-picker");
       stage = "the Lightning invoice";
-      const { hash } = await lightningInvoice(state);
+      const { hash, call } = await lightningInvoice(state);
       const invoice = await walk.capture(page, "happy-invoice");
+      stage = "the invoice's memo";
+      const memo = await walletMemo(target, hash);
+      const problems =
+        memo === undefined ? ["the wallet holds no such invoice"] : memoProblems(memo);
+      outcome.record(
+        IDS.memo,
+        problems.length === 0,
+        `memo ${JSON.stringify(memo ?? "")}${problems.length === 0 ? "" : `: ${problems.join("; ")}`}`,
+      );
+      stage = "the invoice's QR code";
+      const decoded = await decodeQr(browser, await invoiceQr(page).first().screenshot());
+      const expected = call.body?.match(/"bolt11"\s*:\s*"(ln[a-z0-9]+)"/i)?.[1];
+      outcome.record(
+        IDS.qr,
+        decoded !== undefined && expected !== undefined && sameInvoice(decoded, expected),
+        decoded === undefined
+          ? "no QR code could be read from the screen"
+          : expected === undefined
+            ? "the create answer carried no invoice to compare"
+            : sameInvoice(decoded, expected)
+              ? `QR holds the invoice (${decoded.slice(0, 24)}…)`
+              : `QR holds ${decoded.slice(0, 40)}…, the shop minted ${expected.slice(0, 40)}…`,
+      );
+      stage = "the invoice's amount";
       const shown = checkoutFiatCents(invoice.text);
       outcome.record(
         IDS.amount,
@@ -837,7 +987,7 @@ async function happyPath(browser: Browser, target: PayerTarget, walk: Walk): Pro
       );
       outcome.record(
         IDS.latency,
-        ms <= PAID_POLISH_MS,
+        ms <= PAID_BUDGET_MS,
         `${ms} ms; the checkout's payment checks after settle: ${pollsSince(state.api, started)}`,
       );
       const banned = bannedPayerWordsInContext(paid.text);
@@ -980,7 +1130,7 @@ async function invoiceFailure(browser: Browser, target: PayerTarget, walk: Walk)
 }
 
 /** Open the coin's network step and pick the network; Continue is left to the caller. */
-async function chooseSwap(page: Page): Promise<void> {
+export async function chooseSwap(page: Page): Promise<void> {
   const coin = page.getByRole("button", { name: new RegExp(`^${SWAP_COIN}`) }).filter({
     visible: true,
   });
@@ -1001,7 +1151,7 @@ async function chooseSwap(page: Page): Promise<void> {
     .click({ timeout: PAGE_TIMEOUT_MS });
 }
 
-const continueButton = (page: Page): Locator =>
+export const continueButton = (page: Page): Locator =>
   page.getByRole("button", { name: /^Continue$/ }).filter({ visible: true });
 
 /** e: a USDT-on-Solana swap on product 2; the breakdown's total is the shop's price. */
@@ -1185,8 +1335,7 @@ function wordsCheck(states: readonly State[]): Check {
  * screen, the price on the invoice, a silent relay and Try again, and (with
  * swaps) a USDT swap's breakdown and a refused swap. Each step's failure
  * leaves the others to run; a step that cannot run fails its checks with the
- * reason. Decoding the invoice QR is left out: no QR decoder ships in this
- * repo's dependencies.
+ * reason.
  */
 export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
   const walk = new Walk(path.join(target.reportDir, "payer"));
@@ -1201,7 +1350,7 @@ export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
       .filter((id) => target.swaps !== false || !id.startsWith("payer_swap"))
       .map((id) => ({
         id,
-        severity: id === IDS.latency ? "polish" : "blocker",
+        severity: "blocker",
         pass: false,
         summary: "The payer walk ran in Chromium.",
         evidence: reason,
@@ -1215,6 +1364,7 @@ export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
       checks.push(await swapTotal(browser, target, walk));
       checks.push(await swapFailure(browser, target, walk));
     }
+    checks.push(...(await journeyChecks(browser, target, walk)));
     checks.push(wordsCheck(walk.states));
   } finally {
     await browser.close().catch(() => undefined);

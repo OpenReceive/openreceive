@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { checkoutLabels } from "../packages/js/browser/src/headless.ts";
+import { PAYER_PRICES as fossbillingPrices } from "../trials/harness/fossbilling.ts";
+import { SWAP_PRODUCT } from "../trials/harness/live.ts";
+import { PAYER_PRICES as medusaPrices } from "../trials/harness/medusa.ts";
+import { PAYER_PRICES as odooPrices } from "../trials/harness/odoo.ts";
+import { hasPayerWalk, payerOrders } from "../trials/harness/payer-orders.ts";
 import {
+  apiRoute,
   bannedPayerWords,
   bannedPayerWordsInContext,
+  memoProblems,
+  sameInvoice,
   checkoutFiatCents,
   formatCents,
   isPayerSentence,
@@ -11,6 +20,9 @@ import {
   relayHostsOf,
   saysPaid,
 } from "../trials/harness/payer.ts";
+import { PAYER_PRICES as paymenterPrices } from "../trials/harness/paymenter.ts";
+import { PAYER_PRICES as prestashopPrices } from "../trials/harness/prestashop.ts";
+import { PAYER_PRICES as vendurePrices } from "../trials/harness/vendure.ts";
 
 test("the words check flags what the 0.4.32 videos showed the payer", () => {
   assert.deepEqual(bannedPayerWords("Configured NWC relays are unavailable."), ["NWC", "relay"]);
@@ -179,6 +191,9 @@ test("formatCents writes dollars and cents", () => {
 test("saysPaid reads a paid screen and not a waiting one", () => {
   assert.equal(saysPaid("Payment received\nThank you. Your payment is confirmed."), true);
   assert.equal(saysPaid("Order 8\nPaid."), true);
+  // Easy Digital Downloads' own receipt, once the checkout has handed over.
+  assert.equal(saysPaid("Receipt\nOrder:\t5\nOrder Status:\tCompleted"), true);
+  assert.equal(saysPaid("Receipt\nOrder Status:\tPending"), false);
   assert.equal(saysPaid("Pay this invoice\nPay via Lightning"), false);
   assert.equal(
     saysPaid("Waiting for payment\nKeep this page open while we verify settlement."),
@@ -203,4 +218,82 @@ test("relayHostsOf reads only the relay hosts from a wallet code", () => {
   assert.deepEqual(relayHostsOf(code), ["relay.example", "two.example"]);
   assert.deepEqual(relayHostsOf("not a code"), []);
   assert.deepEqual(relayHostsOf("nostr+walletconnect://abc?relay=nonsense"), []);
+});
+
+test("a memo names the order, not the shop or the person", () => {
+  assert.deepEqual(memoProblems("Order #15"), []);
+  assert.deepEqual(memoProblems("Facet"), []);
+  assert.deepEqual(memoProblems("Invoice #INV-12"), []);
+  assert.deepEqual(memoProblems(""), []);
+  // 46dd9917: Odoo put the company name in every payer's wallet app.
+  assert.deepEqual(memoProblems("Widget Shop S00012"), ["names the shop"]);
+  assert.deepEqual(memoProblems("Facet from widget  shop"), ["names the shop"]);
+  assert.deepEqual(memoProblems("Order 12 for buyer@example.test"), ["carries an email address"]);
+  assert.deepEqual(memoProblems("NWC settlement"), ["says NWC", "says settlement"]);
+});
+
+test("a QR and an invoice are compared as a wallet reads them", () => {
+  assert.ok(sameInvoice("lightning:lnbc100n1abc", "lnbc100n1abc"));
+  assert.ok(sameInvoice("LIGHTNING:LNBC100N1ABC", "lnbc100n1abc"));
+  assert.ok(sameInvoice(" lnbc100n1abc\n", "lnbc100n1abc"));
+  assert.ok(!sameInvoice("lightning:lnbc100n1abd", "lnbc100n1abc"));
+  assert.ok(!sameInvoice("", "lnbc100n1abc"));
+});
+
+test("apiRoute reads a checkout route from the path or PrestaShop's ?path=", () => {
+  assert.equal(apiRoute("http://shop.test/openreceive/checkouts"), "/openreceive/checkouts");
+  assert.equal(
+    apiRoute("http://shop.test/api/openreceive/payments/check"),
+    "/api/openreceive/payments/check",
+  );
+  assert.equal(
+    apiRoute("http://shop.test/index.php?fc=module&module=openreceive&path=%2Fcheckouts"),
+    "/checkouts",
+  );
+  assert.equal(
+    apiRoute("http://shop.test/module/openreceive/api?path=/swaps/status"),
+    "/swaps/status",
+  );
+  assert.equal(apiRoute("http://shop.test/checkout?step=review"), undefined);
+  assert.equal(apiRoute("http://shop.test/order-confirmation?path=/elsewhere"), undefined);
+});
+
+test("only BTCPay and Bolt stay out of the payer walk", () => {
+  for (const host of ["paymenter", "fossbilling", "prestashop", "odoo", "medusa", "vendure"]) {
+    const platform = { slug: host, host };
+    assert.equal(hasPayerWalk(platform), true, host);
+    assert.equal(typeof payerOrders(platform, "/tmp/shop", "http://127.0.0.1:1"), "function", host);
+  }
+  assert.equal(hasPayerWalk({ slug: "node" }), true);
+  assert.equal(payerOrders({ slug: "node" }, "/tmp/shop", "http://127.0.0.1:1"), undefined);
+  assert.equal(
+    typeof payerOrders({ slug: "woocommerce" }, "/tmp/shop", "http://127.0.0.1:1"),
+    "function",
+  );
+  assert.equal(hasPayerWalk({ slug: "btcpay", host: "btcpay" }), false);
+  assert.equal(hasPayerWalk({ slug: "bolt", host: "bolt" }), false);
+});
+
+// The walk compares the checkout to these, so they must be what each shop was seeded with.
+test("the hosted platforms' payer prices are their seeds' prices", async () => {
+  const platforms = [
+    [paymenterPrices, "paymenter/seed/seed.php", /\['Widget VPS \w+', '([\d.]+)'\]/g],
+    [fossbillingPrices, "fossbilling/seed/seed.php", /\['Widget VPS \w+', '([\d.]+)'\]/g],
+    [prestashopPrices, "prestashop/seed/seed.php", /\['Widget \w+', 'widget-\w+', '([\d.]+)'\]/g],
+    [odooPrices, "odoo/seed/seed.py", /\("\w+", ([\d.]+), "\w+"\)/g],
+    [
+      medusaPrices,
+      "medusa/fixture/medusa/src/scripts/seed.ts",
+      /handle: "\w+", price: ([\d.]+) }/g,
+    ],
+    [vendurePrices, "vendure/fixture/server/products.csv", /,,,\w+,([\d.]+),standard/g],
+  ];
+  for (const [prices, file, row] of platforms) {
+    const text = await readFile(new URL(`../trials/platforms/${file}`, import.meta.url), "utf8");
+    const seeded = [...text.matchAll(row)].map((match) => Math.round(Number(match[1]) * 100));
+    assert.equal(seeded.length, 5, file);
+    assert.deepEqual([...prices], seeded.slice(0, 2), file);
+    // The test provider takes at least 10 USDT.
+    assert.ok(prices[SWAP_PRODUCT - 1] >= 1000, `${file}: product ${SWAP_PRODUCT} is under $10`);
+  }
 });

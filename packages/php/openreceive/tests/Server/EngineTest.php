@@ -447,6 +447,23 @@ final class EngineTest extends TestCase
         }
     }
 
+    /** The helper above is only half of it: the doctor's own report has to use it. */
+    public function testTheDoctorReportSaysTheSkillsAreInstalledWhenTheyAre(): void
+    {
+        $home = sys_get_temp_dir() . '/openreceive-doctor-home-' . bin2hex(random_bytes(4));
+        mkdir("{$home}/.claude", 0777, true);
+        file_put_contents("{$home}/.claude/settings.json", json_encode(['enabledPlugins' => ['openreceive@openreceive' => true]]));
+        try {
+            $report = implode("\n", Doctor::report(['HOME' => $home], null, static fn () => null));
+        } finally {
+            unlink("{$home}/.claude/settings.json");
+            rmdir("{$home}/.claude");
+            rmdir($home);
+        }
+        self::assertStringContainsString('Agent skills: installed (~/.claude/settings.json enables the openreceive plugin)', $report);
+        self::assertStringNotContainsString('npx skills add', $report);
+    }
+
     public function testCustomAndBuiltInRateLimitsAreMutuallyExclusive(): void
     {
         $this->expectException(\OpenReceive\ConfigurationError::class);

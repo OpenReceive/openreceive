@@ -22,7 +22,9 @@
 // so a rule for a Compose project's prefix holds across a container restart
 // that hands the shop a new address.
 //
-// GET /health, GET /stats, POST /reset {client?}, POST /drop {client?, host?}.
+// GET /health, GET /stats, GET /requests {client?}, POST /reset {client?},
+// POST /drop {client?, host?}. /requests lists the NWC requests each shop sent
+// its relay, by arrival time; the harness tells a scan from an invoice.
 
 import { promises as dns } from "node:dns";
 import { readFileSync } from "node:fs";
@@ -30,6 +32,7 @@ import http from "node:http";
 import net from "node:net";
 import { Duplex } from "node:stream";
 import tls from "node:tls";
+import { RelayTap } from "./nwc-tap.mjs";
 import { serverName } from "./sni.mjs";
 
 const LISTEN_PORT = Number(process.env.INTERCEPT_PORT ?? 443);
@@ -47,6 +50,8 @@ const context = tls.createSecureContext({
 /** A ClientHello larger than this is not one. */
 const MAX_HELLO = 18 * 1024;
 const SILENT_HOLD_MS = 180_000;
+/** Enough for any one trial's window; the oldest are dropped first. */
+const MAX_NWC_REQUESTS = 20_000;
 
 /** @type {Array<{client: string, host: string, mode: string, delayMs?: number[], closeAfterMs?: number, until?: number}>} */
 let rules = [];
@@ -54,6 +59,13 @@ let rules = [];
 const stats = new Map();
 /** @type {Set<{client: string, host: string, sockets: Array<{destroy: () => void}>}>} */
 const live = new Set();
+/** @type {Array<{at: number, client: string, host: string, event: object}>} */
+let nwcRequests = [];
+
+function recordNwcRequest(client, host, event) {
+  nwcRequests.push({ at: Date.now(), client, host, event });
+  if (nwcRequests.length > MAX_NWC_REQUESTS) nwcRequests.shift();
+}
 
 function addressOf(socket) {
   return (socket.remoteAddress ?? "").replace(/^::ffff:/, "");
@@ -148,7 +160,16 @@ function pipeUpstream(client, host, secure, rule) {
   secure.on("error", done);
   secure.on("close", done);
   upstream.on("close", done);
-  secure.pipe(upstream);
+  // Forward by hand instead of pipe() so the tap reads every frame the shop sends.
+  const tap = new RelayTap((event) => recordNwcRequest(client, host, event));
+  secure.on("data", (chunk) => {
+    const out = tap.fromClient(chunk);
+    if (out.length > 0 && !upstream.write(out)) {
+      secure.pause();
+      upstream.once("drain", () => secure.resume());
+    }
+  });
+  secure.on("end", () => upstream.end());
   upstream.pipe(secure);
   bump(client, host, "passed");
   if (rule.closeAfterMs !== undefined) {
@@ -268,6 +289,15 @@ const control = http.createServer(async (request, response) => {
       reply(response, 200, { stats: rows, rules, open: live.size });
       return;
     }
+    if (request.method === "GET" && url.pathname === "/requests") {
+      const client = url.searchParams.get("client");
+      const since = Number(url.searchParams.get("since") ?? 0);
+      const requests = nwcRequests.filter(
+        (item) => item.at >= since && (client === null || item.client.startsWith(client)),
+      );
+      reply(response, 200, { requests });
+      return;
+    }
     if (request.method === "POST" && url.pathname === "/rules") {
       const body = await readJson(request);
       const invalid = validRule(body);
@@ -292,8 +322,13 @@ const control = http.createServer(async (request, response) => {
       const body = await readJson(request);
       const client = typeof body.client === "string" ? body.client : undefined;
       rules = client === undefined ? [] : rules.filter((rule) => rule.client !== client);
-      if (client === undefined) stats.clear();
-      else for (const key of [...stats.keys()]) if (key.startsWith(client)) stats.delete(key);
+      if (client === undefined) {
+        stats.clear();
+        nwcRequests = [];
+      } else {
+        for (const key of [...stats.keys()]) if (key.startsWith(client)) stats.delete(key);
+        nwcRequests = nwcRequests.filter((item) => !item.client.startsWith(client));
+      }
       reply(response, 200, { rules });
       return;
     }

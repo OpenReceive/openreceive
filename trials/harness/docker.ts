@@ -24,6 +24,16 @@ export function walletOverrideFile(directory: string): string {
   return `${directory}.wallet.yml`;
 }
 
+/** Beside the shop, never in it: a `--tree` shop's registry settings for its services. */
+export function treeOverrideFile(directory: string): string {
+  return `${directory}.tree.yml`;
+}
+
+/** Beside the shop, mounted into WordPress: lets its HTTP API reach the tree registry. */
+export function treeMuPluginFile(directory: string): string {
+  return `${directory}.tree-mu.php`;
+}
+
 /**
  * COMPOSE_FILE for a shop: its own compose.yml plus the harness's overrides
  * beside it (a hosting platform's variables, the trial wallet's network). No
@@ -31,9 +41,11 @@ export function walletOverrideFile(directory: string): string {
  * without being pointed at them.
  */
 export function shopComposeEnv(directory: string): Record<string, string> {
-  const overrides = [platformOverrideFile(directory), walletOverrideFile(directory)].filter(
-    (file) => existsSync(file),
-  );
+  const overrides = [
+    platformOverrideFile(directory),
+    walletOverrideFile(directory),
+    treeOverrideFile(directory),
+  ].filter((file) => existsSync(file));
   return overrides.length === 0
     ? {}
     : { COMPOSE_FILE: [path.join(directory, "compose.yml"), ...overrides].join(path.delimiter) };
@@ -48,13 +60,16 @@ export function compose(
   args: readonly string[],
   timeoutMs: number,
   /** Keep the output off the console (a shop's whole log). */
-  options: { readonly quiet?: boolean } = {},
+  options: {
+    readonly quiet?: boolean;
+    readonly env?: Readonly<Record<string, string>>;
+  } = {},
 ): Promise<CommandResult> {
   const label = path.basename(cwd);
   return new Promise((resolve, reject) => {
     const child = spawn("docker", ["compose", ...args], {
       cwd,
-      env: { ...process.env, ...shopComposeEnv(cwd) },
+      env: { ...process.env, ...shopComposeEnv(cwd), ...options.env },
     });
     let stdout = "";
     let stderr = "";

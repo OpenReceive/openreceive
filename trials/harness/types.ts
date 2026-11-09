@@ -50,6 +50,20 @@ export interface Scenario {
    * its own opening (a hosting platform's guide prompt).
    */
   readonly opening?: string;
+  /**
+   * The first code the merchant pastes is wrong: `spend-capable` a code that
+   * can also pay out, `swapped` the LSC code when asked for NWC and the
+   * reverse, `swapped-reverse` the NWC code when asked for LSC, once.
+   */
+  readonly firstPaste?: "spend-capable" | "swapped" | "swapped-reverse";
+  /** The merchant has no wallet code yet and says so when asked (merchant.ts). */
+  readonly noCodeYet?: boolean;
+  /** The shop carries the merchant's own AGENTS.md (house-rules); the merchant approves a migration when asked. */
+  readonly houseRules?: boolean;
+  /** Asked once, right after the agent says setup is finished (out-of-scope). */
+  readonly followUp?: string;
+  /** Files laid over the fixture before its first commit: `trials/scenarios/<id>/<platform>/`. */
+  readonly overlay?: boolean;
 }
 
 export interface Platform {
@@ -201,4 +215,6 @@ export interface RunInput {
   readonly nwc: string;
   readonly lsc: string;
   readonly lscBackup?: string;
+  /** The spend-capable code a merchant pasted first, when there was one. */
+  readonly spendNwc?: string;
 }

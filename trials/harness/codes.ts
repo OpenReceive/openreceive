@@ -8,6 +8,8 @@ export interface MerchantCodes {
   readonly lscBackup?: string;
   /** NWC_URI_VERCEL: a separate receive-only code that the Vercel trial stores in Vercel. */
   readonly nwcVercel?: string;
+  /** A spend-capable code from the trial wallet's second service, for the spend-capable scenario. */
+  readonly spendNwc?: string;
 }
 
 const REQUIRED = [
