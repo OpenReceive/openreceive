@@ -88,7 +88,9 @@ module OpenReceive
           status = OpenReceive::Settlement.status(row)
           if %w[settled expired failed].include?(status)
             results[hash] = service.send(:payment_result, hash, row)
-            on_finality&.call(results[hash]) if Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+            # Only a payment commits as found: a wallet-reported failure or
+            # expiry closes nothing until this scan completes.
+            on_finality&.call(results[hash]) if status == "settled" && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
           end
           window.fetch("observations")[hash] = { "status" => status, "transaction_state" => row["transaction_state"] }
         end

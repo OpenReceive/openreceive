@@ -47,7 +47,8 @@ Gem::Specification.new do |spec|
   # 0.3 bounds every call (connect, info fetch, make_invoice) by request_timeout.
   # 0.4 derives the connection's encryption key once per client instead of on
   # every call and notification; the engine memoizes one client per process.
-  spec.add_dependency "nwc-ruby", "~> 0.4"
+  # 0.5 does that derivation in OpenSSL, about 58x faster, and drops `ecdsa`.
+  spec.add_dependency "nwc-ruby", "~> 0.5"
 
   # Test-only: the engine-owned model tests run against in-memory SQLite.
   spec.add_development_dependency "sqlite3", ">= 2.1"

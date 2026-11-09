@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Fixed (PHP): a wallet reply too large for one network read no longer fails the
+  whole reconcile pass. PHP's websocket reader gave up with "Empty read" when a
+  frame arrived in pieces, so once a wallet's page of twenty recent transactions
+  grew large enough, every pass failed and paid orders stayed unpaid. Affects
+  WordPress, Laravel, plain PHP and the PHP billing panels.
+- Fixed (PHP): a relay that drops the connection during a request no longer
+  prints a PHP warning into the checkout's response. On a host with
+  `display_errors` on, the warning went out ahead of the headers, so the payer's
+  browser got a 200 with broken JSON instead of the error it could retry.
+- Fixed (Python, PHP, Ruby): a wallet-reported `failed` or `expired` invoice no
+  longer closes while a wallet scan is still running. If a later page of that
+  scan failed, the row stayed closed even though the scan had not completed.
+  Only a settled payment is committed as it is found, as in JavaScript.
+- Fixed (Node): a relay that cannot be reached now reads as the wallet being
+  unavailable on bundled hosts too. Next's bundler renames the SDK's error classes,
+  so the payer saw "Failed to connect to wss://..." and a 502. Failed publishes
+  and reply timeouts are now classified the same way on every bundler.
+- Changed (agent directions): a project's own rules now win over the directions,
+  so an agent asks and waits when one forbids a step such as running migrations.
+  Shops with no bundler are told to use `renderTransactionDetailsHtml`, because
+  the standalone file has no `createTransactionDetails` and one bad import stops
+  the whole checkout page.
+- Changed (Rails): `openreceive-rails` now requires `nwc-ruby ~> 0.5`. Each
+  connection's encryption key is derived in OpenSSL instead of pure Ruby, about
+  58x faster, and the `ecdsa` gem is no longer installed. A Ruby whose OpenSSL
+  cannot use secp256k1, as in FIPS mode, cannot use 0.5.
 - Removed (Browser, React, Vue, Svelte, Angular): **breaking.** `openWallet`,
   `OpenWalletOptions`, the controller's and `useCheckout`'s `openWallet()`, the
   `open` option, React's `OpenWalletButton` and `components.OpenWalletButton`,

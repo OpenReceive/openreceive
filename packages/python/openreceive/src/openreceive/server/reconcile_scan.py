@@ -123,7 +123,9 @@ def scan_slice(
                 continue
             if status in ("settled", "expired", "failed"):
                 results[payment_hash] = service._payment_result(payment_hash, row)
-                if on_finality is not None and time.monotonic() < deadline:
+                # Only a payment commits as found: a wallet-reported failure or
+                # expiry closes nothing until this scan completes.
+                if status == "settled" and on_finality is not None and time.monotonic() < deadline:
                     on_finality(results[payment_hash])
             window["observations"][payment_hash] = {
                 "status": status,

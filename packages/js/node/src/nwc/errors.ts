@@ -136,7 +136,25 @@ function knownErrorCode(error: unknown): ErrorCode | undefined {
   return undefined;
 }
 
+/**
+ * @getalby/sdk's transport failures, recognized by their text. Its classes do
+ * not survive a bundler (Next renames them), and a publish that failed comes
+ * with code INTERNAL. Neither must reach the payer as "Failed to connect to
+ * wss://…" or "failed to publish: AggregateError".
+ */
+function sdkTransportCode(records: readonly Record<string, unknown>[]): ErrorCode | undefined {
+  for (const record of records) {
+    const message = record.message;
+    if (typeof message !== "string") continue;
+    if (/^failed to (?:connect to|publish\b)/i.test(message)) return "WALLET_UNAVAILABLE";
+    if (/^(?:reply|publish) timeout\b/i.test(message)) return "TIMEOUT";
+  }
+  return undefined;
+}
+
 function errorCodeFromRecords(records: readonly Record<string, unknown>[]): ErrorCode | undefined {
+  const transport = sdkTransportCode(records);
+  if (transport !== undefined) return transport;
   for (const record of records) {
     const directCode =
       normalizeNwcErrorCode(record.code) ??

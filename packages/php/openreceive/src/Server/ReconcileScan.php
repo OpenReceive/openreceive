@@ -78,9 +78,10 @@ final class ReconcileScan
                 $window['observations'][$hash] = ['status' => $status, 'transaction_state' => $row['transaction_state'] ?? null];
                 if (in_array($status, ['settled', 'expired', 'failed'], true)) {
                     $checked = $service->paymentResult($hash, $row);
-                    // Commit evidence while this page is available. A later page
-                    // failure cannot erase already authenticated wallet finality.
-                    if ($onPositive !== null && !$onPositive($checked)) continue;
+                    // Commit a payment while this page is available: a later page
+                    // failure cannot erase authenticated wallet evidence. A wallet-reported
+                    // failure or expiry closes nothing until this scan completes.
+                    if ($status === 'settled' && $onPositive !== null && !$onPositive($checked)) continue;
                     $results[$hash] = $checked;
                 }
             }

@@ -7,7 +7,9 @@ namespace OpenReceive\Nwc\Transport;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\StreamHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use OpenReceive\Nwc\WalletUnavailableError;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
 use Valtzu\WebSocketMiddleware\WebSocketMiddleware;
 
@@ -106,6 +108,10 @@ final class RelayConnector
     {
         $stack = new HandlerStack(new StreamHandler());
         $stack->unshift(new WebSocketMiddleware());
+        // Pushed after, so it sits nearer the socket than the websocket reader.
+        $stack->push(Middleware::mapResponse(static fn (ResponseInterface $response): ResponseInterface => $response->getStatusCode() === 101
+            ? $response->withBody(new WholeFrameStream($response->getBody()))
+            : $response));
         $client = new Client(['handler' => $stack, 'timeout' => $timeout, 'connect_timeout' => $timeout]);
         $response = $client->requestAsync('GET', $relay)->wait();
         if ($response->getStatusCode() !== 101) {

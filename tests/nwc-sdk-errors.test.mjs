@@ -22,12 +22,15 @@ test("an SDK relay that never connected is WALLET_UNAVAILABLE and retryable", ()
   assert.equal(body.retryable, true);
 });
 
-test("SDK publish failures and reply timeouts map to their own codes", () => {
+test("SDK publish failures and reply timeouts are transport failures, whatever code they carry", () => {
   assert.equal(
-    normalizeNwcWalletError(new Nip47PublishError("Failed to publish: x", "INTERNAL")).toJSON()
-      .code,
-    "INTERNAL",
-    "a code the SDK names wins over the class",
+    normalizeNwcWalletError(
+      new Nip47PublishError(
+        "failed to publish: AggregateError: All promises were rejected",
+        "INTERNAL",
+      ),
+    ).toJSON().code,
+    "WALLET_UNAVAILABLE",
   );
   assert.equal(
     normalizeNwcWalletError(new Nip47PublishError("Failed to publish: x", "OTHER")).toJSON().code,
@@ -36,11 +39,29 @@ test("SDK publish failures and reply timeouts map to their own codes", () => {
   const timeout = normalizeNwcWalletError(
     new Nip47ReplyTimeoutError("reply timeout: event abc", "INTERNAL"),
   ).toJSON();
-  assert.equal(timeout.code, "INTERNAL");
-  assert.equal(
-    normalizeNwcWalletError(new Nip47ReplyTimeoutError("reply timeout", "OTHER")).toJSON().code,
-    "TIMEOUT",
-  );
+  assert.equal(timeout.code, "TIMEOUT");
+  assert.equal(timeout.retryable, true);
+});
+
+test("an SDK transport error in other words is still classified by its class", () => {
+  // The text path only knows today's wording: an unbundled host has the class too.
+  const network = normalizeNwcWalletError(new Nip47NetworkError("the relay went away", "OTHER"));
+  assert.equal(network.toJSON().code, "WALLET_UNAVAILABLE");
+  assert.equal(network.toJSON().retryable, true);
+  const timeout = normalizeNwcWalletError(new Nip47ReplyTimeoutError("no reply came", "OTHER"));
+  assert.equal(timeout.toJSON().code, "TIMEOUT");
+});
+
+test("a bundler renaming the SDK's classes changes nothing: the text says what failed", () => {
+  // Next's server build: no class name, code OTHER, the relay URL as the text.
+  class a extends Error {
+    code = "OTHER";
+  }
+  const body = normalizeNwcWalletError(
+    new a("Failed to connect to wss://relay.example/v1"),
+  ).toJSON();
+  assert.equal(body.code, "WALLET_UNAVAILABLE");
+  assert.equal(body.retryable, true);
 });
 
 test("a wallet's own error keeps the wallet's code; an unknown one stays OTHER", () => {
