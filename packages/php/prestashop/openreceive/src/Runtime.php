@@ -18,7 +18,7 @@ use OpenReceive\Storage\SqlPaymentRepository;
  */
 final class Runtime
 {
-    public const VERSION = '0.4.32';
+    public const VERSION = '0.4.33';
 
     /** The module's name: its folder is modules/openreceive. */
     public const MODULE = 'openreceive';

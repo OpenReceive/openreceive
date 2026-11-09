@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module OpenReceive
-  VERSION = "0.4.32"
+  VERSION = "0.4.33"
 end

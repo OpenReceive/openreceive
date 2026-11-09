@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.33 - 2026-11-09
+
+- Fixed: a process started while the wallet's relay is down now starts.
+  Checkouts answer a retryable `503 WALLET_UNAVAILABLE` and try the wallet
+  again after a short wait. A code that is wrong still stops the start.
+- Fixed: `POST /checkouts/prepare` answers a `paid` object for a paid reference,
+  so a checkout reopened on another device shows its receipt. `POST /checkouts`
+  and `POST /swaps` refuse a paid reference with 409 before asking for a price.
+- Fixed: a swap the provider refuses answers `502` "The swap provider refused
+  this request.", and a provider 429, an outage or an exhausted call budget
+  answers a retryable `503`. All of them were "Internal server error.".
+
 ## 0.4.32 - 2026-11-07
 
 Release with the complete 0.4.32 package family. No runtime changes from

@@ -1,7 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.4.33 - 2026-11-09
 
+- Removed (Browser, React, Vue, Svelte, Angular): **breaking.** `openWallet`,
+  `OpenWalletOptions`, the controller's and `useCheckout`'s `openWallet()`, the
+  `open` option, React's `OpenWalletButton` and `components.OpenWalletButton`,
+  `classNames.openWalletButton`, the `onOpenWallet` handler,
+  `checkoutLabels.openWallet` and the `openreceive-open-wallet` event. Cash App
+  cancels an invoice opened from a link and pays the same invoice scanned or
+  pasted, so a wallet button fails for every payer using Cash App. Show the QR
+  code and Copy invoice. Agent directions now say not to build one.
 - Fixed (all languages): `doctor` now fails when the wallet will not accept the
   code. A wallet publishes its methods for anyone to read, so a code with a wrong
   secret could pass and then fail every checkout. Doctor now sends one signed
@@ -52,14 +60,6 @@
   connection's encryption key is derived in OpenSSL instead of pure Ruby, about
   58x faster, and the `ecdsa` gem is no longer installed. A Ruby whose OpenSSL
   cannot use secp256k1, as in FIPS mode, cannot use 0.5.
-- Removed (Browser, React, Vue, Svelte, Angular): **breaking.** `openWallet`,
-  `OpenWalletOptions`, the controller's and `useCheckout`'s `openWallet()`, the
-  `open` option, React's `OpenWalletButton` and `components.OpenWalletButton`,
-  `classNames.openWalletButton`, the `onOpenWallet` handler,
-  `checkoutLabels.openWallet` and the `openreceive-open-wallet` event. Cash App
-  cancels an invoice opened from a link and pays the same invoice scanned or
-  pasted, so a wallet button fails for every payer using Cash App. Show the QR
-  code and Copy invoice. Agent directions now say not to build one.
 - Changed (provider data): Cash App is now first in the Lightning wallet list,
   above Rizful, so its copy-and-paste walkthrough is the first one payers see.
 - Changed (Browser, React, Vue, Svelte, Angular): a wallet's pay tutorial is now

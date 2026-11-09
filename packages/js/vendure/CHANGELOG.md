@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.33 - 2026-11-09
+
+- No changes to the plugin's own code. It picks up the engine fixes of 0.4.33:
+  a checkout reopened for a paid order opens on its receipt, a relay handshake
+  slower than 3 s no longer fails the checkout, and a relay that stops answering
+  reaches the buyer as a retryable 503.
+
 ## 0.4.32 - 2026-11-07
 
 - Added: this changelog now ships in the npm package, for Vendure's plugin

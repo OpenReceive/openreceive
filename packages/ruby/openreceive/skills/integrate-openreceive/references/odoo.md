@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/odoo/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.32.
+These directions describe OpenReceive 0.4.33.
 
 Install and configure the OpenReceive payment provider in the Odoo you are
 working in. Preserve its website, customers, products, orders, invoices and
@@ -103,7 +103,7 @@ manager, so build an image that adds it:
    FROM odoo:<tag>
    USER root
    RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed typing_extensions h11 \
-    && pip3 install --no-cache-dir --break-system-packages openreceive==0.4.32
+    && pip3 install --no-cache-dir --break-system-packages openreceive==0.4.33
    USER odoo
    ```
 
@@ -114,9 +114,9 @@ manager, so build an image that adds it:
    (the folder that holds the Dockerfile). Change nothing else in the file.
 3. Run `docker compose up -d --build`.
 
-On a server, install `openreceive==0.4.32` with the pip of the Python
+On a server, install `openreceive==0.4.33` with the pip of the Python
 that runs Odoo (its virtualenv when it has one). On Odoo.sh, add
-`openreceive==0.4.32` to the repository's `requirements.txt`. If you
+`openreceive==0.4.33` to the repository's `requirements.txt`. If you
 cannot tell which Python runs Odoo, say so and stop.
 
 The module is the ZIP attached to this GitHub release, with its folder,
@@ -127,8 +127,8 @@ folder on the config file's `addons_path`. Never install the GitHub
 source-code ZIP or a ZIP from an older release.
 
 ```sh
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.32/openreceive-odoo-0.4.32.zip
-unzip -oq openreceive-odoo-0.4.32.zip -d <that folder> && rm openreceive-odoo-0.4.32.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.33/openreceive-odoo-0.4.33.zip
+unzip -oq openreceive-odoo-0.4.33.zip -d <that folder> && rm openreceive-odoo-0.4.33.zip
 ```
 
 Then install it into the database and restart Odoo:
@@ -282,16 +282,16 @@ from a terminal:
 
 ```sh
 cd /path/to/your/addons
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.32/openreceive-odoo-0.4.32.zip
-unzip -oq openreceive-odoo-0.4.32.zip && rm openreceive-odoo-0.4.32.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.33/openreceive-odoo-0.4.33.zip
+unzip -oq openreceive-odoo-0.4.33.zip && rm openreceive-odoo-0.4.33.zip
 odoo -d <database> -i payment_openreceive --stop-after-init
 ```
 
 How the Python package gets in depends on how Odoo runs:
 
 - **Odoo.sh**: commit the `payment_openreceive` folder to your repository and
-  add `openreceive==0.4.32` to the repository's `requirements.txt`.
-- **A source install with a virtualenv**: `pip install openreceive==0.4.32`
+  add `openreceive==0.4.33` to the repository's `requirements.txt`.
+- **A source install with a virtualenv**: `pip install openreceive==0.4.33`
   in Odoo's virtualenv.
 - **Odoo's Docker image** or **its Debian package**: see below.
 
@@ -311,7 +311,7 @@ manager. Build your own image on top of it: put this `Dockerfile` next to your
 FROM odoo:19.0
 USER root
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed typing_extensions h11 \
- && pip3 install --no-cache-dir --break-system-packages openreceive==0.4.32
+ && pip3 install --no-cache-dir --break-system-packages openreceive==0.4.33
 USER odoo
 ```
 
