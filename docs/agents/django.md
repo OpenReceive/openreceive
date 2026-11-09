@@ -488,7 +488,7 @@ pip install "openreceive[django]"
 That is the whole install. `openreceive[django]` brings Django. The base
 package brings the wallet client (websockets, coincurve, cryptography), the
 HTTP engine and the `openreceive` CLI. Use `uv` or a virtualenv on Python 3.10
-or newer. A system Python 3.9 cannot install it. If your app brings its own NWC
+to 3.13. A system Python 3.9 cannot install it, and 3.14 cannot yet, because `coincurve` has no build for it. If your app brings its own NWC
 client, set `OPENRECEIVE["SERVICE"]` instead (see below).
 
 Then add the app, point it at a host class, and mount the routes:

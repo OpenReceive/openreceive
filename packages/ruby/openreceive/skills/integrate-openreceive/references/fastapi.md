@@ -501,8 +501,8 @@ with the Django quickstart. A page without a bundler uses
 | Server   | `openreceive[fastapi]`, `openreceive[django]`, `openreceive[sqlalchemy]` (Flask and plain WSGI/ASGI: [the Flask quickstart](https://openreceive.org/guides/quickstart-flask.md)) |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Use `uv` or a virtualenv on Python 3.10 or newer. A system Python 3.9 cannot
-install the package.
+Use `uv` or a virtualenv on Python 3.10 to 3.13. A system Python 3.9 cannot
+install the package, and 3.14 cannot yet, because `coincurve` has no build for it.
 
 ### 2. Migrate the payment tables
 

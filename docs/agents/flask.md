@@ -507,8 +507,8 @@ wallet client (websockets, coincurve, cryptography), the HTTP engine, the
 with Jinja templates needs no npm. Add your database driver if the app does
 not have one yet, such as `psycopg[binary]` for Postgres.
 
-Use `uv` or a virtualenv on Python 3.10 or newer. A system Python 3.9 cannot
-install the package.
+Use `uv` or a virtualenv on Python 3.10 to 3.13. A system Python 3.9 cannot
+install the package, and 3.14 cannot yet, because `coincurve` has no build for it.
 
 ### 2. Create the payment tables
 

@@ -30,8 +30,8 @@ guide covers what changes when the server is serverless.
   [the durable scan gate](deploying.md#the-durable-scan-gate). A cron job
   cannot stand in for that, and nothing needs one: a scheduled run every few
   minutes is not a checkout, and a once-a-day run is far too slow.
-- **A Node or Python server runtime.** Node 22 or newer, or Python 3.10 or
-  newer. An Edge runtime is not a Node server: keep the payment route on Node.
+- **A Node or Python server runtime.** Node 22 or newer, or Python 3.10 to
+  3.13. An Edge runtime is not a Node server: keep the payment route on Node.
   For Cloudflare Workers, see the [TanStack Start recipe](../recipes/tanstack-start.md).
 - **The codes in the host's environment variables.** Put `NWC_URI` (and
   `LSC_URI_PRIMARY` for swaps) in the host's settings for secrets, never in

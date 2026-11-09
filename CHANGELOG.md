@@ -313,6 +313,10 @@
   payer's session, the checkout routes, a wire field name or a bare error code
   such as `FORBIDDEN`.
 
+- Docs (Python): the install guides now say Python 3.10 to 3.13. On 3.14 the
+  install stops with "Failed to build `coincurve`", because that library has no
+  3.14 build yet. The guides used to say "3.10 or newer".
+
 ## 0.4.32 - 2026-11-07
 
 - Fixed (Node): one failed wallet check at start-up no longer takes payments
