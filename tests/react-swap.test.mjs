@@ -5,21 +5,21 @@ import test from "node:test";
 // do not assert that output, so keep the runner quiet unless explicitly overridden.
 process.env.LOG_LEVEL ??= "error";
 
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import {
+  checkoutLabels,
+  createBlockExplorerUrl,
+  createDetailExternalLink,
+  createLightningInvoiceDecodeUrl,
   createSwapDisplayModel,
   createTransactionDetails,
-  createBlockExplorerUrl,
-  createLightningInvoiceDecodeUrl,
-  createDetailExternalLink,
   getExplorerNetwork,
   swapDepositRisk,
-  checkoutLabels,
 } from "@openreceive/browser/headless";
+import { renderSwapDepositPanel, TransactionDetails } from "@openreceive/react";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { getSwapConfirmationWaitHint } from "../packages/js/browser/src/internal/checkout-swap-view.ts";
-import { TransactionDetails, renderSwapDepositPanel } from "@openreceive/react";
 import { renderElementSwapPanelHtml } from "../packages/js/elements/src/render-swap-panel.ts";
 
 test("swap confirming copy includes network-specific wait guidance", () => {
@@ -467,6 +467,42 @@ test("react refund screen tells the payer to bookmark only when the checkout is 
 // every amount the payer is shown is the deposit amount in the token, and the
 // fiat valuation of the pay-in side appears nowhere — not in the breakdown, not
 // in the transaction details.
+test("both renderers take the Total from the checkout when the attempt has no quote", () => {
+  const invoice = {
+    invoice_id: "or_inv_noquote",
+    rail: "swap",
+    transaction_state: "pending",
+    swap: {
+      attempt_id: "or_swp_noquote",
+      provider: "fixedfloat",
+      provider_order_id: "NOQUOTE",
+      pay_in_asset: "SOL_SOL",
+      deposit_address: "SoLDepositAddress",
+      deposit_amount: "0.1",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+      fee: { currency: "USD", pay_in_fiat: "16.40", payout_fiat: "15.86" },
+    },
+  };
+  const fiat = { currency: "USD", value: "12.00" };
+  const reactHtml = renderToStaticMarkup(
+    renderSwapDepositPanel({
+      invoice,
+      checkout: { reference: "order", checkout_id: "or_inv_noquote", fiat },
+      onBack: () => undefined,
+      onRefund: async () => undefined,
+    }),
+  );
+  const elementHtml = renderElementSwapPanelHtml(invoice, { fiat });
+  for (const [name, html] of [
+    ["React", reactHtml],
+    ["element", elementHtml],
+  ]) {
+    assert.match(html, /\$12\.00/, `${name} shows the price the payer saw`);
+    assert.doesNotMatch(html, /\$15\.86/, `${name} must not show the provider's valuation`);
+  }
+});
+
 test("a pegged stablecoin checkout shows one amount to send, in both renderers", () => {
   const swap = {
     attempt_id: "or_swp_usdc",

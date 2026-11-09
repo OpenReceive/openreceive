@@ -1,13 +1,13 @@
 // The provider tutorial modal and the "open provider" action the wizard links
 // it from. React's counterpart is react/src/provider-tutorial.ts.
 import {
+  checkoutLabels,
   createLightningInvoiceDecodeUrl,
   escapeHtml,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
-  checkoutLabels,
+  orClasses,
   type WizardProviderDisplay,
   type WizardRouteDisplay,
-  orClasses,
 } from "@openreceive/browser/headless";
 
 export function renderProviderOpenActionHtml(provider: WizardProviderDisplay): string {
@@ -25,7 +25,23 @@ export function renderProviderOpenActionHtml(provider: WizardProviderDisplay): s
   `;
 }
 
-function renderCopyStepHtml(copied: boolean): string {
+function renderCopyStepHtml(copied: boolean, copyRefused: boolean, invoice: string): string {
+  if (copyRefused) {
+    return `
+    <li>
+      <div part="tutorial-copy-by-hand" class="${orClasses.tutorialStep}"><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">1</span><span>${escapeHtml(checkoutLabels.tutorialCopyByHand)}</span></div>
+      <input
+        part="tutorial-invoice"
+        class="${orClasses.swapDetailsInput}"
+        type="text"
+        readonly
+        value="${escapeHtml(invoice)}"
+        aria-label="${escapeHtml(checkoutLabels.tutorialCopyByHand)}"
+        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapSelectAll}
+      />
+    </li>
+  `;
+  }
   return `
     <li>
       <button
@@ -62,6 +78,7 @@ export function renderTutorialModalHtml(
   copied: boolean,
   lightningInvoice?: string,
   decodeLinkUrl?: string,
+  copyRefused = false,
 ): string {
   if (activeProviderId === null) return "";
   const provider = routes
@@ -73,9 +90,11 @@ export function renderTutorialModalHtml(
   // Copying comes first whenever there is an invoice to copy: the wallet steps
   // end with pasting it, so they stay greyed out until the copy has worked. Then
   // the whole route shows at once, because a payer on one phone can't flip
-  // between this page and the wallet for each step.
+  // between this page and the wallet for each step. A browser that refuses the
+  // copy must not end the payment there: the steps open and step 1 becomes the
+  // invoice to copy by hand.
   const copySteps = hasInvoice ? 1 : 0;
-  const copyPending = hasInvoice && !copied;
+  const copyPending = hasInvoice && !copied && !copyRefused;
   const decodeHref = hasInvoice
     ? createLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl)
     : undefined;
@@ -100,7 +119,7 @@ export function renderTutorialModalHtml(
           >X</button>
         </div>
         <ol part="tutorial-steps" class="${orClasses.tutorialSteps}">
-          ${hasInvoice ? renderCopyStepHtml(copied) : ""}
+          ${hasInvoice ? renderCopyStepHtml(copied, copyRefused, lightningInvoice) : ""}
           ${provider.tutorials
             .map((tutorial, index) =>
               renderTutorialStepHtml(tutorial, index + copySteps + 1, copyPending),

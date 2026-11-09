@@ -11,6 +11,7 @@ import {
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
 import { LSC_ENV_NAMES, readLscConnectionsFromEnvironment } from "./lsc-uri.ts";
+import { normalizeNwcWalletError } from "./nwc/errors.ts";
 import { runScaffoldPayments, SCAFFOLD_PAYMENTS_HELP } from "./scaffold/index.ts";
 import { scanBuild } from "./scan-build.ts";
 import { redactSecrets } from "./service/logging.ts";
@@ -19,13 +20,14 @@ export interface CliIo {
   write(message: string): void;
 }
 
-/** The two doctor probe methods a wallet client must answer. */
+/** The doctor probe methods a wallet client must answer. */
 export interface DoctorWalletClient {
   preflight(): Promise<{
     readonly methods: readonly string[];
     readonly spendCapabilityAdvertised: boolean;
     readonly warnings: readonly string[];
   }>;
+  listTransactions(request: { readonly limit: number }): Promise<unknown>;
   close(): Promise<void>;
 }
 
@@ -394,6 +396,14 @@ function withEnvFiles(
   return { env: merged, files, checked };
 }
 
+const WALLET_SILENT_MESSAGE = `the wallet published its details but did not answer a signed request within ${WALLET_PROBE_TIMEOUT_MS / 1000}s. The secret in NWC_URI may be wrong, or the wallet may be offline. Copy the code from your wallet again and rerun.`;
+
+/** The line for a wallet that refused this code; undefined for any other failure. */
+function walletRefusalLine(error: unknown): string | undefined {
+  if (normalizeNwcWalletError(error).code !== "UNAUTHORIZED") return undefined;
+  return `wallet: the wallet refused this code (UNAUTHORIZED). The secret in NWC_URI is wrong, or the connection was removed from the wallet. Get a fresh receive-only code: ${OPENRECEIVE_NWC_CODE_HELP_URL}`;
+}
+
 /**
  * Connect to the wallet relay and prove the code is receive-only, exactly as
  * boot preflight would — so `doctor` catches a spend-capable or unreachable
@@ -421,20 +431,19 @@ async function probeWallet(input: {
     spendCapabilityWarning: (message) => overrideWarnings.push(message),
   });
   let timer: NodeJS.Timeout | undefined;
-  try {
-    const summary = await Promise.race([
-      client.preflight(),
+  const inTime = <T>(work: Promise<T>, message: string): Promise<T> =>
+    Promise.race([
+      work,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(
-            new Error(
-              `no relay answered within ${WALLET_PROBE_TIMEOUT_MS / 1000}s. Check the network and the wss relay in the NWC code, or rerun with --offline to skip the probe.`,
-            ),
-          );
-        }, WALLET_PROBE_TIMEOUT_MS);
+        timer = setTimeout(() => reject(new Error(message)), WALLET_PROBE_TIMEOUT_MS);
         timer.unref?.();
       }),
-    ]);
+    ]).finally(() => clearTimeout(timer));
+  try {
+    const summary = await inTime(
+      client.preflight(),
+      `no relay answered within ${WALLET_PROBE_TIMEOUT_MS / 1000}s. Check the network and the wss relay in the NWC code, or rerun with --offline.`,
+    );
     if (summary.spendCapabilityAdvertised) {
       // Reachable only with the explicit override; without it preflight throws.
       return {
@@ -445,6 +454,16 @@ async function probeWallet(input: {
         ],
       };
     }
+    // Everything read so far is public: a wallet publishes its methods for
+    // anyone to read, so a wrong secret gets this far. Only a signed request
+    // proves the wallet accepts this code, and reading a history row changes
+    // nothing.
+    try {
+      await inTime(client.listTransactions({ limit: 1 }), WALLET_SILENT_MESSAGE);
+    } catch (error) {
+      if (normalizeNwcWalletError(error).code === "TIMEOUT") throw new Error(WALLET_SILENT_MESSAGE);
+      throw error;
+    }
     return {
       ok: true,
       lines: [
@@ -453,9 +472,8 @@ async function probeWallet(input: {
       ],
     };
   } catch (error) {
-    return { ok: false, lines: [`wallet: ${safeErrorMessage(error)}`] };
+    return { ok: false, lines: [walletRefusalLine(error) ?? `wallet: ${safeErrorMessage(error)}`] };
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
     try {
       await client.close();
     } catch {

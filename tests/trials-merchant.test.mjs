@@ -638,6 +638,14 @@ test("the Save checks fail on a notice that blames the codes", () => {
   assert.equal(saveAcceptedCheck([blamed]).pass, false);
   assert.equal(saveAcceptedCheck([]).pass, false);
   assert.equal(saveRelaySilentCheck([blamed]).pass, false);
+  // Easy Digital Downloads adds its own success notice after a failed save.
+  assert.equal(
+    saveRelaySilentCheck([
+      "OpenReceive settings were not saved: the wallet's relay did not answer in time. Your codes were not changed.",
+      "Settings updated.",
+    ]).pass,
+    false,
+  );
   assert.equal(
     saveRelaySilentCheck([
       "OpenReceive settings were not saved: the wallet's relay did not answer in time. Your codes were not checked. Press Save again.",

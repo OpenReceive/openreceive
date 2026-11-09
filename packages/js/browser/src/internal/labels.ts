@@ -42,6 +42,7 @@ export const checkoutLabels = {
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
   tutorialInvoiceCopied: "✓ Invoice copied",
+  tutorialCopyByHand: "Press and hold to copy",
   tutorialDone: "Done",
   lightningNetwork: "Lightning Network",
   chooseNetwork: "Choose network",

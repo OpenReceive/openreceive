@@ -17,6 +17,7 @@ from typing import Any
 
 from openreceive._version import __version__
 from openreceive.nwc import info as wallet_info
+from openreceive.nwc.errors import WalletError
 from openreceive.nwc.uri import NWC_CODE_HELP_URL, NwcUriParseError, parse_uri
 from openreceive.server.hosts import Host
 from openreceive.server.service import redact_secrets
@@ -130,6 +131,24 @@ def agent_skills_line(cwd: Path, home: str | None) -> str:
     )
 
 
+def wallet_refusal_line(error: WalletError) -> str | None:
+    """What a wallet's answer to the signed request says about the code; None
+    for any other failure."""
+    if error.code == "UNAUTHORIZED":
+        return (
+            "wallet: the wallet refused this code (UNAUTHORIZED). The secret in NWC_URI is wrong, "
+            "or the connection was removed from the wallet. "
+            f"Get a fresh receive-only code: {NWC_CODE_HELP_URL}"
+        )
+    if error.code == "TIMEOUT":
+        return (
+            "wallet: the wallet published its details but did not answer a signed request within "
+            f"{WALLET_PROBE_TIMEOUT_SECONDS:g}s. The secret in NWC_URI may be wrong, or the wallet "
+            "may be offline. Copy the code from your wallet again and rerun."
+        )
+    return None
+
+
 def probe_wallet(
     nwc: str, env: Mapping[str, str], factory: Callable[[str], Any] | None
 ) -> DoctorReport:
@@ -163,8 +182,18 @@ def probe_wallet(
                     *(f"wallet: {warning}" for warning in summary["warnings"]),
                 ],
             )
+        # Everything read so far is public: a wallet publishes its methods for
+        # anyone to read, so a wrong secret gets this far. Only a signed request
+        # proves the wallet accepts this code, and reading a history row
+        # changes nothing.
+        client.list_transactions({"limit": 1})
         return DoctorReport(
             True, [f"wallet: reachable, receive-only ({', '.join(summary['methods'])})"]
+        )
+    except WalletError as error:
+        refusal = wallet_refusal_line(error)
+        return DoctorReport(
+            False, [refusal or f"wallet: {redact_secrets(f'{type(error).__name__}: {error}')}"]
         )
     except Exception as error:
         return DoctorReport(

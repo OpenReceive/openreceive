@@ -1,12 +1,13 @@
 // The provider tutorial modal and the "open provider" action the wizard links
 // it from. The elements counterpart is elements/src/render-provider-tutorial.ts.
 import {
-  createLightningInvoiceDecodeUrl,
   checkoutLabels,
-  type WizardProviderDisplay,
+  createLightningInvoiceDecodeUrl,
   orClasses,
+  type WizardProviderDisplay,
 } from "@openreceive/browser/headless";
 import * as React from "react";
+import { selectAllInputHandlers } from "./utils.ts";
 
 export function renderProviderOpenAction(
   provider: WizardProviderDisplay,
@@ -39,6 +40,7 @@ export function renderProviderOpenAction(
 export function ProviderTutorialModal(options: {
   readonly provider: WizardProviderDisplay;
   readonly copied: boolean;
+  readonly copyRefused?: boolean;
   readonly invoice: string;
   readonly decodeLinkUrl?: string;
   readonly onClose: () => void;
@@ -65,6 +67,13 @@ export function ProviderTutorialModal(options: {
       opener?.focus();
     };
   }, []);
+  const copyRefused = options.copyRefused === true;
+  const invoiceFieldRef = React.useRef<HTMLInputElement | null>(null);
+  React.useEffect(() => {
+    if (!copyRefused) return;
+    invoiceFieldRef.current?.focus();
+    invoiceFieldRef.current?.select();
+  }, [copyRefused]);
   const trapTab = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== "Tab") return;
     const dialog = dialogRef.current;
@@ -87,7 +96,7 @@ export function ProviderTutorialModal(options: {
     }
   };
   if (provider.tutorials.length === 0) return null;
-  const copyPending = copySteps === 1 && !options.copied;
+  const copyPending = copySteps === 1 && !options.copied && !copyRefused;
   const decodeHref = createLightningInvoiceDecodeUrl(options.invoice, options.decodeLinkUrl);
 
   return React.createElement(
@@ -147,28 +156,54 @@ export function ProviderTutorialModal(options: {
           ? React.createElement(
               "li",
               { key: "copy" },
-              React.createElement(
-                "button",
-                {
-                  className: options.copied
-                    ? orClasses.tutorialCopyStepDone
-                    : orClasses.tutorialCopyStep,
-                  onClick: () => void options.onCopy(),
-                  type: "button",
-                },
-                React.createElement(
-                  "span",
-                  { "aria-hidden": true, className: orClasses.tutorialStepNumber },
-                  1,
-                ),
-                React.createElement(
-                  "span",
-                  null,
-                  options.copied
-                    ? checkoutLabels.tutorialInvoiceCopied
-                    : checkoutLabels.copyInvoice,
-                ),
-              ),
+              ...(copyRefused
+                ? [
+                    React.createElement(
+                      "div",
+                      { key: "label", className: orClasses.tutorialStep },
+                      React.createElement(
+                        "span",
+                        { "aria-hidden": true, className: orClasses.tutorialStepNumber },
+                        1,
+                      ),
+                      React.createElement("span", null, checkoutLabels.tutorialCopyByHand),
+                    ),
+                    React.createElement("input", {
+                      key: "invoice",
+                      ref: invoiceFieldRef,
+                      "aria-label": checkoutLabels.tutorialCopyByHand,
+                      className: orClasses.swapDetailsInput,
+                      readOnly: true,
+                      type: "text",
+                      value: options.invoice,
+                      ...selectAllInputHandlers(),
+                    }),
+                  ]
+                : [
+                    React.createElement(
+                      "button",
+                      {
+                        key: "button",
+                        className: options.copied
+                          ? orClasses.tutorialCopyStepDone
+                          : orClasses.tutorialCopyStep,
+                        onClick: () => void options.onCopy(),
+                        type: "button",
+                      },
+                      React.createElement(
+                        "span",
+                        { "aria-hidden": true, className: orClasses.tutorialStepNumber },
+                        1,
+                      ),
+                      React.createElement(
+                        "span",
+                        null,
+                        options.copied
+                          ? checkoutLabels.tutorialInvoiceCopied
+                          : checkoutLabels.copyInvoice,
+                      ),
+                    ),
+                  ]),
             )
           : null,
         provider.tutorials.map((tutorial, index) =>

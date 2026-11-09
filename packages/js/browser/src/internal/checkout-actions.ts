@@ -4,7 +4,10 @@
 // URL) or copy it. Each action refuses anything `assertInvoice` rejects, and a
 // copy logs what it did.
 
+import { recordOrEmpty } from "@openreceive/core";
 import * as defaultQrEncoder from "qrcode";
+import { assertInvoice, createLightningUri } from "./checkout-invoice.ts";
+import { emitBrowserLog } from "./checkout-log.ts";
 import {
   type CopyInvoiceOptions,
   OPENRECEIVE_QR_DARK_COLOR,
@@ -14,9 +17,6 @@ import {
   type QrEncoder,
   type QrOptions,
 } from "./ui.ts";
-import { recordOrEmpty } from "@openreceive/core";
-import { assertInvoice, createLightningUri } from "./checkout-invoice.ts";
-import { emitBrowserLog } from "./checkout-log.ts";
 
 export async function createQrSvg(invoice: string, options: QrOptions = {}): Promise<string> {
   return await createQrPayloadSvg(createLightningUri(invoice), options);
@@ -67,13 +67,18 @@ export async function createQrPngDataUrl(
 
 export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
   assertInvoice(options.invoice);
-  const clipboard = options.clipboard ?? globalThis.navigator?.clipboard;
-
-  if (clipboard === undefined) {
-    throw new Error("Clipboard API is unavailable.");
+  try {
+    await writeToClipboard(options.invoice, options.clipboard);
+  } catch (error) {
+    emitBrowserLog(
+      options.logger,
+      "warn",
+      "checkout.invoice.copy_refused",
+      "The browser refused to copy the Lightning invoice.",
+      options.logContext,
+    );
+    throw error;
   }
-
-  await clipboard.writeText(options.invoice);
   emitBrowserLog(
     options.logger,
     "info",
@@ -81,6 +86,48 @@ export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
     "Copied Lightning invoice to clipboard.",
     options.logContext,
   );
+}
+
+async function writeToClipboard(
+  text: string,
+  injected: Pick<Clipboard, "writeText"> | undefined,
+): Promise<void> {
+  const clipboard = injected ?? globalThis.navigator?.clipboard;
+  try {
+    if (clipboard === undefined) throw new Error("Clipboard API is unavailable.");
+    await clipboard.writeText(text);
+  } catch (error) {
+    if (!copyBySelection(text)) throw error;
+  }
+}
+
+/**
+ * The older copy command, for where the clipboard API is missing or refuses:
+ * a page on plain http, and some in-app browsers. It works on a selection, so
+ * a field the payer never sees holds the text for a moment.
+ */
+function copyBySelection(text: string): boolean {
+  const page = globalThis.document;
+  if (page?.body === undefined || page.body === null) return false;
+  if (typeof page.execCommand !== "function") return false;
+  const focused = page.activeElement as HTMLElement | null;
+  const field = page.createElement("textarea");
+  field.value = text;
+  // Read-only, so a phone doesn't open its keyboard for it.
+  field.readOnly = true;
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  page.body.append(field);
+  try {
+    field.select();
+    field.setSelectionRange(0, text.length);
+    return page.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+    focused?.focus?.();
+  }
 }
 
 /**

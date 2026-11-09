@@ -7,6 +7,10 @@ namespace OpenReceive\Server;
 use OpenReceive\Host;
 use OpenReceive\Hosts\AllowAllAuthorize;
 use OpenReceive\Hosts\LoggingOnPaid;
+use OpenReceive\Kernel;
+use OpenReceive\Nwc\Errors;
+use OpenReceive\Nwc\ReceiveNwcClient;
+use OpenReceive\Nwc\WalletUnavailableError;
 
 /**
  * Step 0 of the agent directions, as report lines. PRESENCE ONLY: no secret is
@@ -17,7 +21,7 @@ final class Doctor
 {
     /**
      * @param array<string, mixed> $env
-     * @param (callable(): void)|null $walletCheck builds the Service (and with it the receive-only preflight); a throw is reported, never raised
+     * @param (callable(): mixed)|null $walletCheck builds the Service (and with it the receive-only preflight); return it so the report can prove the wallet accepts the code; a throw is reported, never raised
      * @return list<string>
      */
     public static function report(array $env, ?Host $host = null, ?callable $walletCheck = null, ?string $mountedAt = null): array
@@ -90,13 +94,37 @@ final class Doctor
         return $warnings;
     }
 
+    /**
+     * A wallet publishes its methods for anyone to read, so a wrong secret
+     * passes the preflight. Only a signed request proves the wallet accepts
+     * this code, and reading a history row changes nothing.
+     */
+    public static function proveCodeAccepted(ReceiveNwcClient $client): void
+    {
+        try {
+            $client->listTransactions(['limit' => 1]);
+        } catch (\Throwable $e) {
+            $code = Errors::normalizeWalletError($e)['code'];
+            if ($code === 'UNAUTHORIZED') {
+                throw new \RuntimeException('the wallet refused this code (UNAUTHORIZED). The secret in NWC_URI is wrong, or the connection was removed from the wallet. Get a fresh receive-only code: ' . Kernel::NWC_CODE_HELP_URL, 0, $e);
+            }
+            if ($code === 'TIMEOUT' || $e instanceof WalletUnavailableError) {
+                throw new \RuntimeException('the wallet published its details but did not answer a signed request. The secret in NWC_URI may be wrong, or the wallet may be offline. Copy the code from your wallet again and rerun.', 0, $e);
+            }
+            throw $e;
+        }
+    }
+
     private static function walletReport(?callable $walletCheck): string
     {
         if ($walletCheck === null) {
             return 'skipped — no wallet check was supplied';
         }
         try {
-            $walletCheck();
+            $service = $walletCheck();
+            if ($service instanceof Service) {
+                self::proveCodeAccepted($service->nwcClient());
+            }
             return 'ok — the wallet answered and is receive-only';
         } catch (\Throwable $e) {
             return 'FAILED — ' . Reconciler::sanitizeFailureMessage($e);

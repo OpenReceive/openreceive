@@ -1317,6 +1317,103 @@ test("the tutorial's first step is the copy, and then the whole route shows", as
   }
 });
 
+test("a browser that refuses the copy leaves the payer a way on", async (t) => {
+  const clipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+  Object.defineProperty(globalThis.navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => Promise.reject(new Error("NotAllowedError")) },
+  });
+  const execCommand = document.execCommand;
+  document.execCommand = () => false;
+  t.after(() => {
+    document.execCommand = execCommand;
+    if (clipboard === undefined) delete globalThis.navigator.clipboard;
+    else Object.defineProperty(globalThis.navigator, "clipboard", clipboard);
+  });
+  const paymentHash = "d".repeat(64);
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-tutorial-refused", 21_000),
+    "/checkouts": () => checkoutBody("order-tutorial-refused", 21_000, paymentHash),
+    "/payments/check": () => ({ payment_hash: paymentHash, status: "pending" }),
+  });
+  const element = mount({ reference: "order-tutorial-refused", prefix: "/openreceive" });
+  const part = (name) => element.shadowRoot?.querySelector(`[part="${name}"]`);
+  const all = (name) => [...element.shadowRoot.querySelectorAll(`[part="${name}"]`)];
+  const errors = [];
+  element.addEventListener("openreceive-error", (event) => errors.push(event));
+  try {
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'), {
+        label: "method grid",
+      })
+    ).click();
+    (
+      await untilLocal(
+        () => element.shadowRoot?.querySelector('[data-or-provider-tutorial="strike"]'),
+        { label: "Strike's tutorial button" },
+      )
+    ).click();
+    (await untilLocal(() => part("tutorial-copy"), { label: "Copy invoice" })).click();
+    const field = await untilLocal(() => part("tutorial-invoice"), { label: "the invoice field" });
+    assert.equal(field.value, `lnbc-${paymentHash}`);
+    assert.ok(field.readOnly);
+    assert.equal(all("tutorial-frame").length, 4, "the steps opened");
+    assert.ok(part("tutorial-done"), "Done appears");
+    assert.ok(!part("tutorial-copy"), "the button that failed is gone");
+    assert.equal(errors.length, 0, "the payer goes on, so the host hears no error");
+  } finally {
+    element.remove();
+  }
+});
+
+test("the older copy command stands in when the clipboard API refuses", async (t) => {
+  const clipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+  Object.defineProperty(globalThis.navigator, "clipboard", {
+    configurable: true,
+    value: undefined,
+  });
+  const execCommand = document.execCommand;
+  const copied = [];
+  document.execCommand = (command) => {
+    copied.push([command, document.querySelector("textarea")?.value]);
+    return true;
+  };
+  t.after(() => {
+    document.execCommand = execCommand;
+    if (clipboard === undefined) delete globalThis.navigator.clipboard;
+    else Object.defineProperty(globalThis.navigator, "clipboard", clipboard);
+  });
+  const paymentHash = "e".repeat(64);
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-tutorial-fallback", 21_000),
+    "/checkouts": () => checkoutBody("order-tutorial-fallback", 21_000, paymentHash),
+    "/payments/check": () => ({ payment_hash: paymentHash, status: "pending" }),
+  });
+  const element = mount({ reference: "order-tutorial-fallback", prefix: "/openreceive" });
+  const part = (name) => element.shadowRoot?.querySelector(`[part="${name}"]`);
+  try {
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'), {
+        label: "method grid",
+      })
+    ).click();
+    (
+      await untilLocal(
+        () => element.shadowRoot?.querySelector('[data-or-provider-tutorial="strike"]'),
+        { label: "Strike's tutorial button" },
+      )
+    ).click();
+    (await untilLocal(() => part("tutorial-copy"), { label: "Copy invoice" })).click();
+    await untilLocal(() => part("tutorial-copy-label")?.textContent === "✓ Invoice copied", {
+      label: "the copied note",
+    });
+    assert.deepEqual(copied, [["copy", `lnbc-${paymentHash}`]]);
+    assert.ok(document.querySelector("textarea") === null, "the helper field is gone");
+  } finally {
+    element.remove();
+  }
+});
+
 // The payment icons are compiled into @openreceive/browser and drawn inline in
 // the shadow root — no `<img>`, no request, nothing for the host to serve — and
 // labelled for assistive tech from the tile.

@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
-  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
-  formatMsats,
   checkoutElementStyles,
   checkoutLabels,
+  formatMsats,
+  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
 } from "@openreceive/browser/headless";
 import {
-  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   defineElements,
+  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   renderCheckoutHtml,
   renderThemeToggleHtml,
 } from "@openreceive/elements";
@@ -303,6 +303,23 @@ test("elements render payment wizard route choices and providers from browser st
   assert.equal(copyStepTutorial.match(/part="tutorial-step" class="[^"]*opacity-40/g)?.length, 4);
   assert.doesNotMatch(copyStepTutorial, /part="tutorial-frame"/);
   assert.doesNotMatch(copyStepTutorial, /part="tutorial-done"/);
+
+  // The browser refused the copy: the steps open and step 1 is the invoice itself.
+  const refusedTutorial = renderPaymentWizardHtml({
+    selectedMethod: "bitcoin",
+    activeTutorialProviderId: "strike",
+    activeTutorialCopyRefused: true,
+    lightningInvoice: "lnbc1elementtutorial",
+  });
+  assert.doesNotMatch(refusedTutorial, /part="tutorial-copy"/);
+  assert.match(refusedTutorial, /Press and hold to copy/);
+  assert.match(
+    refusedTutorial,
+    /part="tutorial-invoice"[^>]*readonly[^>]*value="lnbc1elementtutorial"/s,
+  );
+  assert.equal(refusedTutorial.match(/part="tutorial-frame"/g)?.length, 4);
+  assert.doesNotMatch(refusedTutorial, /opacity-40/);
+  assert.match(refusedTutorial, /part="tutorial-done"/);
 
   // A swap-route provider can open with no invoice to copy, so no copy step.
   const noInvoiceTutorial = renderPaymentWizardHtml({

@@ -41,8 +41,8 @@ final class DoctorCommand extends Command
         $mountedAt = Route::has(OpenReceiveServiceProvider::ROUTE_NAME)
             ? '/' . trim((string) ($config['route_prefix'] ?? 'openreceive'), '/')
             : null;
-        $walletCheck = $this->option('no-wallet') ? null : function (): void {
-            $this->laravel->make(Service::class);
+        $walletCheck = $this->option('no-wallet') ? null : function (): Service {
+            return $this->laravel->make(Service::class);
         };
 
         $lines = Doctor::report($env, $host, $walletCheck, $mountedAt);

@@ -461,8 +461,8 @@ After the first payment the walk follows the payer's trip (`payer-journeys.ts`):
   wide nothing is cut off, Copy invoice is a comfortable tap, and paid arrives.
 - `payer_tutorial_copy`: a wallet's walkthrough copies the exact invoice, shows
   its steps and pictures, and Done returns to the invoice.
-  `payer_tutorial_copy_refused` (polish): a browser that refuses the clipboard
-  still leaves the payer a way on.
+  `payer_tutorial_copy_refused`: a browser that refuses the clipboard still
+  opens the steps and leaves the invoice there to copy by hand.
 - `payer_safari_paid`: the same trip in WebKit, from Playwright's image (the
   `webkit` profile of `trials/wallet/compose.yml`, started when first needed).
 - `payer_translated_page_paid`: every text node wrapped in `<font>`, as Chrome's

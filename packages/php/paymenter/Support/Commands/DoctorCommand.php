@@ -72,6 +72,7 @@ final class DoctorCommand extends Command
         $service = null;
         $this->check('Wallet preflight', static function () use (&$service, &$gateway): string {
             $service = Runtime::service($gateway);
+            \OpenReceive\Server\Doctor::proveCodeAccepted($service->nwcClient());
             return 'passed (receive-only)';
         });
         if ($service instanceof Service) {

@@ -124,6 +124,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     private selection = createPaymentWizardSelection();
     private activeTutorialProviderId: string | null = null;
     private activeTutorialCopied = false;
+    private activeTutorialCopyRefused = false;
     private swapOptions: readonly ElementsSwapOption[] = [];
     private swapOptionsLoaded = false;
     private selectedSwapAssetByGroup: Record<string, string> = {};
@@ -396,6 +397,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     private resetTutorial(): void {
       this.activeTutorialProviderId = null;
       this.activeTutorialCopied = false;
+      this.activeTutorialCopyRefused = false;
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
@@ -626,6 +628,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           swapInvoice: this.currentSwapInvoice(),
           activeTutorialProviderId: this.activeTutorialProviderId,
           activeTutorialCopied: this.activeTutorialCopied,
+          activeTutorialCopyRefused: this.activeTutorialCopyRefused,
           ...(this.session.swapStartError === undefined
             ? {}
             : { swapStartError: this.session.swapStartError }),
@@ -1167,7 +1170,20 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       });
 
       const copyTutorialInvoice = async (providerId: string): Promise<void> => {
-        await copyInvoice({ invoice, logger });
+        try {
+          await copyInvoice({ invoice, logger });
+        } catch {
+          // Not an error for the host: the payer goes on, copying by hand.
+          if (this.activeTutorialProviderId !== providerId) return;
+          this.activeTutorialCopyRefused = true;
+          this.render();
+          const field = this.shadowRoot?.querySelector<HTMLInputElement>(
+            '[part="tutorial-invoice"]',
+          );
+          field?.focus();
+          field?.select();
+          return;
+        }
         this.dispatchEvent(createCheckoutProviderCopyEvent(providerId));
         this.dispatchEvent(createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy));
         if (this.activeTutorialProviderId !== providerId) return;
@@ -1192,6 +1208,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             }
             this.activeTutorialProviderId = providerId;
             this.activeTutorialCopied = false;
+            this.activeTutorialCopyRefused = false;
             this.loadTutorialImages();
             this.render();
           });

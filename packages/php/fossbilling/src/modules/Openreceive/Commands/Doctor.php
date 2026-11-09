@@ -103,6 +103,7 @@ class Doctor extends Command implements \FOSSBilling\InjectionAwareInterface
         $service = null;
         $this->check('Wallet preflight', static function () use (&$service, &$env): string {
             $service = Runtime::service($env);
+            \OpenReceive\Server\Doctor::proveCodeAccepted($service->nwcClient());
             return 'passed (receive-only)';
         });
         if ($service instanceof Service) {

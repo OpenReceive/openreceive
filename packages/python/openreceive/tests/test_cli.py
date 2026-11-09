@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from openreceive.cli import run
+from openreceive.nwc.errors import WalletError
 from openreceive.nwc.uri import SCHEME
 
 PUBKEY = "a" * 64
@@ -141,8 +142,44 @@ class ReceiveOnlyWallet:
     def preflight(self) -> dict[str, Any]:
         return {"methods": ["make_invoice", "list_transactions"], "encryption": ["nip44_v2"]}
 
+    def list_transactions(self, params: dict[str, Any]) -> dict[str, Any]:
+        self.proof = params
+        return {"transactions": []}
+
     def close(self) -> None:
         self.closed = True
+
+
+def test_doctor_proves_the_wallet_accepts_the_code_by_reading_one_row() -> None:
+    wallets: list[ReceiveOnlyWallet] = []
+
+    def factory(uri: str) -> ReceiveOnlyWallet:
+        wallets.append(ReceiveOnlyWallet(uri))
+        return wallets[-1]
+
+    code, out, err = cli(["doctor"], env={"NWC_URI": NWC_URI}, wallet_client_factory=factory)
+    assert code == 0, out + err
+    assert wallets[0].proof == {"limit": 1}
+
+
+@pytest.mark.parametrize(
+    ("wallet_code", "expected"),
+    [
+        ("UNAUTHORIZED", "wallet: the wallet refused this code (UNAUTHORIZED)"),
+        ("TIMEOUT", "did not answer a signed request"),
+    ],
+)
+def test_doctor_fails_when_the_wallet_will_not_accept_a_readable_code(
+    wallet_code: str, expected: str
+) -> None:
+    class Refusing(ReceiveOnlyWallet):
+        def list_transactions(self, params: dict[str, Any]) -> dict[str, Any]:
+            raise WalletError(wallet_code, "no wallet connected for this key")
+
+    code, out, err = cli(["doctor"], env={"NWC_URI": NWC_URI}, wallet_client_factory=Refusing)
+    assert code == 1, out + err
+    assert expected in out
+    assert "wallet: reachable" not in out
 
 
 def test_doctor_never_prints_a_secret() -> None:

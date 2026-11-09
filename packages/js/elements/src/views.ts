@@ -1,10 +1,10 @@
 import {
+  type BrowserLoggerOption,
   type CheckoutInvoiceSnapshot,
+  type CheckoutPaymentMethod,
   type CheckoutState,
   createCheckoutSnapshotFromInvoice,
   createCheckoutState,
-  type BrowserLoggerOption,
-  type CheckoutPaymentMethod,
   type PaymentMethod,
   type QrEncoder,
   type Status,
@@ -96,6 +96,7 @@ export interface ElementsWizardView {
   readonly swapInvoice?: CheckoutInvoiceSnapshot;
   readonly activeTutorialProviderId?: string | null;
   readonly activeTutorialCopied?: boolean;
+  readonly activeTutorialCopyRefused?: boolean;
   /** Swap-start failure rendered inline in the deposit slot with a retry button. */
   readonly swapStartError?: string;
   /**

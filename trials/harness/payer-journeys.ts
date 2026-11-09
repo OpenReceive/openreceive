@@ -12,10 +12,10 @@ import {
   type ApiCall,
   bannedPayerWordsInContext,
   bitcoinTile,
+  CREATE_SWAP,
   checkoutRendered,
   chooseSwap,
   continueButton,
-  CREATE_SWAP,
   decodeQr,
   describeCall,
   hashOf,
@@ -23,9 +23,9 @@ import {
   lastCall,
   lightningInvoice,
   message,
+  Outcome,
   oneLine,
   order,
-  Outcome,
   PAGE_HELPERS,
   PAGE_TIMEOUT_MS,
   PAID_BUDGET_MS,
@@ -33,17 +33,17 @@ import {
   type PayerTarget,
   PRODUCT,
   readCheckout,
+  SWAP_TIMEOUT_MS,
   sameInvoice,
   saysPaid,
-  SWAP_TIMEOUT_MS,
-  visit,
   type Visit,
+  visit,
+  type Walk,
   waitFor,
-  Walk,
   watchPage,
 } from "./payer.ts";
-import { startWebkit } from "./wallet.ts";
 import type { Check, Severity } from "./types.ts";
+import { startWebkit } from "./wallet.ts";
 
 // The payer's trip after the first screen. A person reloads, opens a second
 // tab, loses signal in a lift, goes to their wallet app and comes back, opens
@@ -938,9 +938,8 @@ async function copyRefusedJourney(
     [
       {
         id: IDS.refused,
-        severity: "polish",
         summary:
-          "When the browser refuses the clipboard, the walkthrough still gives the payer a way on.",
+          "When the browser refuses the clipboard, the steps still open and the invoice is there to copy by hand.",
       },
     ],
     async (state, outcome, at) => {
@@ -965,13 +964,19 @@ async function copyRefusedJourney(
       await walk.capture(page, "tutorial-copy-refused");
       const done = await dialog.getByRole("button", { name: /^done$/i }).count();
       const images = await dialog.locator("ol img").count();
+      const invoice = await dialog
+        .locator("ol input[readonly]")
+        .first()
+        .inputValue()
+        .catch(() => "");
       const text = oneLine(await dialog.innerText(), 220);
+      const wayOn = (done > 0 || images > 0) && /^ln/i.test(invoice);
       outcome.record(
         IDS.refused,
-        done > 0 || images > 0,
-        done > 0 || images > 0
-          ? "the steps opened anyway"
-          : `the steps stayed locked and the payer has no way on: ${text}`,
+        wayOn,
+        wayOn
+          ? "the steps opened and the invoice is there to copy by hand"
+          : `the payer has no way on: ${text}`,
       );
     },
     phoneOptions(),

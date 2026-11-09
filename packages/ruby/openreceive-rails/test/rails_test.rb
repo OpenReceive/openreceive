@@ -845,6 +845,11 @@ class WalletUnreachableAtBootTest < Minitest::Test
   # Shaped like nwc-ruby's NotSentError, which the engine reads by name.
   class NotSentError < StandardError; end
 
+  # Shaped like nwc-ruby's error for a wallet's coded refusal.
+  class WalletServiceError < StandardError
+    def code = "UNAUTHORIZED"
+  end
+
   class RelayWallet < FakeWallet
     attr_accessor :down, :info
     attr_reader :preflights
@@ -923,6 +928,36 @@ class WalletUnreachableAtBootTest < Minitest::Test
     assert_equal 201, status, body.inspect
     assert_equal 2, @wallet.preflights
     assert_equal "ok — the wallet answered and is receive-only", OpenReceive.doctor_wallet_report
+  end
+
+  # A wallet publishes its methods for anyone to read, so only a signed
+  # request can show that the secret in the code is wrong.
+  def test_doctor_fails_when_the_wallet_refuses_the_code
+    @wallet.down = false
+    capture_io { OpenReceive.config.service }
+    @wallet.define_singleton_method(:list_transactions) do |_request|
+      raise WalletServiceError, "UNAUTHORIZED: this public key has no wallet connected"
+    end
+    assert_match(/\AFAILED — the wallet refused this code \(UNAUTHORIZED\)/, OpenReceive.doctor_wallet_report)
+  end
+
+  def test_doctor_fails_when_the_wallet_never_answers_a_signed_request
+    @wallet.down = false
+    capture_io { OpenReceive.config.service }
+    @wallet.define_singleton_method(:list_transactions) { |_request| raise Timeout::Error, "deadline" }
+    assert_match(/\AFAILED — .*did not answer a signed request/, OpenReceive.doctor_wallet_report)
+  end
+
+  def test_doctors_proof_reads_one_history_row
+    @wallet.down = false
+    capture_io { OpenReceive.config.service }
+    seen = []
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      seen << request.fetch("limit")
+      { "transactions" => [] }
+    end
+    assert_equal "ok — the wallet answered and is receive-only", OpenReceive.doctor_wallet_report
+    assert_equal [1], seen
   end
 
   def test_a_later_check_refuses_a_spend_capable_wallet

@@ -170,6 +170,7 @@ export function renderSwapDepositPanel(options: {
   const display = createSwapDisplayModel(options.invoice, {
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.resumable === undefined ? {} : { resumable: options.resumable }),
+    ...(options.checkout?.fiat === undefined ? {} : { fiat: options.checkout.fiat }),
   });
   if (display === undefined) return null;
   const backButton = React.createElement(

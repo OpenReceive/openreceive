@@ -96,6 +96,7 @@ export function renderElementSwapPanelHtml(
 ): string {
   const display = createSwapDisplayModel(invoice, {
     ...(view.resumable === undefined ? {} : { resumable: view.resumable }),
+    ...(view.fiat === undefined ? {} : { fiat: view.fiat }),
   });
   if (display === undefined) return "";
   const backButton = `

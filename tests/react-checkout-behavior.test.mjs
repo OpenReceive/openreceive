@@ -192,6 +192,55 @@ test("the default checkout wires controller actions into its buttons", async () 
   }
 });
 
+test("a browser that refuses the tutorial's copy leaves the payer a way on", async () => {
+  const errors = [];
+  const execCommand = document.execCommand;
+  document.execCommand = () => false;
+  const handle = mount(
+    React.createElement(PaymentWizard, {
+      invoice: "lnbc-tutorial",
+      clipboard: { writeText: async () => Promise.reject(new Error("NotAllowedError")) },
+      onError: (error) => errors.push(error),
+    }),
+  );
+  try {
+    (await until(() => handle.button("Bitcoin"), { label: "method grid" })).click();
+    (
+      await until(
+        () =>
+          handle
+            .buttons()
+            .find(
+              (button) =>
+                button.textContent === "How To Pay" &&
+                button.closest("article")?.querySelector("h4")?.textContent === "Strike",
+            ),
+        { label: "Strike's tutorial button" },
+      )
+    ).click();
+    const dialog = await until(() => handle.container.querySelector("[role='dialog']"), {
+      label: "tutorial dialog",
+    });
+    dialog.querySelector("ol button").click();
+    const field = await until(() => dialog.querySelector("ol input"), {
+      label: "the invoice field",
+    });
+    assert.equal(field.value, "lnbc-tutorial");
+    assert.ok(field.readOnly);
+    assert.match(dialog.textContent, new RegExp(checkoutLabels.tutorialCopyByHand));
+    assert.equal(dialog.querySelectorAll("ol > li > div + div").length, 4, "the steps opened");
+    assert.ok(
+      [...dialog.querySelectorAll("button")].some(
+        (button) => button.textContent === checkoutLabels.tutorialDone,
+      ),
+    );
+    assert.deepEqual(errors, [], "the payer goes on, so the host hears no error");
+  } finally {
+    handle.unmount();
+    document.execCommand = execCommand;
+  }
+});
+
 test("the tutorial's first step is the copy, and then the whole route shows", async () => {
   const written = [];
   const handle = mount(

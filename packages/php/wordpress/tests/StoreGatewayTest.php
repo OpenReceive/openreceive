@@ -39,6 +39,8 @@ function esc_html(string $text): string
     return $text;
 }
 function add_settings_error(string $setting, string $code, string $message): void { StoreGatewayTest::$notices[] = $message; }
+function add_filter(string $hook, callable $callback): void { StoreGatewayTest::$filters[$hook] = $callback; }
+function remove_filter(string $hook, callable $callback): void { unset(StoreGatewayTest::$filters[$hook]); }
 function wp_verify_nonce(string $nonce, string $action): int { return 1; }
 function sanitize_text_field(string $value): string { return $value; }
 function wp_unslash(mixed $value): mixed { return $value; }
@@ -53,6 +55,8 @@ final class StoreGatewayTest extends TestCase
 {
     public static array $escaped = [];
     public static array $notices = [];
+    /** @var array<string, callable> */
+    public static array $filters = [];
     private const HEX = 'b889ff5b1513b641e2a139f661a661364979c5beee91842f8f0ef42ab558e9d4';
 
     protected function setUp(): void
@@ -122,6 +126,31 @@ final class StoreGatewayTest extends TestCase
         self::assertStringContainsString('nostr+walletconnect', self::$notices[0]);
         self::assertSame(self::$notices, self::$escaped, 'Easy Digital Downloads prints the notice as HTML, so it is escaped first');
         self::assertSame([], ConfigurationTest::$writes, 'nothing was saved');
+    }
+
+    public function testAFailedEddSaveWithdrawsOnlyTheStoresSuccessNotice(): void
+    {
+        $_POST = ['openreceive_edd_nonce' => 'nonce', 'openreceive' => ['nwc_uri' => 'not-a-wallet-code']];
+        EddGateway::save([]);
+        $withdraw = self::$filters['pre_update_option_edd_settings'] ?? null;
+        self::assertIsCallable($withdraw, 'a failed save must withdraw the notice the store adds next');
+
+        $ours = ['setting' => 'edd-notices', 'code' => 'openreceive', 'message' => 'not saved', 'type' => 'error'];
+        $other = ['setting' => 'general', 'code' => '', 'message' => 'kept', 'type' => 'updated'];
+        $GLOBALS['wp_settings_errors'] = [$ours, ['setting' => 'edd-notices', 'code' => '', 'message' => 'Settings updated.', 'type' => 'updated'], $other];
+
+        self::assertSame(['saved' => 'value'], $withdraw(['saved' => 'value']));
+        self::assertSame([$ours, $other], $GLOBALS['wp_settings_errors']);
+        self::assertArrayNotHasKey('pre_update_option_edd_settings', self::$filters, 'one save, one withdrawal');
+        unset($GLOBALS['wp_settings_errors']);
+    }
+
+    public function testASuccessfulEddSaveKeepsTheStoresNotice(): void
+    {
+        self::$filters = [];
+        $_POST = ['openreceive_edd_nonce' => 'nonce', 'openreceive' => ['title' => 'Bitcoin']];
+        EddGateway::save([]);
+        self::assertArrayNotHasKey('pre_update_option_edd_settings', self::$filters);
     }
 }
 }

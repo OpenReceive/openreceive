@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Fixed (all languages): `doctor` now fails when the wallet will not accept the
+  code. A wallet publishes its methods for anyone to read, so a code with a wrong
+  secret could pass and then fail every checkout. Doctor now sends one signed
+  request, reading one history row, and names a refused or silent wallet. In PHP,
+  a `$walletCheck` closure should return the `Service` it builds to get this.
+- Fixed (checkout): a browser that refuses the clipboard no longer strands the
+  payer in a wallet's tutorial. The copy falls back to the browser's older copy
+  command, and if that is refused too, the steps open and step 1 becomes the
+  invoice, selected, to copy by hand.
+- Fixed (swaps): the Total on a swap screen is the order's own price even when
+  the attempt comes back from the server without its quote. It could show the
+  provider's valuation instead, a different figure from the one the payer saw.
+- Fixed (Easy Digital Downloads): a failed save no longer shows "Settings
+  updated." beside the reason it was not saved.
 - Fixed (PHP): a wallet reply too large for one network read no longer fails the
   whole reconcile pass. PHP's websocket reader gave up with "Empty read" when a
   frame arrived in pieces, so once a wallet's page of twenty recent transactions

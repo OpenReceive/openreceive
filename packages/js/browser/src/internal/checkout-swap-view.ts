@@ -181,6 +181,9 @@ export function swapDepositRisk(payInAsset: string): SwapDepositRisk {
  * @param options.now Unix timestamp in **seconds** ({@link UnixSeconds}); the
  *   provider countdown is measured against it. Milliseconds (`Date.now()`)
  *   throw rather than pinning every deposit window at zero.
+ * @param options.fiat The checkout's own amount. A swap read back from the
+ *   server can arrive without its quote, and the Total row must still be the
+ *   price the payer saw rather than the provider's valuation of it.
  * @param options.resumable Whether this checkout has a URL the payer can come
  *   BACK to — a synced history path, or the host's own per-order route. It
  *   decides {@link SwapDisplayModel.refundReturnLabel} and nothing else; the
@@ -191,7 +194,11 @@ export function swapDepositRisk(payInAsset: string): SwapDepositRisk {
  */
 export function createSwapDisplayModel(
   invoice: CheckoutInvoiceSnapshot,
-  options: { readonly now?: UnixSeconds; readonly resumable?: boolean } = {},
+  options: {
+    readonly now?: UnixSeconds;
+    readonly resumable?: boolean;
+    readonly fiat?: { readonly currency?: string; readonly value?: string };
+  } = {},
 ): SwapDisplayModel | undefined {
   const swap = invoice.swap;
   if (swap === undefined) return undefined;
@@ -210,7 +217,11 @@ export function createSwapDisplayModel(
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
   const settled = invoice.transaction_state === "settled";
   const instructionsExpired = expiresInSeconds === 0 && swap.provider_state === "awaiting_deposit";
-  const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap, invoice.fiat_quote?.fiat);
+  const feeBreakdown = createSwapFeeBreakdown(
+    swap.fee,
+    swap,
+    invoice.fiat_quote?.fiat ?? options.fiat,
+  );
 
   return {
     provider: swap.provider,

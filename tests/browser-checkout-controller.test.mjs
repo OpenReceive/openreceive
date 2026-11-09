@@ -4,8 +4,8 @@ import {
   BrowserRequestError,
   checkoutLabels,
   createCheckoutController,
-  createCheckoutState,
   createCheckoutElementAttributes,
+  createCheckoutState,
   createStatusFetcher,
   createSwapDisplayModel,
   normalizeSwapStartInvoice,
@@ -13,12 +13,12 @@ import {
   postJson,
   prepareCheckout,
   requestCheckout,
+  startSwapRequest,
 } from "../packages/js/browser/src/headless.ts";
 import {
-  createSwapFeeBreakdown,
   checkoutRoutes,
+  createSwapFeeBreakdown,
 } from "../packages/js/browser/src/internal/checkout.ts";
-import { startSwapRequest } from "../packages/js/browser/src/headless.ts";
 
 // The browser checkout attaches a console logger at INFO; these unit tests do not
 // assert that output.
@@ -706,6 +706,41 @@ test("the Total row is the host's amount, not the provider's rounding of it", ()
   );
   // The row reads "Total": a donation has no cart.
   assert.equal(checkoutLabels.cartTotal, "Total");
+});
+
+// F27: a swap read back from the server can arrive without its quote. The Total
+// row fell back to the provider's valuation ($15.86 for a $12.00 item) though
+// the checkout still knew the price the payer had seen.
+test("the Total row uses the checkout's amount when the attempt has no quote", () => {
+  const invoice = {
+    invoice_id: "b".repeat(64),
+    rail: "swap",
+    expires_at: 2_000_000_000,
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: "SOL_SOL",
+      deposit_address: "So1anaAddress",
+      deposit_amount: "0.1",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: 2_000_000_000,
+      fee: { currency: "USD", pay_in_fiat: "16.40", payout_fiat: "15.86" },
+    },
+  };
+  const now = 1_900_000_000;
+  assert.equal(createSwapDisplayModel(invoice, { now }).feeBreakdown.cartTotal, "$15.86");
+  const display = createSwapDisplayModel(invoice, {
+    now,
+    fiat: { currency: "USD", value: "12.00" },
+  });
+  assert.equal(display.feeBreakdown.cartTotal, "$12.00");
+  // The attempt's own quote still wins over the checkout's.
+  assert.equal(
+    createSwapDisplayModel(
+      { ...invoice, fiat_quote: { fiat: { currency: "USD", value: "13.00" } } },
+      { now, fiat: { currency: "USD", value: "12.00" } },
+    ).feeBreakdown.cartTotal,
+    "$13.00",
+  );
 });
 
 test("the swap start keeps the checkout's fiat amount for the Total row", () => {

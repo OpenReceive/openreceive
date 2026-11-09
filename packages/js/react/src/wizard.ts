@@ -71,6 +71,7 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
   const [activeTutorial, setActiveTutorial] = React.useState<{
     readonly providerId: string;
     readonly copied: boolean;
+    readonly copyRefused?: boolean;
   } | null>(null);
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
@@ -270,12 +271,22 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
           .find((provider) => provider.id === activeTutorial.providerId);
   const copyTutorialInvoice = async (providerId: string): Promise<void> => {
     if (!props.invoice) return;
-    await copyInvoiceHelper({
-      invoice: props.invoice,
-      clipboard: props.clipboard,
-      logger: props.logger,
-      logContext: props.logContext,
-    });
+    try {
+      await copyInvoiceHelper({
+        invoice: props.invoice,
+        clipboard: props.clipboard,
+        logger: props.logger,
+        logContext: props.logContext,
+      });
+    } catch {
+      // Not an error for the host: the payer goes on, copying by hand.
+      setActiveTutorial((current) =>
+        current?.providerId === providerId
+          ? { providerId, copied: false, copyRefused: true }
+          : current,
+      );
+      return;
+    }
     // Both handlers, matching the element (which dispatches both
     // openreceive-provider-copy and openreceive-copy for one tutorial copy).
     props.onProviderCopy?.(providerId);
@@ -700,6 +711,7 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
           key: "provider-tutorial",
           provider: activeTutorialProvider,
           copied: activeTutorial.copied,
+          copyRefused: activeTutorial.copyRefused === true,
           invoice: props.invoice ?? "",
           ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
           onClose: () => setActiveTutorial(null),

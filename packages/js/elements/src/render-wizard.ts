@@ -319,6 +319,7 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
         view.activeTutorialCopied ?? false,
         view.lightningInvoice,
         view.decodeLinkUrl,
+        view.activeTutorialCopyRefused ?? false,
       )}
     </section>
   `;

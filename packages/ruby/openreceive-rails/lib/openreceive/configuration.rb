@@ -503,9 +503,40 @@ module OpenReceive
       pending = service.respond_to?(:wallet_pending) ? service.wallet_pending : nil
       return "FAILED — the wallet check has not passed (#{pending})" unless pending.nil?
 
+      refusal = doctor_wallet_refusal
+      return "FAILED — #{refusal}" unless refusal.nil?
+
       "ok — the wallet answered and is receive-only"
     rescue StandardError => error
       "FAILED — #{sanitize_failure_message(error)}"
+    end
+
+    DOCTOR_PROOF_SECONDS = 10
+
+    # A wallet publishes its methods for anyone to read, so a wrong secret can
+    # pass the wallet check. Only a signed request proves the wallet accepts
+    # this code, and reading a history row changes nothing. nil when accepted.
+    def doctor_wallet_refusal
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + DOCTOR_PROOF_SECONDS
+      config.send(:resolved_nwc_client).list_transactions("limit" => 1, "_deadline" => deadline)
+      nil
+    rescue Timeout::Error
+      doctor_wallet_silent_message
+    rescue StandardError => error
+      case OpenReceive::Nwc.normalize_wallet_error(error)["code"]
+      when "UNAUTHORIZED"
+        "the wallet refused this code (UNAUTHORIZED). The secret in NWC_URI is wrong, or the " \
+          "connection was removed from the wallet. Get a fresh receive-only code: " \
+          "#{OpenReceive::NWC_CODE_HELP_URL}"
+      when "TIMEOUT" then doctor_wallet_silent_message
+      else sanitize_failure_message(error)
+      end
+    end
+
+    def doctor_wallet_silent_message
+      "the wallet published its details but did not answer a signed request within " \
+        "#{DOCTOR_PROOF_SECONDS}s. The secret in NWC_URI may be wrong, or the wallet may be " \
+        "offline. Copy the code from your wallet again and rerun."
     end
 
     # nil when the boot preflight should run; otherwise the short reason the

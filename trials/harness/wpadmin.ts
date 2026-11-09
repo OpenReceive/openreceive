@@ -168,8 +168,10 @@ export function saveAcceptedCheck(notices: readonly string[]): Check {
 export function saveRelaySilentCheck(notices: readonly string[]): Check {
   return check(
     "wpadmin_save_relay_silent",
-    notices.some(blamesTheRelay) && !notices.some(blamesTheCodes),
-    "With the relay silent, Save in wp-admin said the relay did not answer and did not blame the codes.",
+    notices.some(blamesTheRelay) &&
+      !notices.some(blamesTheCodes) &&
+      !notices.some((text) => /settings have been saved|settings updated/i.test(text)),
+    "With the relay silent, Save in wp-admin said only that the relay did not answer: it did not blame the codes or also say the settings saved.",
     shown(notices),
   );
 }

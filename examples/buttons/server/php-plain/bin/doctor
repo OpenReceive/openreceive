@@ -25,7 +25,7 @@ $host = null;
 $mounted = '/openreceive';
 $walletCheck = ($env['DEMO_WALLET'] ?? '') === 'testkit'
     ? static function (): void { /* the fakes need no wallet */ }
-    : static function () use ($env): void { Service::fromEnvironment($env); };
+    : static fn () => Service::fromEnvironment($env);
 
 foreach (Doctor::report($env, $host, $walletCheck, $mounted) as $line) {
     echo $line, PHP_EOL;

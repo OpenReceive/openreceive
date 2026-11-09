@@ -2495,7 +2495,8 @@ Step 0 of the agent directions, as report lines. It reports:
 - each credential as set or unset, never its value,
 - the host class, and whether `authorize`/`onPaid` are still the placeholder traits,
 - where the handler is mounted, and
-- the wallet preflight. `$walletCheck` is a closure that builds the `Service`.
+- the wallet preflight. `$walletCheck` is a closure that builds the `Service`
+  and returns it, so the report can also prove the wallet accepts the code.
   If it throws, the error is reported, never raised.
 
 `$engine->doctor(?array $env, ?callable $walletCheck, ?string $mountedAt)` does

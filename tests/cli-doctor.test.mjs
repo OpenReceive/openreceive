@@ -18,6 +18,7 @@ function receiveOnlyWallet() {
       spendCapabilityAdvertised: false,
       warnings: [],
     }),
+    listTransactions: async () => ({ transactions: [] }),
     close: async () => {},
   };
 }
@@ -146,6 +147,61 @@ test("doctor fails when preflight refuses the wallet", async () => {
   });
   assert.equal(code, 1);
   assert.match(out, /wallet: This NWC connection is NOT receive-only\./);
+});
+
+// A wallet publishes its methods for anyone to read, so a wrong secret passes
+// the preflight. A FOSSBilling trial looped on UNAUTHORIZED after doctor passed.
+test("doctor fails when the wallet refuses the code behind a readable preflight", async () => {
+  const { code, out } = await doctor({
+    env: { NWC_URI: VALID_NWC },
+    walletClientFactory: () => ({
+      ...receiveOnlyWallet(),
+      listTransactions: async () => {
+        throw Object.assign(new Error("this public key has no wallet connected"), {
+          code: "UNAUTHORIZED",
+        });
+      },
+    }),
+  });
+  assert.equal(code, 1);
+  assert.match(out, /wallet: the wallet refused this code \(UNAUTHORIZED\)/);
+  assert.match(out, /get_a_nwc_code_to_receive_payments/);
+  assert.doesNotMatch(out, /wallet: reachable/);
+});
+
+test("doctor fails when the wallet never answers a signed request", async () => {
+  const { code, out } = await doctor({
+    env: { NWC_URI: VALID_NWC },
+    walletClientFactory: () => ({
+      ...receiveOnlyWallet(),
+      listTransactions: async () => {
+        throw Object.assign(new Error("reply timeout"), { code: "TIMEOUT" });
+      },
+    }),
+  });
+  assert.equal(code, 1);
+  assert.match(out, /did not answer a signed request/);
+  assert.doesNotMatch(out, /wallet: reachable/);
+});
+
+test("doctor's proof reads one history row and makes nothing", async () => {
+  const calls = [];
+  const { code } = await doctor({
+    env: { NWC_URI: VALID_NWC },
+    walletClientFactory: () => ({
+      ...receiveOnlyWallet(),
+      makeInvoice: async () => {
+        calls.push("makeInvoice");
+        return {};
+      },
+      listTransactions: async (request) => {
+        calls.push(request);
+        return { transactions: [] };
+      },
+    }),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [{ limit: 1 }]);
 });
 
 test("doctor flags a spend-capable wallet reachable through the override", async () => {
