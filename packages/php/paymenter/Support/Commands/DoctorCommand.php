@@ -8,6 +8,7 @@ use App\Models\Setting;
 use Illuminate\Console\Command;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
+use OpenReceive\Server\Doctor as CoreDoctor;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\PaymentsSchema;
 use OpenReceive\Swap\SwapProvider;
@@ -72,7 +73,7 @@ final class DoctorCommand extends Command
         $service = null;
         $this->check('Wallet preflight', static function () use (&$service, &$gateway): string {
             $service = Runtime::service($gateway);
-            \OpenReceive\Server\Doctor::proveCodeAccepted($service->nwcClient());
+            CoreDoctor::proveCodeAccepted($service->nwcClient());
             return 'passed (receive-only)';
         });
         if ($service instanceof Service) {

@@ -6,6 +6,7 @@ namespace Box\Mod\Openreceive\Commands;
 
 use Box\Mod\Openreceive\Support\GatewayFiles;
 use Box\Mod\Openreceive\Support\Runtime;
+use OpenReceive\Server\Doctor as CoreDoctor;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\PaymentsSchema;
 use OpenReceive\Swap\SwapProvider;
@@ -103,7 +104,7 @@ class Doctor extends Command implements \FOSSBilling\InjectionAwareInterface
         $service = null;
         $this->check('Wallet preflight', static function () use (&$service, &$env): string {
             $service = Runtime::service($env);
-            \OpenReceive\Server\Doctor::proveCodeAccepted($service->nwcClient());
+            CoreDoctor::proveCodeAccepted($service->nwcClient());
             return 'passed (receive-only)';
         });
         if ($service instanceof Service) {

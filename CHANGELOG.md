@@ -16,6 +16,16 @@
   provider's valuation instead, a different figure from the one the payer saw.
 - Fixed (Easy Digital Downloads): a failed save no longer shows "Settings
   updated." beside the reason it was not saved.
+- Fixed (PHP): `doctor` no longer prints a NUL byte for an anonymous `Host`, which
+  made tools such as `grep` treat its output as binary.
+- Docs: the Rails, Laravel and plain PHP guides give the Alpine packages. Debian's
+  package names do not exist there.
+- Fixed (WooCommerce, Easy Digital Downloads): a payment that arrives on an order
+  the merchant already cancelled or revoked now adds a note to that order. The
+  order stays as the merchant left it, but nothing used to say the money had
+  arrived.
+- Fixed (Easy Digital Downloads): fifty revoked orders holding a completion marker
+  no longer stop the repair pass from reaching later paid orders.
 - Fixed (PHP): a wallet reply too large for one network read no longer fails the
   whole reconcile pass. PHP's websocket reader gave up with "Empty read" when a
   frame arrived in pieces, so once a wallet's page of twenty recent transactions

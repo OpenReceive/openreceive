@@ -116,5 +116,19 @@ $check(edd_get_order($recoveryId)->status === 'pending', 'interrupted completion
 StoreHost::repair();
 $check(edd_get_order($recoveryId)->status === 'complete', 'interrupted completion repaired');
 
+// The merchant revoked the order while the payer was paying: it stays revoked,
+// the note says the money arrived, and repair's query runs on real tables.
+$revokedId = $makeOrder();
+$revokedRef = EddOrderHost::reference($revokedId);
+$checkout = Plugin::engine()->service()->createCheckout(['reference' => $revokedRef, 'amount' => $host->amountFor($revokedRef)]);
+$repo->commitAttempt($revokedRef, $checkout['payment_hash'], $checkout);
+edd_update_order_status($revokedId, 'revoked');
+$repo->markPaidOnce($checkout['payment_hash'], time(), null, [$host, 'onPaid']);
+$host->afterPaid(new OpenReceive\WP\Vendor\OpenReceive\PaymentSettlement($revokedRef, $checkout['payment_hash'], time(), null));
+StoreHost::repair();
+$check(edd_get_order($revokedId)->status === 'revoked', 'a revoked order is never reopened');
+$revokedNotes = array_map(static fn ($note): string => (string) $note->content, edd_get_notes(['object_id' => $revokedId, 'object_type' => 'order']));
+$check(count(array_filter($revokedNotes, static fn (string $note): bool => str_contains($note, 'refund the customer'))) === 1, 'the merchant is told once that money arrived on a revoked order');
+
 foreach ([$otherId, $owned] as $id) { edd_destroy_order($id); }
 echo "Easy Digital Downloads integration: {$checks} checks passed.\n";

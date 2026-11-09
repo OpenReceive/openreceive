@@ -46,3 +46,34 @@ test("guest Easy Digital Downloads purchase", async ({ page }, testInfo) => {
   await expect(checkout).toHaveCount(0, { timeout: 60_000 });
   await expect(page.getByText("Completed")).toBeVisible();
 });
+
+// Easy Digital Downloads prints "Settings updated." after every Save unless a
+// settings error already holds that notice's id. In wp-admin, a failed Save
+// must read as one answer.
+test("a failed Save says only that it failed", async ({ page }) => {
+  const refuse = "/var/www/html/wp-content/mu-plugins/openreceive-test-refuse-save.php";
+  const container = "openreceive-wp-test-wordpress-1";
+  execFileSync("docker", [
+    "exec",
+    container,
+    "sh",
+    "-c",
+    `mkdir -p "$(dirname ${refuse})" && printf '%s' "<?php add_filter('pre_update_option_woocommerce_openreceive_settings', static function () { throw new RuntimeException('forced by the test'); });" > ${refuse}`,
+  ]);
+  try {
+    await page.goto("/wp-login.php");
+    await page.locator("#user_login").fill("demo");
+    await page.locator("#user_pass").fill("openreceive-local-demo");
+    await page.locator("#wp-submit").click();
+    await page.waitForURL(/wp-admin/);
+    await page.goto(
+      "/wp-admin/edit.php?post_type=download&page=edd-settings&tab=gateways&section=openreceive",
+    );
+    await page.locator('input[name="openreceive[title]"]').fill("Bitcoin");
+    await page.locator('#submit, input[type="submit"][name="submit"]').first().click();
+    await expect(page.getByText(/settings were not saved/i).first()).toBeVisible();
+    await expect(page.getByText("Settings updated.")).toHaveCount(0);
+  } finally {
+    execFileSync("docker", ["exec", container, "rm", "-f", refuse]);
+  }
+});

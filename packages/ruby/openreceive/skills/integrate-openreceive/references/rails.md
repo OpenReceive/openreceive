@@ -454,6 +454,13 @@ Docker builds) have neither. Install them before bundling:
 apt-get install -y autoconf automake libtool build-essential pkg-config libssl-dev
 ```
 
+On Alpine (`ruby:*-alpine`), install these instead. `tzdata` is for Rails itself,
+which will not boot without it there:
+
+```sh
+apk add --no-cache build-base autoconf automake libtool pkgconf openssl-dev tzdata
+```
+
 Full Ruby images and typical developer machines already have these.
 
 Then run:

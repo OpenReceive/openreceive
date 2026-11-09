@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace OpenReceive\Tests\Server;
 
+use OpenReceive\Host;
+use OpenReceive\Hosts\AllowAllAuthorize;
+use OpenReceive\Hosts\LoggingOnPaid;
 use OpenReceive\Nwc\NwcRequestError;
 use OpenReceive\Nwc\ReceiveNwcClient;
 use OpenReceive\Nwc\WalletUnavailableError;
@@ -36,6 +39,22 @@ final class DoctorProofTest extends TestCase
         $wallet->method('listTransactions')->willThrowException(new WalletUnavailableError('The wallet did not answer in time.'));
         $this->expectExceptionMessage('did not answer a signed request');
         Doctor::proveCodeAccepted($wallet);
+    }
+
+    public function testAnAnonymousHostIsReportedWithoutANulByte(): void
+    {
+        $host = new class implements Host {
+            use AllowAllAuthorize;
+            use LoggingOnPaid;
+
+            public function amountFor(string $reference): ?array
+            {
+                return null;
+            }
+        };
+        $report = implode("\n", Doctor::report([], $host));
+        self::assertStringContainsString('host:             an anonymous class', $report);
+        self::assertStringNotContainsString("\0", $report);
     }
 
     public function testAnyOtherFailureIsLeftAlone(): void

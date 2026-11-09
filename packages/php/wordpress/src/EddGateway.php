@@ -212,29 +212,9 @@ final class EddGateway
             Configuration::save($settings);
         } catch (\Throwable $error) {
             // Easy Digital Downloads prints settings errors as HTML (through wp_kses); the reason is plain text.
-            add_settings_error('edd-notices', 'openreceive', esc_html(Configuration::saveFailure($error, $values, __('OpenReceive settings were not saved:', 'openreceive'))));
-            // Easy Digital Downloads adds its own success notice after this filter returns.
-            add_filter('pre_update_option_edd_settings', [self::class, 'withdrawSuccessNotice']);
+            // Under the id of the store's own "Settings updated." notice, which it adds next and drops as a duplicate.
+            add_settings_error('edd-notices', 'edd-notices', esc_html(Configuration::saveFailure($error, $values, __('OpenReceive settings were not saved:', 'openreceive'))));
         }
         return $input;
-    }
-
-    /**
-     * Drops "Settings updated." from a save that just failed, so the merchant
-     * reads one answer. Only Easy Digital Downloads' own success notice goes.
-     */
-    public static function withdrawSuccessNotice(mixed $value): mixed
-    {
-        // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- WordPress offers no call to withdraw a settings notice.
-        global $wp_settings_errors;
-        if (is_array($wp_settings_errors)) {
-            // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- See above.
-            $wp_settings_errors = array_values(array_filter(
-                $wp_settings_errors,
-                static fn (array $notice): bool => ($notice['setting'] ?? '') !== 'edd-notices' || ($notice['type'] ?? '') !== 'updated',
-            ));
-        }
-        remove_filter('pre_update_option_edd_settings', [self::class, 'withdrawSuccessNotice']);
-        return $value;
     }
 }

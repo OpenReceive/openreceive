@@ -6,6 +6,9 @@ namespace OpenReceive\Laravel\Tests;
 
 use Illuminate\Contracts\Foundation\Application;
 use OpenReceive\Laravel\Tests\Fixtures\PlaceholderHost;
+use OpenReceive\Laravel\Tests\Fixtures\RefusingWallet;
+use OpenReceive\Nwc\ReceiveNwcClient;
+use OpenReceive\Server\Service;
 
 final class DoctorCommandTest extends TestCase
 {
@@ -31,6 +34,15 @@ final class DoctorCommandTest extends TestCase
             ->expectsOutputToContain('wallet preflight: skipped')
             ->doesntExpectOutputToContain(self::SENTINEL)
             ->assertSuccessful();
+    }
+
+    public function testAWalletThatRefusesTheCodeFailsThoughItsDetailsAreReadable(): void
+    {
+        $this->app->singleton(ReceiveNwcClient::class, static fn (): ReceiveNwcClient => new RefusingWallet());
+        $this->app->forgetInstance(Service::class);
+
+        $this->artisan('openreceive:doctor')
+            ->expectsOutputToContain('the wallet refused this code (UNAUTHORIZED)');
     }
 
     public function testTheWalletCheckRunsThePreflightThroughTheBoundClient(): void

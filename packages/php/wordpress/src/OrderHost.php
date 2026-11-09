@@ -78,10 +78,23 @@ final class OrderHost implements Host, AfterPaid
                 $order->payment_complete($hash);
             }
             // A cancelled/refunded order is an operator decision: never reopen it.
-            if (!$order->is_paid()) { return; }
+            if (!$order->is_paid()) {
+                self::noteUnclaimedPayment($order, $hash);
+                return;
+            }
             $order->delete_meta_data('_openreceive_completion_pending');
             $order->save_meta_data();
         } finally { $db->query('SELECT RELEASE_LOCK(?)', [$lock]); }
+    }
+
+    /** Money reached the wallet for an order the merchant had closed, and nothing else would show it. Once per order. */
+    private static function noteUnclaimedPayment(\WC_Order $order, string $hash): void
+    {
+        if ($order->get_meta('_openreceive_unclaimed_noted') === 'yes') { return; }
+        /* translators: 1: the order's status, 2: the Lightning payment hash */
+        $order->add_order_note(sprintf(__('A Lightning payment arrived while this order was %1$s. OpenReceive left the order as it is. The money is in your wallet: reinstate the order or refund the customer. Payment %2$s', 'openreceive'), $order->get_status(), $hash));
+        $order->update_meta_data('_openreceive_unclaimed_noted', 'yes');
+        $order->save_meta_data();
     }
 
     public static function repair(): void

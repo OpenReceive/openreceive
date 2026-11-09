@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (PHP)
 
 ```sh
-# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 45 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/php/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/php/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -138,8 +138,8 @@ again. Never set the spend-capable override to get past it.
 Then check the PHP runtime: `php -m` must list `gmp`, `sodium`, `mbstring`,
 `json`, `pdo` and one PDO driver. `ext-gmp` is REQUIRED — the NWC transport
 signs every request with it — and `php:*-cli`/`-fpm` images do not ship it:
-install `libgmp-dev` first, then `docker-php-ext-install gmp`, in the
-Dockerfile. Never pass `--ignore-platform-req=ext-gmp` to Composer. PHP must
+install `libgmp-dev` first (on Alpine, `apk add gmp` plus `$PHPIZE_DEPS
+gmp-dev` for the build), then `docker-php-ext-install gmp`, in the Dockerfile. Never pass `--ignore-platform-req=ext-gmp` to Composer. PHP must
 be ≥ 8.2 and 64-bit.
 
 ### Upgrading an existing install
@@ -451,7 +451,10 @@ thin adapter over this engine).
 Requires PHP ≥ 8.2 (64-bit) with `ext-gmp`, `ext-sodium`, `ext-mbstring`,
 `ext-json`, `ext-pdo` and one PDO driver (`pdo_pgsql`, `pdo_sqlite` or
 `pdo_mysql`). `ext-gmp` is **required**, not optional. The NWC transport signs
-every wallet request with it.
+every wallet request with it. The official `php` Docker images do not ship it.
+On Debian images, install `libgmp-dev` and then run `docker-php-ext-install gmp`.
+On Alpine images, run `apk add gmp` and install `$PHPIZE_DEPS gmp-dev` for the
+build.
 
 ### 1. Install
 

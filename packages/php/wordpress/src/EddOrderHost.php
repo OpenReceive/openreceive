@@ -90,9 +90,22 @@ final class EddOrderHost implements Host, AfterPaid
                 edd_insert_payment_note($id, sprintf('OpenReceive Lightning payment %s', $hash));
             }
             // A refunded or revoked order is an operator decision: never reopen it.
-            if (edd_get_order($id)?->status !== 'complete') { return; }
+            $status = edd_get_order($id)?->status;
+            if ($status !== 'complete') {
+                self::noteUnclaimedPayment($id, $hash, (string) $status);
+                return;
+            }
             edd_delete_order_meta($id, '_openreceive_completion_pending');
         } finally { $db->query('SELECT RELEASE_LOCK(?)', [$lock]); }
+    }
+
+    /** Money reached the wallet for an order the merchant had closed, and nothing else would show it. Once per order. */
+    private static function noteUnclaimedPayment(int $id, string $hash, string $status): void
+    {
+        if (edd_get_order_meta($id, '_openreceive_unclaimed_noted', true) === 'yes') { return; }
+        /* translators: 1: the order's status, 2: the Lightning payment hash */
+        edd_insert_payment_note($id, sprintf(__('A Lightning payment arrived while this order was %1$s. OpenReceive left the order as it is. The money is in your wallet: reinstate the order or refund the customer. Payment %2$s', 'openreceive'), $status, $hash));
+        edd_update_order_meta($id, '_openreceive_unclaimed_noted', 'yes');
     }
 
     public static function repair(): void
@@ -102,7 +115,8 @@ final class EddOrderHost implements Host, AfterPaid
         // Read the markers from the table itself: EDD caches order queries for
         // the request, which would miss a marker this request just committed.
         $db = new WpdbConnection($wpdb);
-        $rows = $db->query("SELECT edd_order_id FROM {$wpdb->prefix}edd_ordermeta WHERE meta_key = ? AND meta_value = ? ORDER BY edd_order_id LIMIT 50", ['_openreceive_completion_pending', 'yes']);
+        // Only orders repair can finish: a revoked order keeps its marker, and fifty of those would hide every later order.
+        $rows = $db->query("SELECT m.edd_order_id FROM {$wpdb->prefix}edd_ordermeta m JOIN {$wpdb->prefix}edd_orders o ON o.id = m.edd_order_id WHERE m.meta_key = ? AND m.meta_value = ? AND o.status IN ('pending', 'complete') ORDER BY m.edd_order_id LIMIT 50", ['_openreceive_completion_pending', 'yes']);
         foreach ($rows as $row) {
             try { self::complete((int) $row['edd_order_id']); } catch (\Throwable) { /* Retain the durable marker for the next pass. */ }
         }

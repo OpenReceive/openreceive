@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -202,6 +202,26 @@ test("doctor's proof reads one history row and makes nothing", async () => {
   });
   assert.equal(code, 0);
   assert.deepEqual(calls, [{ limit: 1 }]);
+});
+
+// These four run inside store software no test here boots. The library's own
+// proof is tested in DoctorProofTest; this keeps each of them calling it.
+test("every store platform's doctor proves the wallet accepts the code", async () => {
+  for (const file of [
+    "packages/php/wordpress/src/Plugin.php",
+    "packages/php/fossbilling/src/modules/Openreceive/Commands/Doctor.php",
+    "packages/php/paymenter/Support/Commands/DoctorCommand.php",
+    "packages/php/prestashop/openreceive/src/Commands/Doctor.php",
+  ]) {
+    const source = await readFile(path.join(import.meta.dirname, "..", file), "utf8");
+    assert.match(
+      source,
+      /'Wallet preflight'.{0,200}?proveCodeAccepted\(\$service->nwcClient\(\)\)/s,
+      `${file} must make the signed request`,
+    );
+    // The WordPress build renames bundled classes in `use` lines only.
+    assert.doesNotMatch(source, /\\OpenReceive\\Server\\Doctor::/, `${file} must import it`);
+  }
 });
 
 test("doctor flags a spend-capable wallet reachable through the override", async () => {

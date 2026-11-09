@@ -7,7 +7,10 @@ thin adapter over this engine).
 Requires PHP ≥ 8.2 (64-bit) with `ext-gmp`, `ext-sodium`, `ext-mbstring`,
 `ext-json`, `ext-pdo` and one PDO driver (`pdo_pgsql`, `pdo_sqlite` or
 `pdo_mysql`). `ext-gmp` is **required**, not optional. The NWC transport signs
-every wallet request with it.
+every wallet request with it. The official `php` Docker images do not ship it.
+On Debian images, install `libgmp-dev` and then run `docker-php-ext-install gmp`.
+On Alpine images, run `apk add gmp` and install `$PHPIZE_DEPS gmp-dev` for the
+build.
 
 ## 1. Install
 

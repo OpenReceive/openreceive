@@ -95,7 +95,7 @@ share one wallet scan across every instance. See
 `onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the
 library's settlement transaction. It runs only for the first settled attempt
 for a reference. `paidAt` is Unix seconds. For a timestamp column, convert it
-in the statement: `to_timestamp($1)` on Postgres, `FROM_UNIXTIME(?)` on MySQL. Use `query`, with statements written for your own dialect, to
+in the statement: `to_timestamp($1)` on Postgres, `FROM_UNIXTIME(?)` on MySQL. Store it in a column that holds an instant, `timestamptz` on Postgres or `TIMESTAMP` on MySQL: a plain `timestamp` or `DATETIME` keeps the database session's local time, so on a server not set to UTC it reads hours off. Use `query`, with statements written for your own dialect, to
 update your order or insert an outbox row in that transaction. Do not use your
 ORM's separate connection there. Never map `swap_data` into an API serializer,
 log, or browser bundle.

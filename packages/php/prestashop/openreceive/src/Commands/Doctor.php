@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PrestaShop\Module\OpenReceive\Commands;
 
+use OpenReceive\Server\Doctor as CoreDoctor;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\MetaStore;
 use OpenReceive\Swap\SwapProvider;
@@ -94,7 +95,7 @@ final class Doctor extends Command
         $service = null;
         $this->check('Wallet preflight', static function () use (&$service, &$env): string {
             $service = Runtime::service($env);
-            \OpenReceive\Server\Doctor::proveCodeAccepted($service->nwcClient());
+            CoreDoctor::proveCodeAccepted($service->nwcClient());
             return 'passed (receive-only)';
         });
         if ($service instanceof Service) {

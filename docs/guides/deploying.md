@@ -190,6 +190,12 @@ headers in the build stage. Without them, `bundle install` fails with
 RUN apt-get update && apt-get install -y autoconf automake libtool build-essential pkg-config libssl-dev
 ```
 
+On Alpine images, use this instead. `tzdata` is for Rails itself:
+
+```dockerfile
+RUN apk add --no-cache build-base autoconf automake libtool pkgconf openssl-dev tzdata
+```
+
 ## Laravel in production
 
 Under PHP-FPM or Apache, PHP boots your app fresh on every request. The

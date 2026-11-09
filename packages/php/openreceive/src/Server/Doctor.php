@@ -36,7 +36,8 @@ final class Doctor
         if ($host === null) {
             $lines[] = '  host:             NOT CONFIGURED — implement OpenReceive\\Host and pass it to the engine';
         } else {
-            $lines[] = '  host:             ' . $host::class;
+            // An anonymous class's name holds a NUL byte, and tools then treat the report as binary.
+            $lines[] = '  host:             ' . ((new \ReflectionClass($host))->isAnonymous() ? 'an anonymous class' : $host::class);
             $lines[] = '  authorize:        ' . (self::usesTrait($host, AllowAllAuthorize::class) ? 'the generated placeholder (allow-all) — replace it' : 'set');
             $lines[] = '  amount_for:       set';
             $lines[] = '  on_paid:          ' . (self::usesTrait($host, LoggingOnPaid::class) ? 'the generated placeholder (logging-only) — replace it' : 'set');

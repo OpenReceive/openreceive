@@ -10,6 +10,7 @@ use OpenReceive\Rates\Rates;
 use OpenReceive\Server\Engine;
 use OpenReceive\Server\Psr15Handler;
 use OpenReceive\Server\RequestHandler;
+use OpenReceive\Server\Doctor as CoreDoctor;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\PaymentsSchema;
 use OpenReceive\Storage\SqlPaymentRepository;
@@ -395,7 +396,7 @@ final class Plugin
         });
         if (StoreHost::woocommerce() || StoreHost::edd()) {
             $service = null;
-            $check('Wallet preflight', static function () use (&$service): string { $service = self::service(); \OpenReceive\Server\Doctor::proveCodeAccepted($service->nwcClient()); return 'passed'; });
+            $check('Wallet preflight', static function () use (&$service): string { $service = self::service(); CoreDoctor::proveCodeAccepted($service->nwcClient()); return 'passed'; });
             if ($service !== null) {
                 $check('Price feed', static function () use ($service): string { $currencies = StoreHost::currencies(); $service->listRates(['currencies' => $currencies]); return 'available for ' . implode(', ', $currencies); });
                 // A set LSC code proves nothing about the provider, so ask each one for the catalog checkout lists.

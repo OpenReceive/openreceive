@@ -21,10 +21,6 @@
 
 export const OUT_OF_SCOPE = [
   {
-    pattern: /^packages\/js\/[^/]+\/src\/.*tutorial/i,
-    reason: "checkout tutorial files are still changing in a separate session",
-  },
-  {
     pattern: /WalletSuggestions/,
     reason: "WalletSuggestions is still changing in a separate session",
   },

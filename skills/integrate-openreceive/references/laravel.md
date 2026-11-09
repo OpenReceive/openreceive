@@ -461,6 +461,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev \
     && rm -rf /var/lib/apt/lists/*
 ```
 
+On Alpine images, Debian's package name does not exist. Use this instead:
+
+```dockerfile
+RUN apk add --no-cache gmp \
+    && apk add --no-cache --virtual .gmp-build $PHPIZE_DEPS gmp-dev \
+    && docker-php-ext-install gmp \
+    && apk del .gmp-build
+```
+
 Run `composer require` with a PHP that has gmp. On a machine without one,
 use the rebuilt image with the project mounted, then rebuild again so the
 image installs the new lock:
