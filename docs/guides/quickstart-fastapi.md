@@ -255,7 +255,9 @@ A page without a bundler renders the same checkout as a custom element:
 its standalone build from your static directory: copy
 `openreceive-checkout.js` and `openreceive-checkout.css` from
 `node_modules/@openreceive/elements/dist/standalone/` to `static/openreceive/`,
-and load both on the checkout page. The `openreceive` package from PyPI carries
+and load both on the checkout page: the JS with `<script type="module">`, because
+it is an ES module and a plain `<script>` tag runs nothing, and the CSS with
+`<link rel="stylesheet">`. The `openreceive` package from PyPI carries
 the same two files in `openreceive/django/static/openreceive/`, so you can copy
 them from there without npm.
 

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (NestJS)
 
 ```sh
-# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 45 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/nestjs/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/nestjs/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -213,6 +213,10 @@ itself, and they hold for every integration.
 - Work only in this application. Never read or run anything from another
   project on this machine (its `node_modules`, tools or source), for any
   reason. A browser and Playwright are not part of setup.
+- The project's own rules (its `AGENTS.md`, contributing guide) win over these
+  directions. If one forbids a step here, such as running migrations, ask the
+  owner and wait for the answer, even if doctor cannot pass yet. Do not move
+  the step somewhere the rule does not name, such as app startup.
 - Restart only this app's server, on the port it already uses: stop the
   process you started, or the one listening on that port, by its pid (or
   restart its Compose service). Never `pkill` or `killall` by name: that
@@ -271,7 +275,9 @@ itself, and they hold for every integration.
   the price from `amountFor` and both drop-ins render it above the amount.
   Without it the checkout is a QR and "$1.00" with no sign of what the dollar
   is for.
-- Show the payer the transaction record: `createTransactionDetails(...)` rows,
+- Show the payer the transaction record: `createTransactionDetails(...)` rows
+  (with no bundler use `renderTransactionDetailsHtml`: the standalone file has
+  no `createTransactionDetails`, and one bad import stops the whole page),
   collapsed behind a caret, on the live checkout AND on the receipt. A payment
   hash and a deposit txid are the only evidence a payer has that they paid you.
   `<Checkout>` / `<openreceive-checkout>` already render this panel and the
