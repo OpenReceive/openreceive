@@ -27,7 +27,7 @@
     "@openreceive/vue": "0.4.33",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tabler/icons-react": "^3.49.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.2.1",
     "@vitejs/plugin-vue": "^6.0.10",
     "express": "^5.2.1",
     "mobx": "^6.15.0",
