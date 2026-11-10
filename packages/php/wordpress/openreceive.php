@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OpenReceive – Crypto Payments for WooCommerce & Easy Digital Downloads (Bitcoin, USDT, USDC)
  * Description: Accept crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT, USDC, ETH and SOL, paid to your wallet in Bitcoin. No approval, no API key.
- * Version: 0.4.32
+ * Version: 0.4.33
  * Requires at least: 6.6
  * Requires PHP: 8.2
  * WC requires at least: 9.0
@@ -15,7 +15,7 @@
 
 defined('ABSPATH') || exit;
 define('OPENRECEIVE_PLUGIN_FILE', __FILE__);
-define('OPENRECEIVE_PLUGIN_VERSION', '0.4.32');
+define('OPENRECEIVE_PLUGIN_VERSION', '0.4.33');
 require_once __DIR__ . '/autoload.php';
 
 register_activation_hook(__FILE__, [OpenReceive\WP\Plugin::class, 'activate']);

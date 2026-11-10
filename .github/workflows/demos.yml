@@ -74,7 +74,9 @@ jobs:
   # demos job above builds (build:demo) and scans for secret/testkit
   # markers (scan:client-bundles).
   buttons-rails:
-    runs-on: ubuntu-latest
+    # setup-ruby has no build of the example's Ruby 3.4.3 for Ubuntu 26.04, which
+    # is what ubuntu-latest became in November 2026.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NWC_URI: ""

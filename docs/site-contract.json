@@ -1,6 +1,6 @@
 {
   "contract_version": 11,
-  "release_version": "0.4.32",
+  "release_version": "0.4.33",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
   "how_to_update": "docs/internal/site-build.md",
@@ -53,7 +53,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 15807
+      "bytes": 15868
     },
     {
       "path": "/guides/quickstart-django",
@@ -63,7 +63,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 20286
+      "bytes": 20347
     },
     {
       "path": "/guides/quickstart-flask",
@@ -73,7 +73,7 @@
       "slug": "quickstart-flask",
       "title": "Flask Quickstart",
       "category": "quickstart",
-      "bytes": 18085
+      "bytes": 18146
     },
     {
       "path": "/guides/quickstart-next",
@@ -155,7 +155,7 @@
       "slug": "serverless",
       "title": "Bitcoin Checkout on Serverless Hosts",
       "category": "guide",
-      "bytes": 9732
+      "bytes": 9731
     },
     {
       "path": "/guides/mobile-apps",
@@ -546,7 +546,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "agent-directions",
-      "bytes": 44517
+      "bytes": 44578
     },
     {
       "path": "/guides/agent-directions-django",
@@ -556,7 +556,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "agent-directions",
-      "bytes": 49391
+      "bytes": 49452
     },
     {
       "path": "/guides/agent-directions-flask",
@@ -566,7 +566,7 @@
       "slug": "agent-directions-flask",
       "title": "Agent Directions: Flask",
       "category": "agent-directions",
-      "bytes": 47004
+      "bytes": 47065
     },
     {
       "path": "/guides/agent-directions-next",
@@ -1068,7 +1068,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44517,
+      "bytes": 44578,
       "copy_button": true,
       "self_contained": true
     },
@@ -1089,7 +1089,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 49391,
+      "bytes": 49452,
       "copy_button": true,
       "self_contained": true
     },
@@ -1110,7 +1110,7 @@
       "kind": "agent-directions-payload",
       "stack": "flask",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 47004,
+      "bytes": 47065,
       "copy_button": true,
       "self_contained": true
     },

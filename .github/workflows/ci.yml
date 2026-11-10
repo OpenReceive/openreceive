@@ -409,7 +409,9 @@ jobs:
   # points at postgres://openreceive:openreceive@127.0.0.1:5432, which the
   # service container below provides, so no DATABASE_URL override is needed.
   rails-example:
-    runs-on: ubuntu-latest
+    # setup-ruby has no build of the example's Ruby 3.4.3 for Ubuntu 26.04, which
+    # is what ubuntu-latest became in November 2026.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NWC_URI: ""

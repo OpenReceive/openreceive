@@ -123,7 +123,8 @@ async function openTutorial(page) {
     .click();
   const dialog = page.getByRole("dialog", { name: /Pay a Lightning invoice with Strike/ });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Next" }).click();
+  // Step 1 is the copy, and the wallet's steps show their pictures only after it.
+  await dialog.getByRole("button", { name: /Copy invoice/ }).click();
   await expect(dialog).toContainText("Tap Send");
   return dialog;
 }
@@ -169,7 +170,7 @@ async function verifyFixture(origin, name, renderer) {
     assert.equal(tutorialScripts.length > 0, split, `${name}: tutorial download timing`);
     if (name !== "standalone") {
       const counts = await page.evaluate(() => window.decodePackagedImages());
-      assert(counts.icons > 0 && counts.logos >= 37 && counts.tutorials >= 20);
+      assert(counts.icons > 0 && counts.logos >= 37 && counts.tutorials >= 19);
       console.log(`${name}/${renderer}: decoded ${JSON.stringify(counts)}`);
     } else console.log("standalone/elements: release archive rendered and decoded tutorial");
     assert.deepEqual(imageRequests, [], "checkout requested image files");

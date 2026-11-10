@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/flask/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.32.
+These directions describe OpenReceive 0.4.33.
 
 Add OpenReceive to a Flask application — the app you are already working in.
 You do not need a copy of the OpenReceive source: the engine is on PyPI
@@ -507,8 +507,8 @@ wallet client (websockets, coincurve, cryptography), the HTTP engine, the
 with Jinja templates needs no npm. Add your database driver if the app does
 not have one yet, such as `psycopg[binary]` for Postgres.
 
-Use `uv` or a virtualenv on Python 3.10 or newer. A system Python 3.9 cannot
-install the package.
+Use `uv` or a virtualenv on Python 3.10 to 3.13. A system Python 3.9 cannot
+install the package, and 3.14 cannot yet, because `coincurve` has no build for it.
 
 ### 2. Create the payment tables
 

@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/django/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.32.
+These directions describe OpenReceive 0.4.33.
 
 Add OpenReceive to a Django project — the app you are already working in. You
 do not need a copy of the OpenReceive source: the Python package is on PyPI
@@ -488,7 +488,7 @@ pip install "openreceive[django]"
 That is the whole install. `openreceive[django]` brings Django. The base
 package brings the wallet client (websockets, coincurve, cryptography), the
 HTTP engine and the `openreceive` CLI. Use `uv` or a virtualenv on Python 3.10
-or newer. A system Python 3.9 cannot install it. If your app brings its own NWC
+to 3.13. A system Python 3.9 cannot install it, and 3.14 cannot yet, because `coincurve` has no build for it. If your app brings its own NWC
 client, set `OPENRECEIVE["SERVICE"]` instead (see below).
 
 Then add the app, point it at a host class, and mount the routes:

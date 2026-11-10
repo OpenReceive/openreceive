@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.33 - 2026-11-09
+
+- Changed: requires `nwc-ruby ~> 0.5`. Each connection's encryption key is
+  derived in OpenSSL instead of pure Ruby, about 58x faster, and the `ecdsa` gem
+  is no longer installed. A Ruby whose OpenSSL cannot use secp256k1, as in FIPS
+  mode, cannot use 0.5.
+- Fixed: `bin/rails openreceive:doctor` fails when the wallet will not accept
+  the code, and names a refused or silent wallet.
+- Fixed: a production boot with the wallet's relay down now completes. Checkouts
+  answer a retryable 503 and try the wallet again after a short wait.
+- Fixed: a wallet-reported `failed` or `expired` invoice no longer closes while
+  a wallet scan is still running. Only a settled payment is committed as found.
+- Fixed: an unexpected error inside OpenReceive's routes leaves a line in the
+  Rails log even when `Rails.error` is present.
+- Fixed: the paid-reference and swap-provider answers described in
+  `openreceive-server` 0.4.33, and the 12 s wallet budget in `openreceive` 0.4.33.
+
 ## 0.4.32 - 2026-11-07
 
 Release with the complete 0.4.32 package family. No Ruby runtime changes

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.33 - 2026-11-09
+
+- Added: `OpenReceive::NwcRubyReceiveClient.from_uri` builds the wallet client
+  a Rack host passes to `OpenReceive::Server::Service`.
+- Fixed: a relay that accepts the connection and never answers now costs 12 s
+  instead of 30 s (`NwcRubyReceiveClient::REQUEST_TIMEOUT_SECONDS`).
+
 ## 0.4.32 - 2026-11-07
 
 Release with the complete 0.4.32 package family. No Ruby runtime changes

@@ -60,7 +60,8 @@ wallet, provider and server remain part of the trust model. Read the
 
 ## Install
 
-Requires **Python 3.10 or newer**. Choose the extra for your application:
+Requires **Python 3.10 to 3.13**. Python 3.14 cannot install it yet, because
+`coincurve` has no build for it. Choose the extra for your application:
 
 ```sh
 # Django 5.2 or newer
