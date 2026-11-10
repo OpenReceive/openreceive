@@ -4,7 +4,7 @@ Tags: crypto, bitcoin, usdt, woocommerce, payment gateway
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.4.33
+Stable tag: 0.4.34
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 

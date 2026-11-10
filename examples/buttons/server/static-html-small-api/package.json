@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-static-html",
-  "version": "0.4.33",
+  "version": "0.4.34",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,18 +10,18 @@
     "start": "node ../../../../tools/run-with-root-env.mjs tsx src/server/production.ts"
   },
   "dependencies": {
-    "@openreceive/browser": "0.4.33",
-    "@openreceive/core": "0.4.33",
-    "@openreceive/elements": "0.4.33",
-    "@openreceive/express": "0.4.33",
-    "@openreceive/http": "0.4.33",
-    "@openreceive/node": "0.4.33",
-    "@openreceive/provider-data": "0.4.33",
+    "@openreceive/browser": "0.4.34",
+    "@openreceive/core": "0.4.34",
+    "@openreceive/elements": "0.4.34",
+    "@openreceive/express": "0.4.34",
+    "@openreceive/http": "0.4.34",
+    "@openreceive/node": "0.4.34",
+    "@openreceive/provider-data": "0.4.34",
     "express": "^5.2.1",
     "vite": "^8.3.5"
   },
   "devDependencies": {
-    "@openreceive/testkit": "0.4.33",
+    "@openreceive/testkit": "0.4.34",
     "typescript": "^6.0.3"
   }
 }

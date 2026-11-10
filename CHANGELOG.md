@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.34 - 2026-11-10
 
 - Changed (Node): `@openreceive/node` now depends on `@getalby/sdk` 9.
   OpenReceive's API is unchanged. One difference a host can see: a relay that

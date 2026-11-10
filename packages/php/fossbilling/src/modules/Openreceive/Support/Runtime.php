@@ -20,7 +20,7 @@ require_once dirname(__DIR__) . '/autoload.php';
  */
 final class Runtime
 {
-    public const VERSION = '0.4.33';
+    public const VERSION = '0.4.34';
 
     /** The module's id: its folder is modules/Openreceive, its URLs start with /openreceive. */
     public const MODULE = 'openreceive';

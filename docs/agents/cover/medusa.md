@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Medusa (0.4.33)
+# OpenReceive agent directions: Medusa (0.4.34)
 
 These directions are 22 KB. Download them with your shell and follow them from Step 0:
 

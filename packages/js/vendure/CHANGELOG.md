@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.34 - 2026-11-10
+
+- No changes to the plugin's own code. It picks up `@getalby/sdk` 9 through
+  `@openreceive/node`: a relay that accepts a wallet request and never
+  acknowledges it now fails as `TIMEOUT` instead of `WALLET_UNAVAILABLE`. Both
+  are retryable.
+
 ## 0.4.33 - 2026-11-09
 
 - No changes to the plugin's own code. It picks up the engine fixes of 0.4.33:

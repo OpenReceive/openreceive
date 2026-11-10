@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.34 - 2026-11-10
+
+Release with the complete 0.4.34 package family. No runtime changes from
+0.4.33.
+
 ## 0.4.33 - 2026-11-09
 
 - Fixed: a process started while the wallet's relay is down now starts.
