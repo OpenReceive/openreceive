@@ -16,7 +16,6 @@ import {
   checkoutRendered,
   chooseSwap,
   continueButton,
-  decodeQr,
   describeCall,
   hashOf,
   invoiceQr,

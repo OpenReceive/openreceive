@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   Nip47NetworkError,
   Nip47PublishError,
+  Nip47PublishTimeoutError,
   Nip47ReplyTimeoutError,
   Nip47WalletError,
 } from "@getalby/sdk/nwc";
@@ -41,6 +42,19 @@ test("SDK publish failures and reply timeouts are transport failures, whatever c
   ).toJSON();
   assert.equal(timeout.code, "TIMEOUT");
   assert.equal(timeout.retryable, true);
+});
+
+// @getalby/sdk 9 gives the relay's own OK wait a second more than the
+// client's, so a relay that takes the request and never acknowledges it now
+// fails as a publish timeout, where SDK 8 threw a publish error.
+test("an SDK relay that never acknowledges a request is a retryable TIMEOUT", () => {
+  const body = normalizeNwcWalletError(
+    new Nip47PublishTimeoutError("publish timeout: abc", "INTERNAL"),
+  ).toJSON();
+  assert.equal(body.code, "TIMEOUT");
+  assert.equal(body.retryable, true);
+  const reworded = normalizeNwcWalletError(new Nip47PublishTimeoutError("no OK came", "OTHER"));
+  assert.equal(reworded.toJSON().code, "TIMEOUT");
 });
 
 test("an SDK transport error in other words is still classified by its class", () => {

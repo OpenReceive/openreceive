@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Changed (Node): `@openreceive/node` now depends on `@getalby/sdk` 9.
+  OpenReceive's API is unchanged. One difference a host can see: a relay that
+  accepts a wallet request and never acknowledges it now fails as `TIMEOUT`
+  instead of `WALLET_UNAVAILABLE`. Both are retryable, so the checkout still
+  offers Try again.
+
 ## 0.4.33 - 2026-11-09
 
 - Removed (Browser, React, Vue, Svelte, Angular): **breaking.** `openWallet`,

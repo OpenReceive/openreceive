@@ -22,7 +22,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@getalby/sdk": "^8.0.3",
+    "@getalby/sdk": "^9.0.0",
     "@openreceive/core": "0.4.33"
   },
   "bin": {
