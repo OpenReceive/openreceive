@@ -10,9 +10,9 @@
     "start": "node ../../../../tools/run-with-root-env.mjs tsx src/server/production.ts"
   },
   "dependencies": {
-    "@angular/compiler": "^22.2.4",
-    "@angular/core": "^22.2.4",
-    "@angular/platform-browser": "^22.2.4",
+    "@angular/compiler": "^22.2.5",
+    "@angular/core": "^22.2.5",
+    "@angular/platform-browser": "^22.2.5",
     "@mantine/core": "^9.7.3",
     "@mantine/hooks": "^9.7.3",
     "@openreceive/angular": "0.4.33",
@@ -26,8 +26,8 @@
     "@openreceive/svelte": "0.4.33",
     "@openreceive/vue": "0.4.33",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
-    "@tabler/icons-react": "^3.49.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@tabler/icons-react": "^3.50.0",
+    "@vitejs/plugin-react": "^6.2.1",
     "@vitejs/plugin-vue": "^6.0.10",
     "express": "^5.2.1",
     "mobx": "^6.15.0",
@@ -35,7 +35,7 @@
     "mobx-react": "^9.2.1",
     "react": "^19.2.7",
     "react-dom": "^19.3.1",
-    "svelte": "^5.39.6",
+    "svelte": "^5.57.3",
     "vite": "^8.3.5",
     "vue": "^3.5.22"
   },

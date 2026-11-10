@@ -170,7 +170,7 @@ services:
   # follow the Playwright version the harness runs (wallet.ts, startWebkit).
   webkit:
     profiles: ["webkit"]
-    image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:-1.64.1}-noble
+    image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:-1.65.0}-noble
     network_mode: host
     init: true
     user: pwuser
@@ -178,7 +178,7 @@ services:
     command:
       - /bin/sh
       - -c
-      - npx -y playwright@${PLAYWRIGHT_VERSION:-1.64.1} run-server --port 17894 --host 127.0.0.1
+      - npx -y playwright@${PLAYWRIGHT_VERSION:-1.65.0} run-server --port 17894 --host 127.0.0.1
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/17894"]
       interval: 2s

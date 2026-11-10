@@ -40,6 +40,18 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: mobx-react
         update-types: ["version-update:semver-major"]
+      # The checkout stylesheet's build tools, held because every host page
+      # loads what they emit. Measured against Tailwind 4.3.2 + daisyUI 5.6.16
+      # (scoped 218,787 bytes, shadow 119,453): Tailwind 4.3.5, with the
+      # lightningcss 1.33 it requires, gives 239,987 / 129,945 and a different
+      # default sans-serif stack; daisyUI 5.7.50 gives 279,733 / 153,583. Lift
+      # these in the change that takes the new versions and keeps the size.
+      - dependency-name: tailwindcss
+        versions: [">= 4.3.3"]
+      - dependency-name: "@tailwindcss/cli"
+        versions: [">= 4.3.3"]
+      - dependency-name: daisyui
+        versions: [">= 5.7.0"]
 
   # The root Gemfile alone: the Ruby engine's test dependencies and the
   # cross-language conformance harness. The per-gem Gemfiles under
