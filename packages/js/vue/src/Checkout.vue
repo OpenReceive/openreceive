@@ -40,6 +40,20 @@ onMounted(() => {
   defineElements();
 });
 
+/**
+ * Bind each element input as an attribute: `^name` is how Vue spells the
+ * `.attr` modifier at runtime, and its SSR renderer reads it too. Without it,
+ * Vue sets a custom element's input as a DOM property whenever the element
+ * has a property of that name. Every element has a read-only `prefix` (its
+ * namespace prefix), so the assignment threw, Vue only warned, and the
+ * checkout asked /openreceive instead of the prefix it was given (#132).
+ */
+function asAttributes(
+  attributes: Readonly<Record<string, string | undefined>>,
+): Record<string, string | undefined> {
+  return Object.fromEntries(Object.entries(attributes).map(([name, value]) => [`^${name}`, value]));
+}
+
 const shell = computed(() => {
   validateCheckoutProps({
     framework: "@openreceive/vue",
@@ -89,11 +103,11 @@ const shell = computed(() => {
     <component
       v-if="shell.themeToggle"
       :is="shell.themeToggle.tagName"
-      v-bind="shell.themeToggle.attributes"
+      v-bind="asAttributes(shell.themeToggle.attributes)"
     />
     <component
       :is="shell.checkout.tagName"
-      v-bind="shell.checkout.attributes"
+      v-bind="asAttributes(shell.checkout.attributes)"
       v-on="shell.checkout.listeners"
     />
   </section>

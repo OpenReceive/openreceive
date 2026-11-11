@@ -238,10 +238,30 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       this.render();
       this.syncThemeAncestorObserver();
       if (this.isCreateMode()) {
-        void this.session.createCheckout();
+        this.scheduleCreate();
         return;
       }
       this.startCheckoutController();
+    }
+
+    private createScheduled = false;
+
+    /**
+     * Prepare once the caller has finished writing attributes: on the next
+     * microtask, with whatever `reference` and `prefix` the element has by
+     * then. A host that sets them one at a time on a connected element (the
+     * Angular wrapper, DOM code that appends before it configures) used to
+     * prepare under the default prefix as soon as `reference` arrived, then
+     * abort that and prepare again when `prefix` followed.
+     */
+    private scheduleCreate(): void {
+      if (this.createScheduled) return;
+      this.createScheduled = true;
+      queueMicrotask(() => {
+        this.createScheduled = false;
+        if (!this.isConnected || !this.isCreateMode()) return;
+        void this.session.createCheckout();
+      });
     }
 
     attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
@@ -256,12 +276,11 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         oldValue?.replace(/\/+$/, "") === newValue?.replace(/\/+$/, "")
       )
         return;
-      // An upgrade calls back once per attribute already present, while the
-      // element is connected: markup parsed before the script defined the
-      // element (a module script, server rendering, a wrapper that defines on
-      // mount) or inserted with innerHTML. The first identity callback prepares
-      // with every attribute already in place, so the next one names the same
-      // order. Starting over aborted that prepare and sent a second (#137).
+      // An identity callback that still names the order this element prepared,
+      // or is preparing, changes nothing: starting over would abort that
+      // prepare and send a second for the same order (#137). An upgrade, whose
+      // callbacks arrive once per attribute while connected, is held off by
+      // scheduleCreate instead.
       if (identityChanged && this.session.preparedCurrentKey) return;
 
       // Display-only attributes (theme, the resume-path trio) never change what is
@@ -313,7 +332,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         this.syncThemeAncestorObserver();
         // Theme/status attrs must not re-prepare; only create inputs may.
         if (createInputChanged) {
-          void this.session.createCheckout();
+          this.scheduleCreate();
         }
         return;
       }

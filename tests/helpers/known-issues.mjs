@@ -17,33 +17,9 @@
 // test you have not understood; a test that fails for a reason not listed
 // here is a new bug or a broken test, and both need a person.
 
-export const KNOWN_OPEN = {
-  "issue-137": {
-    tracked: "https://github.com/OpenReceive/openreceive/issues/137",
-    summary:
-      "<openreceive-checkout> upgraded with `reference` and then `prefix` already on it calls " +
-      "POST /checkouts/prepare twice and aborts the first. A browser upgrades the element when " +
-      "the markup was parsed before the module script ran, set with innerHTML or cloned from a " +
-      "<template>: the pages WooCommerce, Easy Digital Downloads, Paymenter, PrestaShop, " +
-      "FOSSBilling and Odoo print, and the markup in most guides.",
-  },
-  "issue-132": {
-    tracked: "https://github.com/OpenReceive/openreceive/issues/132",
-    summary:
-      "@openreceive/vue drops a `prefix` prop on a client render: Vue assigns it to the " +
-      "read-only DOM property Element.prefix, so the element asks /openreceive instead.",
-  },
-  "prefix-after-reference": {
-    tracked: "found by tests/real-browser-wrappers.test.mjs on 2026-11-11, not filed",
-    summary:
-      "A connected <openreceive-checkout> that is given `reference` and then `prefix` (the " +
-      "Angular wrapper writes them in that order, one at a time) sends POST " +
-      "/openreceive/checkouts/prepare, aborts it, and only then asks the prefix it was given. A " +
-      "shop mounted anywhere but /openreceive gets a request for a path it does not serve on " +
-      "every Angular checkout. The issue-137 change does not cover it: the two requests name " +
-      "different prefixes.",
-  },
-};
+// Empty: #137, #132 and the reference-then-prefix order were fixed on
+// 2026-11-11, and the checks that tracked them now hold the fixes.
+export const KNOWN_OPEN = {};
 
 const FAIL_KNOWN = process.env.OPENRECEIVE_KNOWN_ISSUES === "fail";
 

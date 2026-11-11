@@ -11,6 +11,21 @@
   Livewire) and the first mount of the Vue, Svelte and Angular wrappers. On a
   paid order reopened just after paying, the aborted request could leave the
   payer on the payment screen instead of the receipt. Reported in #137.
+- Fixed (Vue): a `prefix` prop now reaches the checkout when the component
+  renders in the browser. Vue set it as a DOM property, and every element
+  already has a read-only `prefix` property, so the assignment failed with
+  `Failed setting prop "prefix"` and the checkout asked `/openreceive` instead.
+  A server-rendered page was not affected. The wrapper now sets every checkout
+  input as an attribute. Reported in #132.
+- Fixed (checkout, Angular): a checkout given `reference` and then `prefix`
+  one at a time after it is on the page, as the Angular wrapper sets them, now
+  prepares once under its own prefix. It first asked
+  `/openreceive/checkouts/prepare`, a path a shop mounted elsewhere does not
+  serve, then aborted that and asked again. The element now waits for the
+  caller to finish setting attributes before it prepares.
+- Tests: the checkout and its Vue, Svelte, Angular and React wrappers now run
+  in real Chromium, WebKit and Firefox on every push (`npm run test:browsers`,
+  and in `npm test` where the browsers are installed).
 
 ## 0.4.34 - 2026-11-10
 

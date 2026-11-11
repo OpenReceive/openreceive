@@ -70,9 +70,16 @@ test("the Vue wrapper only binds shell fields that exist", () => {
   assert.equal(errors.length, 0, `Checkout.vue must parse: ${errors.map((e) => e.message).join()}`);
   assert.ok(descriptor.template, "Checkout.vue must have a template");
   const shell = shellFixture();
-  const spreads = [...descriptor.template.content.matchAll(/v-bind="shell\.([\w.]+)"/g)].map(
-    (match) => match[1],
-  );
+  // `asAttributes(...)` forces each key to an attribute (#132); the path inside
+  // it must still name a real binding field.
+  const spreads = [
+    ...descriptor.template.content.matchAll(/v-bind="(?:asAttributes\()?shell\.([\w.]+)\)?"/g),
+  ].map((match) => match[1]);
+  assert.deepEqual(spreads.sort(), [
+    "checkout.attributes",
+    "rootAttributes",
+    "themeToggle.attributes",
+  ]);
   for (const path of spreads) {
     const value = path.split(".").reduce((node, key) => node?.[key], shell);
     assert.notEqual(value, undefined, `shell.${path} is bound but does not exist on the binding`);
