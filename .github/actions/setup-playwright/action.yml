@@ -1,9 +1,16 @@
 name: Set up Playwright
 description: >-
-  Node + npm ci + a Chromium install cached on the locked @playwright/test
+  Node + npm ci + a browser install cached on the locked @playwright/test
   version, then the package dists the demo's vite server resolves
   @openreceive/* against. Shared by ci.yml's e2e-smoke and demos.yml's
-  e2e-matrix so the two lanes cannot drift.
+  e2e-matrix so the two lanes cannot drift. Chromium unless `browsers` names
+  more (ci.yml's browsers job installs all three engines).
+
+inputs:
+  browsers:
+    description: Playwright engines to install, separated by spaces.
+    required: false
+    default: chromium
 
 runs:
   using: composite
@@ -19,18 +26,26 @@ runs:
     - name: Read Playwright version
       id: playwright-version
       shell: bash
+      env:
+        BROWSERS: ${{ inputs.browsers }}
       run: |
         echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        echo "engines=${BROWSERS// /-}" >> "$GITHUB_OUTPUT"
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: playwright-cache
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-${{ steps.playwright-version.outputs.engines }}
+    # $BROWSERS is left unquoted on purpose: one word per engine.
     - if: steps.playwright-cache.outputs.cache-hit != 'true'
-      run: npx playwright install chromium --with-deps
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: npx playwright install $BROWSERS --with-deps
       shell: bash
     - if: steps.playwright-cache.outputs.cache-hit == 'true'
-      run: npx playwright install-deps chromium
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: npx playwright install-deps $BROWSERS
       shell: bash
     # The demo's vite dev server (the Playwright webServer) resolves
     # @openreceive/* to the packages' built dists; tsx only covers the demo's
