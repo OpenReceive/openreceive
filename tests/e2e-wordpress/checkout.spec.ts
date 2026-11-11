@@ -48,6 +48,22 @@ for (const mode of ["blocks", "classic", "plain-permalinks", "swap-refund"] as c
     if (await city.isVisible()) await city.fill("Los Angeles");
     const postcode = page.getByLabel(/ZIP Code|Postal code|Postcode/).first();
     if (await postcode.isVisible()) await postcode.fill("90001");
+    // The order page prints <openreceive-checkout> with its attributes before
+    // the module script defines it, so the element is upgraded: it must still
+    // prepare once, with nothing aborted (#137).
+    const orderPagePrepares: string[] = [];
+    const abortedPrepares: string[] = [];
+    page.on("request", (request) => {
+      if (
+        request.url().includes("/checkouts/prepare") &&
+        request.frame().url().includes("order-pay")
+      )
+        orderPagePrepares.push(request.url());
+    });
+    page.on("requestfailed", (request) => {
+      if (request.url().includes("/checkouts/prepare"))
+        abortedPrepares.push(`${request.url()} ${request.failure()?.errorText ?? ""}`);
+    });
     const invoiceResponse = page.waitForResponse(
       (response) =>
         response
@@ -59,6 +75,9 @@ for (const mode of ["blocks", "classic", "plain-permalinks", "swap-refund"] as c
     await expect(page).toHaveURL(/order-pay/);
     const checkout = page.locator("openreceive-checkout");
     await expect(checkout).toBeVisible();
+    await expect(checkout.getByRole("button", { name: /Bitcoin/ }).first()).toBeVisible();
+    expect(abortedPrepares).toEqual([]);
+    expect(orderPagePrepares).toHaveLength(1);
     if (mode === "swap-refund") {
       await checkout.getByRole("button", { name: /USDT/ }).click();
       await checkout

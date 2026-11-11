@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import {
   addButtonToCart,
-  bitcoinTile,
   BUTTON_PRICE,
   BUTTON_SATS,
+  bitcoinTile,
   CHECKOUT_FRAMEWORKS,
   expectInlineImages,
+  expectOnePrepareSince,
   expectPaidReceipt,
   expectWizardCurrencies,
   mintAttempt,
@@ -15,6 +16,7 @@ import {
   settleTestkitInvoice,
   startCheckout,
   watchImageRequests,
+  watchPrepareRequests,
 } from "./helpers.ts";
 
 /**
@@ -30,11 +32,21 @@ for (const framework of CHECKOUT_FRAMEWORKS) {
     page,
   }) => {
     const imageRequests = watchImageRequests(page);
+    const prepares = watchPrepareRequests(page);
     await openShop(page);
     await addButtonToCart(page);
     await startCheckout(page);
+    if (framework !== "react") {
+      // The React tab mounts first. Let its prepare finish, so the switch below
+      // unmounts a checkout that is not mid-request.
+      await expect(page.getByRole("heading", { name: "Pay this invoice" })).toBeVisible();
+    }
+    const mark = framework === "react" ? 0 : prepares.sent.length;
     await selectFrameworkTab(page, framework);
     await expectWizardCurrencies(page);
+    // The Vue, Svelte and Angular wrappers define the element when they mount,
+    // so its first mount is an upgrade: it must still prepare once (#137).
+    expectOnePrepareSince(prepares, mark);
 
     // Selecting Bitcoin mints the bolt11 through POST /openreceive/checkouts.
     const attempt = await mintAttempt(page, "/openreceive/checkouts", async () => {

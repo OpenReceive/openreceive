@@ -92,6 +92,11 @@ export interface ElementCheckoutSession {
   applyOwnAttributes(attributes: Parameters<typeof applyCheckoutElementAttributes>[1]): void;
   /** Run a block of self-writes under the same guard, for conditional writes. */
   writeOwnAttributes(write: () => void): void;
+  /**
+   * This element already prepared, or is preparing, the `${prefix}::${reference}`
+   * its attributes name right now.
+   */
+  readonly preparedCurrentKey: boolean;
   /** A create input changed: the next connect/render may prepare again. */
   forgetCreateKey(): void;
   dispose(): void;
@@ -356,6 +361,9 @@ export function createElementCheckoutSession(
     },
     get created() {
       return createdKey !== undefined;
+    },
+    get preparedCurrentKey() {
+      return createdKey !== undefined && createdKey === currentCreateKey();
     },
     createCheckout,
     retryCreateCheckout,

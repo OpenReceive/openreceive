@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Fixed (checkout): a checkout element that is already on the page when its
+  script defines it now prepares its order once. Every server-rendered page
+  loads the checkout as a module script, which runs after the page's markup, so
+  WooCommerce, Easy Digital Downloads, plain PHP and the other hosts that print
+  both `reference` and `prefix` sent `POST /checkouts/prepare` twice and
+  aborted the first. So did markup inserted with `innerHTML` (htmx, Turbo,
+  Livewire) and the first mount of the Vue, Svelte and Angular wrappers. On a
+  paid order reopened just after paying, the aborted request could leave the
+  payer on the payment screen instead of the receipt. Reported in #137.
+
 ## 0.4.34 - 2026-11-10
 
 - Changed (Node): `@openreceive/node` now depends on `@getalby/sdk` 9.
