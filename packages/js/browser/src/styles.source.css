@@ -20,9 +20,24 @@
 @source "./ui-classes.ts";
 @source "./internal/**/*.{ts,tsx}";
 
-/* Shadow-DOM / host bridge for web components */
+/* Shadow-DOM / host bridge for web components.
+
+   Text properties inherit through the shadow root, so a host theme's body
+   font size, weight, letter spacing or text transform (a WordPress block
+   theme's 20px body, say) restyled every checkout text the utilities leave
+   unsized. Tailwind's preflight already sets font-family and line-height on
+   :host; these complete the set. A host rule on the tag itself still wins. */
 :host {
   display: block;
+  font-size: 1rem;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-transform: none;
+  text-indent: 0;
+  text-align: start;
+  text-shadow: none;
 }
 
 :host([hidden]) {

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./page-checks.ts";
 import {
   addButtonToCart,
   type CheckoutFramework,

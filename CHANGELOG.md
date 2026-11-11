@@ -16,7 +16,26 @@
   already has a read-only `prefix` property, so the assignment failed with
   `Failed setting prop "prefix"` and the checkout asked `/openreceive` instead.
   A server-rendered page was not affected. The wrapper now sets every checkout
-  input as an attribute. Reported in #132.
+  input as an attribute. A host that patched `Checkout.js` to force attributes
+  itself, as nuxt-openreceive does, keeps working: an input it already marked
+  is left as it is. Reported in #132.
+- Fixed (React): a host that keeps the swap's payment hash from `onState` and
+  passes it back as `resumePaymentHash`, as the refund steps say, no longer
+  sends the payer's deposit screen back to "Creating checkout..." and prepares
+  the order again the moment the swap starts. The checkout reads the resume
+  props when it opens, as the custom element does.
+- Fixed (checkout element): the checkout's borders, focus rings and shadows
+  now draw on every page. Tailwind gives them their starting values through
+  `@property`, which browsers ignore inside a shadow root, so on most pages the
+  element drew its payment tiles and panels with no border at all; they only
+  appeared on a page that ran Tailwind v4 itself. This is every host that uses
+  the element: WooCommerce, Easy Digital Downloads, PrestaShop, FOSSBilling,
+  Paymenter, Odoo, the standalone checkout, and the Vue, Svelte and Angular
+  wrappers. React's checkout was not affected and already looked this way.
+- Fixed (checkout element): a host theme's text size, weight, letter spacing
+  or capitalisation no longer reaches inside the checkout. A WordPress block
+  theme with a 20px body made every unsized text in the checkout larger. A rule
+  on the `openreceive-checkout` tag itself still restyles it.
 - Fixed (checkout, Angular): a checkout given `reference` and then `prefix`
   one at a time after it is on the page, as the Angular wrapper sets them, now
   prepares once under its own prefix. It first asked
@@ -25,7 +44,11 @@
   caller to finish setting attributes before it prepares.
 - Tests: the checkout and its Vue, Svelte, Angular and React wrappers now run
   in real Chromium, WebKit and Firefox on every push (`npm run test:browsers`,
-  and in `npm test` where the browsers are installed).
+  and in `npm test` where the browsers are installed), including inside a
+  Tailwind, Bootstrap, WordPress-theme and CSS-reset host page. Every browser
+  spec fails on a script error, a console error or an abandoned checkout
+  request; the trial payer walk reports the same; and a weekly job builds and
+  tests nuxt-openreceive against the current packages.
 
 ## 0.4.34 - 2026-11-10
 

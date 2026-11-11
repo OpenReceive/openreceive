@@ -1337,6 +1337,51 @@ function expiredResumeStub(calls) {
   return hash;
 }
 
+test("a host handing back the attempt it got from onState does not restart the checkout", async () => {
+  // The refund docs tell a host to keep the swap's hash from onState and pass it
+  // back as resumePaymentHash. It arrives right after the payer starts a swap;
+  // as a prepare-effect dependency it sent the deposit screen back to
+  // "Creating checkout..." and prepared the order a second time (found by the
+  // browser suite's abandoned-request watch).
+  const calls = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/checkouts/prepare"))
+      return Response.json({ reference: "fed-back", amount_msats: 21000, payment_methods: [] });
+    if (url.endsWith("/payments/check")) return Response.json({ status: "pending" });
+    throw new Error(`Unexpected request ${url}`);
+  };
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  const render = (props) =>
+    root.render(
+      React.createElement(Checkout, {
+        reference: "fed-back",
+        prefix: "/openreceive",
+        polling: false,
+        ...props,
+      }),
+    );
+  try {
+    render({});
+    await until(() => (container.textContent ?? "").includes(checkoutLabels.wizardTitle), {
+      label: "method grid",
+    });
+    render({ resumePaymentHash: "e".repeat(64), resumePaymentRail: "swap" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(calls.filter((url) => url.endsWith("/checkouts/prepare")).length, 1);
+    assert.ok(
+      (container.textContent ?? "").includes(checkoutLabels.wizardTitle),
+      "the checkout must stay where the payer is",
+    );
+  } finally {
+    root.unmount();
+    container.remove();
+  }
+});
+
 test("Start over with no host handler prepares the same order again", async () => {
   // A payer who comes back to an expired QR must not be stuck: the button used
   // to call an optional `onStartOver` and do nothing without one, and no agent

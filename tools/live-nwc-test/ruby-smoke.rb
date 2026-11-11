@@ -8,6 +8,9 @@ DEFAULT_EXPECTED_CAPABILITIES = File.join(ROOT, "tools/live-nwc-test/expected_ca
 
 def read_expected_capabilities
   path = ENV["OPENRECEIVE_EXPECTED_CAPABILITIES"] || DEFAULT_EXPECTED_CAPABILITIES
+  # expected_capabilities.json is a local, untracked override; without one,
+  # use the committed example, as the PHP twin does.
+  path = File.join(ROOT, "tools/live-nwc-test/expected_capabilities.example.json") unless File.file?(path)
   JSON.parse(File.read(path))
 end
 

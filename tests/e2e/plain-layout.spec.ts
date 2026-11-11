@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./page-checks.ts";
 import { addButtonToCart, expectWizardCurrencies, openShop, startCheckout } from "./helpers.ts";
 
 test.skip(process.env.OPENRECEIVE_E2E_STACK !== "php-plain", "Plain PHP demo regressions");

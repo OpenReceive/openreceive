@@ -231,6 +231,8 @@ console.log(`Final outcome: ${outcome.status} (${outcome.reason})`);
 if (outcome.status !== "settled") {
   process.exit(1);
 }
+// The relay connection would keep the process alive after a settled smoke.
+await client.close();
 
 /**
  * The wait loop drives the PRODUCTION scan — @openreceive/core's

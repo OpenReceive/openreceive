@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { root } from "../shared/root.mjs";
 import { STYLE_ROOT_ATTRIBUTE, scopeStyles } from "./scope-styles.mjs";
+import { shadowStyles } from "./shadow-styles.mjs";
 
 const browserRoot = path.join(root, "packages/js/browser");
 const input = path.join(browserRoot, "src/styles.source.css");
@@ -80,7 +81,10 @@ for (const target of wrapperCssTargets) {
 // leaves the tree failing format:check. A biome failure fails the build —
 // silently writing unformatted output would leave format:check failing later
 // with no pointer back to the real cause.
-const generatedSource = `${header}\nexport const compiledStyles = ${JSON.stringify(css)};\n`;
+// The shadow copy: unscoped, with Tailwind's @property fallback made
+// unconditional (shadow-styles.mjs explains why).
+const shadowCss = shadowStyles(css);
+const generatedSource = `${header}\nexport const compiledStyles = ${JSON.stringify(shadowCss)};\n`;
 const formatted = spawnSync(
   path.join(root, "node_modules/.bin/biome"),
   ["format", `--stdin-file-path=${generatedTs}`],
@@ -99,5 +103,5 @@ if (formatted.error !== undefined || formatted.status !== 0) {
 writeFileSync(generatedTs, formatted.stdout);
 
 process.stdout.write(
-  `built browser css (${css.length} bytes shadow, ${scopedCss.length} bytes scoped)\n`,
+  `built browser css (${shadowCss.length} bytes shadow, ${scopedCss.length} bytes scoped)\n`,
 );

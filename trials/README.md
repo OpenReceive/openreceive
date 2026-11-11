@@ -440,6 +440,15 @@ is saved in the report's `payer/` folder as a screenshot and its visible text.
   "settled" or "settlement", shows a server error, an exception, `undefined`,
   `NaN` or `[object Object]`.
   "swap service" is allowed in the product (that ban is for videos).
+- `payer_console_clean` (polish): no page of the walk threw an uncaught error
+  or logged a console error. Chromium's own "Failed to load resource" lines are
+  left out (the failure steps provoke server errors on purpose).
+- `payer_no_abandoned_checkout_requests` (polish): no page started a prepare,
+  create or swap request and gave up on it (#137: an element that aborted its
+  own prepare on every order page). Polish, because a React development build
+  mounts each component twice and abandons the first prepare by design.
+
+Both watch every page the walk opens, in every context (`page-signals.ts`).
 
 After the first payment the walk follows the payer's trip (`payer-journeys.ts`):
 

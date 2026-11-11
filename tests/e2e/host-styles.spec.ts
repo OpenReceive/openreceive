@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, test } from "./page-checks.ts";
 import {
   addButtonToCart,
   expectWizardCurrencies,

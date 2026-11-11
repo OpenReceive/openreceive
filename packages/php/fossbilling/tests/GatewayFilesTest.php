@@ -28,7 +28,12 @@ final class GatewayFilesTest extends TestCase
     {
         $adapter = $this->library . '/Payment/Adapter';
         @chmod($adapter, 0o755);
-        foreach (glob($adapter . '/OpenReceive/{,.}*', GLOB_BRACE) ?: [] as $file) {
+        // Two globs, not GLOB_BRACE: musl's libc (Alpine's PHP) has no brace expansion.
+        $files = array_merge(
+            glob($adapter . '/OpenReceive/*') ?: [],
+            glob($adapter . '/OpenReceive/.*') ?: [],
+        );
+        foreach ($files as $file) {
             if (is_file($file)) {
                 unlink($file);
             }
