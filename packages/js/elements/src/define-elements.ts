@@ -256,6 +256,13 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         oldValue?.replace(/\/+$/, "") === newValue?.replace(/\/+$/, "")
       )
         return;
+      // An upgrade calls back once per attribute already present, while the
+      // element is connected: markup parsed before the script defined the
+      // element (a module script, server rendering, a wrapper that defines on
+      // mount) or inserted with innerHTML. The first identity callback prepares
+      // with every attribute already in place, so the next one names the same
+      // order. Starting over aborted that prepare and sent a second (#137).
+      if (identityChanged && this.session.preparedCurrentKey) return;
 
       // Display-only attributes (theme, the resume-path trio) never change what is
       // polled: rebuilding the controller for them fired an extra POST

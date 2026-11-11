@@ -47,6 +47,41 @@ export function watchImageRequests(page: Page): ImageRequestLog {
   return { images, notFound };
 }
 
+/**
+ * Every POST /openreceive/checkouts/prepare the page sends, and the ones the
+ * browser gave up on. A checkout mount prepares once: a second prepare, or an
+ * aborted one, is the double-request bug class of issue #137 (an element
+ * upgraded with its attributes already in place restarted its own prepare).
+ * Install before navigating; hand the result to {@link expectOnePrepareSince}.
+ */
+export function watchPrepareRequests(page: Page): PrepareRequestLog {
+  const sent: string[] = [];
+  const failed: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/checkouts/prepare")) sent.push(request.url());
+  });
+  page.on("requestfailed", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/checkouts/prepare")) {
+      failed.push(`${request.url()} ${request.failure()?.errorText ?? ""}`);
+    }
+  });
+  return { sent, failed };
+}
+
+export interface PrepareRequestLog {
+  readonly sent: string[];
+  readonly failed: string[];
+}
+
+/**
+ * Exactly one prepare since `mark` (the log's `sent.length` before the mount),
+ * and none aborted. Call once the mounted checkout shows its method grid.
+ */
+export function expectOnePrepareSince(log: PrepareRequestLog, mark: number): void {
+  expect(log.failed).toEqual([]);
+  expect(log.sent.slice(mark)).toHaveLength(1);
+}
+
 export interface ImageRequestLog {
   /** Image requests that were not the shop's own artwork. */
   readonly images: string[];
