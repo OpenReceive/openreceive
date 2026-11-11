@@ -13,6 +13,7 @@
       "!**/.release",
       "!**/.next",
       "!**/.vite",
+      "!**/.wrangler",
       "!**/.openreceive",
       "!**/vendor/bundle",
       "!**/vendor",

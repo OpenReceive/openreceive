@@ -118,11 +118,17 @@ export async function testLatestBtcpay(input = {}) {
     ]);
     report.sourceCommit = await command("git", ["rev-parse", "HEAD"], { cwd: source });
     report.pinnedCommit = await command("git", ["rev-parse", "HEAD"], { cwd: pinnedSource });
-    assert.equal(
-      await command("git", ["status", "--porcelain"], { cwd: pinnedSource }),
-      "",
-      "Pinned BTCPay source must be clean",
-    );
+    // Our own Docker builds compile the referenced upstream projects and leave
+    // their untracked obj-docker/ and bin-docker/ folders in the submodule; those
+    // are build output, not a change to the pinned source.
+    const sourceChanges = (await command("git", ["status", "--porcelain"], { cwd: pinnedSource }))
+      .split("\n")
+      .filter((line) => line !== "")
+      .filter((line) => {
+        const untracked = line.match(/^\?\? (.+?)\/?$/);
+        return untracked === null || !buildDirectories.has(path.basename(untracked[1]));
+      });
+    assert.deepEqual(sourceChanges, [], "Pinned BTCPay source must be clean");
 
     async function check(label, dotnetRoot, btcpayRoot, unitTests) {
       const env = {

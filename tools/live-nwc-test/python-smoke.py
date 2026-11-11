@@ -48,6 +48,10 @@ def read_expected_capabilities() -> dict[str, Any]:
     path = Path(
         os.environ.get("OPENRECEIVE_EXPECTED_CAPABILITIES") or DEFAULT_EXPECTED_CAPABILITIES
     )
+    # expected_capabilities.json is a local, untracked override; without one,
+    # use the committed example, as the PHP twin does.
+    if not path.is_file():
+        path = DEFAULT_EXPECTED_CAPABILITIES.with_name("expected_capabilities.example.json")
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return data
 

@@ -49,6 +49,21 @@ jobs:
       - uses: ./.github/actions/setup-playwright
       - run: npm run test:e2e
 
+  # nuxt-openreceive, a Nuxt module someone else maintains, built and tested
+  # against this tree's packages (tools/ci/downstream-nuxt.sh): its install,
+  # its patch over our Checkout.js, its build, typecheck and tests, then its
+  # playground's checkout page in Chromium with the routes moved to /pay. The
+  # module runs in a container at a pinned commit, with no secrets.
+  downstream-nuxt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-playwright
+      - run: npm run test:downstream:nuxt
+
   # Real-ORM adapter lane: knex, typeorm, and prisma each drive the payments
   # repository through their @openreceive/http factory (knexDb / prismaDb /
   # typeOrmDb) on sqlite. The per-push unit tests pin the factories against

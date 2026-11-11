@@ -4,6 +4,7 @@ import { request } from "node:https";
 import path from "node:path";
 import type { Browser, BrowserContextOptions, Locator, Page } from "@playwright/test";
 import { SWAP_PRODUCT } from "./live.ts";
+import { pageSignalChecks, watchBrowserPages } from "./page-signals.ts";
 import { journeyChecks } from "./payer-journeys.ts";
 import type { Check, Platform, Severity } from "./types.ts";
 import type { TrialWallet } from "./wallet.ts";
@@ -1357,6 +1358,7 @@ export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
       }));
   }
   const checks: Check[] = [];
+  const signals = watchBrowserPages(browser);
   try {
     checks.push(...(await happyPath(browser, target, walk)));
     checks.push(...(await invoiceFailure(browser, target, walk)));
@@ -1369,6 +1371,7 @@ export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
   } finally {
     await browser.close().catch(() => undefined);
   }
+  checks.push(...pageSignalChecks(signals));
   return checks;
 }
 
@@ -1529,6 +1532,7 @@ export async function donationWalkChecks(target: PayerTarget): Promise<Check[]> 
   }
   let reason = "";
   let stage = "/donate";
+  const signals = watchBrowserPages(browser);
   try {
     // The page and a $20 preset, with an amount slipped into the checkout's request.
     await visit(browser, async (state) => {
@@ -1712,5 +1716,9 @@ export async function donationWalkChecks(target: PayerTarget): Promise<Check[]> 
   } finally {
     await browser.close().catch(() => undefined);
   }
-  return [...outcome.finish(reason || `stopped at ${stage}`), wordsCheck(walk.states)];
+  return [
+    ...outcome.finish(reason || `stopped at ${stage}`),
+    wordsCheck(walk.states),
+    ...pageSignalChecks(signals),
+  ];
 }

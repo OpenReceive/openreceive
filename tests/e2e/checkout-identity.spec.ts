@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./page-checks.ts";
 import {
   addButtonToCart,
   openShop,

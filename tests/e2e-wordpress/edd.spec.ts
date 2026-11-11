@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../e2e/page-checks.ts";
 
 function wp(code: string): string {
   return execFileSync(

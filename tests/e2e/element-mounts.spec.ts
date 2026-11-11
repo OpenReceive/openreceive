@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./page-checks.ts";
 
 /**
  * Every way a host puts `<openreceive-checkout>` on a page, in a real browser,

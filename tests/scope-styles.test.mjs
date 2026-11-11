@@ -163,3 +163,41 @@ test("the shipped sheets are scoped; the shadow-DOM compile is not", () => {
   assert.ok(compiledStyles.includes("*,:after,:before,::backdrop"));
   assert.ok(!compiledStyles.includes(STYLE_ROOT_ATTRIBUTE));
 });
+
+test("the shadow sheet starts Tailwind's variables itself: @property does not work in a shadow root", () => {
+  const root = postcss.parse(compiledStyles);
+  const properties = [];
+  root.walkAtRules("layer", (layer) => {
+    if (layer.params === "properties") properties.push(layer);
+  });
+  assert.equal(properties.length, 1);
+  const supports = [];
+  properties[0].walkAtRules("supports", (rule) => supports.push(rule));
+  assert.deepEqual(supports, [], "the fallback block must not wait on an @supports");
+  const declared = [];
+  properties[0].walkDecls(/^--tw-border-style$/, (decl) => declared.push(decl.value));
+  assert.deepEqual(declared, ["solid"], "every element must start with a solid border style");
+  // The scoped file copies keep Tailwind's condition: in a document @property works.
+  assert.match(
+    readFileSync("packages/js/browser/dist/styles.css", "utf8"),
+    /@layer properties\{@supports/,
+  );
+});
+
+test("the shadow sheet stops a host's text styles at the shadow root", () => {
+  const host = [];
+  postcss.parse(compiledStyles).walkRules(/^:host$/, (rule) => {
+    rule.walkDecls((decl) => host.push(`${decl.prop}:${decl.value}`));
+  });
+  for (const declaration of [
+    "font-size:1rem",
+    "font-weight:400",
+    "letter-spacing:normal",
+    "text-transform:none",
+  ]) {
+    assert.ok(
+      host.includes(declaration),
+      `:host must set ${declaration}; it has ${host.join(";")}`,
+    );
+  }
+});

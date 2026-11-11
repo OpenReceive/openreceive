@@ -47,11 +47,20 @@ onMounted(() => {
  * has a property of that name. Every element has a read-only `prefix` (its
  * namespace prefix), so the assignment threw, Vue only warned, and the
  * checkout asked /openreceive instead of the prefix it was given (#132).
+ *
+ * A key that already carries a Vue modifier (`^` or `.`) is left as it is: a
+ * host that patched this file to force attributes itself (nuxt-openreceive did,
+ * before this fix) must not end up binding `^^prefix`.
  */
 function asAttributes(
   attributes: Readonly<Record<string, string | undefined>>,
 ): Record<string, string | undefined> {
-  return Object.fromEntries(Object.entries(attributes).map(([name, value]) => [`^${name}`, value]));
+  return Object.fromEntries(
+    Object.entries(attributes).map(([name, value]) => [
+      name.startsWith("^") || name.startsWith(".") ? name : `^${name}`,
+      value,
+    ]),
+  );
 }
 
 const shell = computed(() => {

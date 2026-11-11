@@ -198,6 +198,15 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // Ref so the session always reads the latest checkout without being a dep.
   const createdCheckoutRef = React.useRef(created.checkout);
   createdCheckoutRef.current = created.checkout;
+  // The resume props name the remembered attempt to reopen when the checkout
+  // OPENS. A host that keeps the attempt from `onState`, as the refund docs
+  // say, hands that same hash back the moment the payer starts a swap: as an
+  // effect dependency it reset the deposit screen to "Creating checkout..." and
+  // prepared the order again. Read from a ref, a new order still opens on the
+  // host's current values, and a changed hash alone restarts nothing, as in the
+  // custom element.
+  const resumeRef = React.useRef({ paymentHash: resumePaymentHash, rail: resumePaymentRail });
+  resumeRef.current = { paymentHash: resumePaymentHash, rail: resumePaymentRail };
 
   // The deferred Lightning mint, shared with the custom element (G6): reuse a
   // bolt11 with time left on it, otherwise mint one, and never mint twice for
@@ -234,10 +243,11 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   }, [syncUrl, reference, resumePathPrefix, routeReference]);
 
   // Prepare on mount (amount lock + methods). Lightning mints only when Bitcoin is selected.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; fetch/onError are read from refs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; fetch/onError and the resume props are read from refs.
   React.useEffect(() => {
     let cancelled = false;
     const action = session.capture();
+    const { paymentHash: resumePaymentHash, rail: resumePaymentRail } = resumeRef.current;
     setCreated({ status: "pending" });
     prepareCheckout({
       prefix: resolvedPrefix,
@@ -282,7 +292,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       cancelled = true;
       session.reset();
     };
-  }, [reference, resolvedPrefix, csrfHeader, resumePaymentHash, resumePaymentRail, attempt]);
+  }, [reference, resolvedPrefix, csrfHeader, attempt]);
 
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
