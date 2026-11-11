@@ -17,12 +17,17 @@ import { memoryPaymentsDb } from "./factories.mjs";
 export async function createLifecycleStack(options = {}) {
   const now = options.now ?? (() => Math.floor(Date.now() / 1000));
   const wallet = createTestkitReceiveClient({ now });
+  // `walletLatencyMs`: the fake wallet answers after a wait, like a wallet behind
+  // a relay. With an instant wallet one request always finishes before the next
+  // starts, so two requests that overlap on a real shop never overlap here.
+  const client =
+    options.walletLatencyMs === undefined ? wallet : slowWallet(wallet, options.walletLatencyMs);
   // `noSwapProvider: true` is a shop that never configured a swap provider: no
   // provider is injected, so the service builds its list from `env` exactly as a
   // real install does. Any other stack gets the testkit fake provider.
   const swapProvider = options.noSwapProvider ? undefined : createTestkitSwapProvider({ now });
   const service = await createOpenReceive({
-    client: wallet,
+    client,
     clock: now,
     ...(swapProvider === undefined
       ? { env: options.env ?? {} }
@@ -49,6 +54,8 @@ export async function createLifecycleStack(options = {}) {
     authorize: options.authorize ?? (() => true),
     host,
     ...(options.handlerClock === undefined ? {} : { clock: options.handlerClock }),
+    // `prefix`: routes mounted somewhere other than /openreceive.
+    ...(options.prefix === undefined ? {} : { prefix: options.prefix }),
   });
   const requests = [];
   const fetchStub = async (input, init) => {
@@ -82,7 +89,7 @@ export async function createLifecycleStack(options = {}) {
       });
     },
     async postJson(path, body) {
-      const response = await fetchStub(`/openreceive${path}`, {
+      const response = await fetchStub(`${handler.prefix}${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -95,6 +102,27 @@ export async function createLifecycleStack(options = {}) {
     async close() {
       await service.close();
     },
+  };
+}
+
+/**
+ * The same wallet, each answer `latencyMs` late. A plain object, not a Proxy:
+ * the testkit client keeps its state in private fields.
+ */
+function slowWallet(wallet, latencyMs) {
+  const wait = () => new Promise((resolve) => setTimeout(resolve, latencyMs));
+  return {
+    capabilitySummary: wallet.capabilitySummary,
+    preflight: () => wallet.preflight(),
+    async makeInvoice(request) {
+      await wait();
+      return wallet.makeInvoice(request);
+    },
+    async listTransactions(request, options) {
+      await wait();
+      return wallet.listTransactions(request, options);
+    },
+    subscribeNotifications: (...args) => wallet.subscribeNotifications(...args),
   };
 }
 
