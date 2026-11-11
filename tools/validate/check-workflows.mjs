@@ -28,6 +28,9 @@ const requiredWorkflows = {
     // Per-push browser smoke: one real checkout through the node-express
     // demo in Chromium (full spec matrix stays in the weekly demos lane).
     "npm run test:e2e:smoke",
+    // Per-push browser lab: the checkout and its wrappers in Chromium, WebKit
+    // and Firefox (tests/real-browser-*.test.mjs).
+    "npm run test:browsers",
     "npm run test:package-assets",
     "npm run test:orms",
     // The Supabase repository over PostgREST, the storage Lovable apps use.

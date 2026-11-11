@@ -400,6 +400,27 @@ jobs:
           cache-dependency-glob: examples/buttons/server/fastapi/uv.lock
       - run: npm run test:e2e:smoke:fastapi
 
+  # The browser lab (tests/real-browser-*.test.mjs): the built checkout and the
+  # Vue, Svelte, Angular and React wrappers in Chromium, WebKit and Firefox,
+  # against the real HTTP handler. happy-dom, which the rest of the JS suite
+  # runs in, does not upgrade custom elements, has no read-only DOM properties
+  # and never aborts a request on the wire: issues 132 and 137, both reported
+  # by a user, lived there. The same files run inside `npm test` wherever a
+  # browser is installed and skip where none is; here a missing engine fails
+  # (OPENRECEIVE_BROWSER_TESTS=require, set by the script). Ubuntu 24.04:
+  # Playwright ships WebKit's and Firefox's system libraries for it.
+  browsers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-playwright
+        with:
+          browsers: chromium webkit firefox
+      - run: npm run test:browsers
+
   # Full Buy a Button Rails example on every push/PR, not only in the weekly
   # demos lane: a schema break in the example once shipped because nothing
   # per-push ever executed it. Mirrors demos.yml's buttons-rails job.
