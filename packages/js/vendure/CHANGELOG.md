@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.35 - 2026-11-12
+
+- No changes to the plugin's own code. Released with the 0.4.35 package
+  family, whose fixes are in the checkout UI packages.
+
 ## 0.4.34 - 2026-11-10
 
 - No changes to the plugin's own code. It picks up `@getalby/sdk` 9 through

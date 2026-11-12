@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.35 - 2026-11-12
+
+Release with the complete 0.4.35 package family. No Ruby runtime changes
+from 0.4.34.
+
 ## 0.4.34 - 2026-11-10
 
 Release with the complete 0.4.34 package family. No Ruby runtime changes

@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Odoo (0.4.34)
+# OpenReceive agent directions: Odoo (0.4.35)
 
 These directions are 23 KB. Download them with your shell and follow them from Step 0:
 

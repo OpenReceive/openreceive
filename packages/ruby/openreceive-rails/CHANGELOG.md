@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.35 - 2026-11-12
+
+Release with the complete 0.4.35 package family. No Ruby runtime changes
+from 0.4.34. The checkout fixes of 0.4.35 (one prepare per page load, the
+element's borders, a host theme's text no longer resizing it) reach a Rails
+page through `@openreceive/elements` or the standalone checkout of the same
+version.
+
 ## 0.4.34 - 2026-11-10
 
 Release with the complete 0.4.34 package family. No Ruby runtime changes

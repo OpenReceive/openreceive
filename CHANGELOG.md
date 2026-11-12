@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.35 - 2026-11-12
 
 - Fixed (checkout): a checkout element that is already on the page when its
   script defines it now prepares its order once. Every server-rendered page
