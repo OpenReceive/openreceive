@@ -501,8 +501,6 @@ function renderElementSwapFeeBreakdownHtml(
     <div part="swap-breakdown" class="${orClasses.swapBreakdown}">
       <p part="swap-breakdown-title" class="${orClasses.swapBreakdownTitle}">${escapeHtml(checkoutLabels.paymentBreakdown)}</p>
       <dl part="swap-details" class="${orClasses.swapBreakdownRows}">
-        <dt>${escapeHtml(checkoutLabels.cartTotal)}</dt>
-        <dd>${escapeHtml(breakdown.cartTotal)}</dd>
         <dt>${escapeHtml(checkoutLabels.youSend)}</dt>
         <dd>${escapeHtml(breakdown.youSend)}</dd>
         <dt>${escapeHtml(checkoutLabels.swapAndNetworkFees)}</dt>

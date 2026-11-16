@@ -42,7 +42,13 @@ async function expectMethodGrid(page: Page): Promise<void> {
   await expect(paymentColumn(page).getByText(/ on the .+ network/)).toHaveCount(0);
 }
 
-/** Pick a swap coin from the grid and wait for ITS deposit instructions. */
+/**
+ * Pick a swap coin from the grid and wait for ITS deposit instructions.
+ *
+ * A coin tile only selects, whatever the coin: the payer sees the amount and
+ * the swap starts on Continue. Only a coin on several networks is asked which
+ * one first.
+ */
 async function payWith(page: Page, { tile, coin, network }: Coin): Promise<void> {
   await paymentColumn(page).getByRole("button", { name: tile }).first().click();
   if (network !== undefined) {
@@ -51,11 +57,22 @@ async function payWith(page: Page, { tile, coin, network }: Coin): Promise<void>
       .getByRole("button", { name: network })
       .first()
       .click();
-    await paymentColumn(page)
-      .getByRole("button", { name: /^Continue/ })
-      .first()
-      .click();
   }
+  // The amount for this order in that coin, before anything is started. The
+  // review step is drawn for narrow and wide layouts and CSS shows one of the
+  // two, hence `visible`.
+  await expect(
+    paymentColumn(page)
+      .getByText(new RegExp(`^≈ [\\d.]+ ${coin}\\b`))
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  // The tile opened no deposit: there is still nothing to switch away from.
+  await expect(switchLink(page)).toHaveCount(0);
+  await paymentColumn(page)
+    .getByRole("button", { name: /^Continue/ })
+    .first()
+    .click();
   const expectedNetwork = network ?? (coin === "SOL" ? "Solana" : "Ethereum");
   await expect(
     paymentColumn(page)

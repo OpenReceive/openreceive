@@ -145,8 +145,13 @@ OpenReceive.configure do |config|
 
   # Cap invoice creation per client IP, counted from the engine-owned
   # openreceive_payments rows. On here because this is a public web shop and
-  # every payer arrives on their own address. Behind a proxy, configure Rails'
-  # trusted proxies so request.ip is the payer, not the proxy.
+  # every payer arrives on their own address.
+  #
+  # The address counted is the one that connected to the app. When that is one
+  # of the app's trusted proxies, it is the client the proxy forwarded
+  # (request.remote_ip) instead. Rails trusts private addresses already; list
+  # a proxy with a public address (a cloud load balancer, a CDN) in
+  # config.action_dispatch.trusted_proxies, or all its payers share one limit.
   config.rate_limiting = true
 
   # Settlement discovery is opportunistic by default: every engine request first

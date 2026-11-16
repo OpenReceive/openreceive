@@ -37,6 +37,56 @@ final class ClientIp
         return implode(':', array_slice($hextets, 0, 4)) . '::/64';
     }
 
+    /**
+     * Whether the limiter may count this client value as one payer; ports the
+     * JS isPayerAddress (the rate-limit-address vector).
+     *
+     * False for an IP address no payer on the internet can have: loopback,
+     * private (RFC 1918), carrier-shared (100.64.0.0/10), link-local, the
+     * unspecified address, and their IPv6 counterparts (::1, fc00::/7,
+     * fe80::/10). A server sees one of those only when the request came from
+     * its own proxy or network, so the address stands for every payer at once.
+     *
+     * True for every other IP, and for a value that is not an IP at all: a
+     * host that passes its own identifier (an account id, a session key)
+     * chose it deliberately. Accepts raw addresses and the buckets `bucket()`
+     * returns.
+     */
+    public static function isPayer(string $value): bool
+    {
+        $address = strtolower(trim($value));
+        if (str_starts_with($address, '::ffff:') && str_contains($address, '.')) {
+            $address = substr($address, strlen('::ffff:'));
+        }
+        if (!str_contains($address, ':')) {
+            if (preg_match('/\A\d{1,3}(\.\d{1,3}){3}\z/', $address) !== 1) {
+                return true;
+            }
+            [$a, $b, $c, $d] = array_map('intval', explode('.', $address));
+            if (max($a, $b, $c, $d) > 255) {
+                return true;
+            }
+            return !($a === 0
+                || $a === 10
+                || $a === 127
+                || ($a === 100 && $b >= 64 && $b <= 127)
+                || ($a === 169 && $b === 254)
+                || ($a === 172 && $b >= 16 && $b <= 31)
+                || ($a === 192 && $b === 168));
+        }
+        $withoutZone = explode('%', $address, 2)[0];
+        $hextets = self::expandIpv6(str_ends_with($withoutZone, '/64') ? substr($withoutZone, 0, -3) : $withoutZone);
+        if ($hextets === null) {
+            return true;
+        }
+        // :: and ::1 (a /64 bucket of either is all zeros in its first four groups).
+        if (array_slice($hextets, 0, 7) === array_fill(0, 7, '0') && in_array($hextets[7] ?? '', ['0', '1'], true)) {
+            return false;
+        }
+        $first = (int) hexdec($hextets[0]);
+        return !(($first & 0xfe00) === 0xfc00 || ($first & 0xffc0) === 0xfe80);
+    }
+
     /** @return list<string>|null */
     private static function expandIpv6(string $value): ?array
     {

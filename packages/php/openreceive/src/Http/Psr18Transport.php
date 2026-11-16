@@ -37,6 +37,10 @@ final class Psr18Transport implements HttpTransport
         } catch (ClientExceptionInterface $e) {
             throw new TransportException($e->getMessage(), false, $e);
         }
-        return ['status' => $response->getStatusCode(), 'body' => (string) $response->getBody()];
+        $responseHeaders = [];
+        foreach (array_keys($response->getHeaders()) as $name) {
+            $responseHeaders[strtolower((string) $name)] = $response->getHeaderLine((string) $name);
+        }
+        return ['status' => $response->getStatusCode(), 'body' => (string) $response->getBody(), 'headers' => $responseHeaders];
     }
 }

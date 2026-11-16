@@ -29,6 +29,39 @@ export function formatDepositAmount(amount: string): string {
   return amount.replace(/0+$/, "").replace(/\.$/, "");
 }
 
+/**
+ * A crypto amount shortened for a glance: "12.34567891" -> "12.35",
+ * "0.04213457" -> "0.04213", "5.00000000" -> "5".
+ *
+ * For an ESTIMATE only: the picker's amount line, which is marked "≈" and
+ * read once before Continue. A quote carries eight decimals, which is a row of
+ * digits nobody takes in and too wide for a phone. Four significant digits,
+ * and never coarser than two decimals, rounded half up in exact integer math.
+ * An amount the payer has to REPRODUCE (the deposit panel's) keeps every digit
+ * and goes through {@link formatDepositAmount} instead. Non-numeric input is
+ * returned unchanged.
+ *
+ * `cents` is for a coin pegged to a currency (USDT, USDC): it is read as money,
+ * so it is shown as money, to the cent and always with both decimals:
+ * "7.47712345" -> "7.48", "12.5" -> "12.50". An amount under half a cent keeps
+ * its significant digits instead of reading "0.00".
+ */
+export function formatEstimateAmount(
+  amount: string,
+  options: { readonly cents?: boolean } = {},
+): string {
+  if (!/^[0-9]+(?:\.[0-9]+)?$/.test(amount)) return amount;
+  const { units, scale } = parseDecimal(amount);
+  if (options.cents === true) {
+    const cents = rescaleHalfUp(units, scale, 2);
+    if (cents > 0n || units === 0n) return formatDecimal(cents, 2);
+  }
+  // Digits left of the point: 2 for "12.3", 0 for "0.5", -1 for "0.04".
+  const integerDigits = units.toString().length - scale;
+  const decimals = Math.min(scale, Math.max(2, 4 - integerDigits));
+  return formatDepositAmount(formatDecimal(rescaleHalfUp(units, scale, decimals), decimals));
+}
+
 /** Integer division rounded half up. */
 export function roundedDiv(numerator: bigint, denominator: bigint): bigint {
   return (numerator + denominator / 2n) / denominator;

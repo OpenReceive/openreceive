@@ -21,7 +21,15 @@ Formats in use (one per file family):
   capabilities and an encryption mode), `swap-address` (checksum validation of
   refund/deposit addresses), `rate-limit-window` (which timestamp column the
   per-IP budget counts on — `inserted_at` — plus the
-  `(client_ip, inserted_at)` index and window-membership cases).
+  `(client_ip, inserted_at)` index and window-membership cases),
+  `rate-limit-address` (which client values the per-IP limit may count as one
+  payer: never a loopback, private, carrier-shared or link-local address,
+  which is the host's own proxy).
+- **`profiles` + `hosts` + `scenarios`** — `swap-provider-limits`: the request
+  guard every engine attaches to a swap provider. `profiles` are the limits per
+  provider, `hosts` maps a provider's HTTPS base URL to its profile, and each
+  scenario is a clocked list of reserve, check and 429 steps with the answer
+  the guard must give.
 - **`provider` + `cases`** — `swap-state`: the FixedFloat status, emergency block,
   and refund-tx presence → OpenReceive swap state plus attention/refund reasons,
   run through each engine's production status normalizer — an interpreter of

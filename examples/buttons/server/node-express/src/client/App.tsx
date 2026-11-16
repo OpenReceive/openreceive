@@ -166,6 +166,9 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
     // embedded app down and rebuild it once a second.
     const resumePaymentHash = readSwapAttempt(reference);
     const [checkoutState, setCheckoutState] = useState<CheckoutState | undefined>(undefined);
+    // A swap screen shows one amount, the one to send, so the order total
+    // leaves the page while a swap is on it.
+    const swapOnScreen = checkoutState?.rail === "swap";
     const rememberSwap = useCallback(
       (state: CheckoutState) => {
         setCheckoutState(state);
@@ -186,7 +189,7 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
             beside the cart. */}
         <div className="or-shop-stage or-checkout">
           <Stack className="or-checkout-summary" gap="md">
-            <OrderStrip shop={shop} />
+            <OrderStrip shop={shop} hideTotal={swapOnScreen} />
             <StatusCard status={createCheckoutStatusModel(checkoutState)} />
           </Stack>
 
@@ -243,9 +246,11 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
           <Button onClick={shop.startOver} size="sm" variant="subtle">
             Back to shop
           </Button>
-          <Text c="dimmed" size="sm">
-            {formatUsdCents(shop.orderTotalCents)}
-          </Text>
+          {swapOnScreen ? null : (
+            <Text c="dimmed" size="sm">
+              {formatUsdCents(shop.orderTotalCents)}
+            </Text>
+          )}
         </div>
       </>
     );

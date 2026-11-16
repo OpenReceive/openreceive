@@ -31,7 +31,7 @@ final class RateLimitWindowTest extends TestCase
         PaymentsSchema::migrate($db);
         $repo = new SqlPaymentRepository($db);
         foreach ($family['cases'] as $index => $case) {
-            $ip = "10.0.0.{$index}";
+            $ip = "203.0.113.{$index}";
             $attempt = $case['attempt'];
             $db->execute(
                 'INSERT INTO openreceive_payments (reference, payment_hash, status, expires_at, checkout_data, client_ip, inserted_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',

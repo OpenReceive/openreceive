@@ -7,10 +7,10 @@ namespace OpenReceive\Http;
 /** HttpTransport over a closure — the test seam (`fn ($method, $url, $headers, $body, $timeoutMs) => ['status' => …, 'body' => …]`). */
 final class CallableTransport implements HttpTransport
 {
-    /** @var callable(string, string, array<string, string>, ?string, ?int): array{status: int, body: string} */
+    /** @var callable(string, string, array<string, string>, ?string, ?int): array{status: int, body: string, headers?: array<string, string>} */
     private $fn;
 
-    /** @param callable(string, string, array<string, string>, ?string, ?int): array{status: int, body: string} $fn */
+    /** @param callable(string, string, array<string, string>, ?string, ?int): array{status: int, body: string, headers?: array<string, string>} $fn */
     public function __construct(callable $fn)
     {
         $this->fn = $fn;

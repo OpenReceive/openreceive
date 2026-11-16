@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
+import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { fixedFloatProvider } from "../packages/js/node/src/swap/fixedfloat.ts";
-import { SwapProviderWeightBudget } from "../packages/js/node/src/swap/weight-budget.ts";
+import {
+  FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
+  LIGHTNING_SWAP_PROVIDER_LIMITS,
+  SwapProviderWeightBudget,
+  swapProviderLimitsForBaseUrl,
+} from "../packages/js/node/src/swap/weight-budget.ts";
+import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
 const NOW = 1_700_000_000;
 const API_KEY = "test-api-key";
@@ -511,4 +518,210 @@ test("a rate-limit backoff outlives the weight window it started in", async () =
   // ...and the backoff expires on its own clock (1_059 + 60).
   now = 1_120;
   await budget.reserve("create");
+});
+
+// --- provider limits: the guard is sized by who the provider is --------------
+
+test("the provider's host picks its limits; an unknown host gets the stricter FixedFloat ones", () => {
+  for (const url of [
+    "https://lightning-swap.com",
+    "https://lightning-swap.com/",
+    "https://api.lightning-swap.com/v1",
+    "https://LIGHTNING-SWAP.com",
+  ]) {
+    assert.equal(swapProviderLimitsForBaseUrl(url), LIGHTNING_SWAP_PROVIDER_LIMITS, url);
+  }
+  for (const url of [
+    "https://ff.io",
+    "https://swap.example/v1",
+    // A look-alike host is not Lightning Swap.
+    "https://evil-lightning-swap.com",
+    "https://lightning-swap.com.example",
+    "not a url",
+  ]) {
+    assert.equal(swapProviderLimitsForBaseUrl(url), FIXEDFLOAT_SWAP_PROVIDER_LIMITS, url);
+  }
+  assert.equal(
+    fixedFloatProvider({ key: "k", secret: "s", baseUrl: "https://lightning-swap.com" }).limits
+      .profile,
+    "lightning-swap",
+  );
+  assert.equal(fixedFloatProvider({ key: "k", secret: "s" }).limits.profile, "fixedfloat");
+});
+
+test("a FixedFloat guard still allows three creates a minute", async () => {
+  let now = 1_000;
+  const budget = new SwapProviderWeightBudget("fixedfloat", () => now);
+  for (let index = 0; index < 3; index += 1) await budget.reserve("create");
+  await assert.rejects(() => budget.reserve("create"), /weight budget exhausted/);
+  now += 60;
+  await budget.reserve("create");
+});
+
+test("a Lightning Swap guard allows thirty creates a minute and keeps status calls going", async () => {
+  let now = 1_000;
+  const budget = new SwapProviderWeightBudget(
+    "lightning-swap-com",
+    () => now,
+    LIGHTNING_SWAP_PROVIDER_LIMITS,
+  );
+  for (let index = 0; index < 30; index += 1) await budget.reserve("create");
+  const denied = await budget.reserve("create").then(
+    () => undefined,
+    (error) => error,
+  );
+  assert.match(String(denied?.message), /create budget exhausted \(30\+1 > 30\)/);
+  assert.equal(denied?.denial?.reason, "exhausted");
+  assert.equal(denied?.denial?.create_limit, 30);
+  // The swaps that exist can still be read and refunded.
+  await budget.reserve("order");
+  await budget.reserve("emergency");
+  now += 60;
+  await budget.reserve("create");
+});
+
+test("asking whether a create is available uses no budget", async () => {
+  const budget = new SwapProviderWeightBudget("fixedfloat", () => 1_000);
+  for (let index = 0; index < 10; index += 1) await budget.assertAvailable("create");
+  for (let index = 0; index < 3; index += 1) await budget.reserve("create");
+  await assert.rejects(() => budget.assertAvailable("create"), /weight budget exhausted/);
+});
+
+test("a Lightning Swap 429 on a create stops creates for the wait it names, and nothing else", async () => {
+  let now = 1_000;
+  const budget = new SwapProviderWeightBudget(
+    "lightning-swap-com",
+    () => now,
+    LIGHTNING_SWAP_PROVIDER_LIMITS,
+  );
+  await budget.markRateLimited({ path: "create", retryAfterSeconds: 12 });
+  const denied = await budget.reserve("create").then(
+    () => undefined,
+    (error) => error,
+  );
+  assert.equal(denied?.denial?.reason, "backoff");
+  assert.equal(denied?.denial?.backoff_until, 1_012);
+  await budget.reserve("order");
+  now = 1_012;
+  await budget.reserve("create");
+
+  // A 429 on any other call means the account's API budget is spent: all stop.
+  await budget.markRateLimited({ path: "order", retryAfterSeconds: 30 });
+  await assert.rejects(() => budget.reserve("order"), /in backoff until 1042/);
+  await assert.rejects(() => budget.reserve("create"), /in backoff until 1042/);
+
+  // No wait named (the unpaid-swaps-open limit): one minute. A day-long wait
+  // is retried after five minutes, because the provider can lift it sooner.
+  now = 2_000;
+  await budget.markRateLimited({ path: "create" });
+  await assert.rejects(() => budget.reserve("create"), /in backoff until 2060/);
+  now = 3_000;
+  await budget.markRateLimited({ path: "create", retryAfterSeconds: 86_000 });
+  await assert.rejects(() => budget.reserve("create"), /in backoff until 3300/);
+});
+
+test("a FixedFloat 429 stops every call for at least a minute, longer when it says so", async () => {
+  let now = 1_000;
+  const budget = new SwapProviderWeightBudget("fixedfloat", () => now);
+  await budget.markRateLimited({ path: "create", retryAfterSeconds: 5 });
+  await assert.rejects(() => budget.reserve("order"), /in backoff until 1060/);
+  now = 2_000;
+  await budget.markRateLimited({ path: "create", retryAfterSeconds: 600 });
+  await assert.rejects(() => budget.reserve("order"), /in backoff until 2600/);
+  now = 5_000;
+  await budget.markRateLimited({ retryAfterSeconds: 999_999 });
+  await assert.rejects(() => budget.reserve("order"), /in backoff until 8600/);
+});
+
+test("a 429 hands the guard the path and the provider's own wait", async () => {
+  const notices = [];
+  const attach = (provider) =>
+    provider.attachWeightBudget({
+      reserve: async () => {},
+      markRateLimited: async (notice) => {
+        notices.push(notice);
+      },
+    });
+  // Lightning Swap answers a refused create with Retry-After and a body.
+  const header = makeProvider({
+    order: () =>
+      Response.json(
+        { code: 429, msg: "Rate limit", data: null },
+        { status: 429, headers: { "Retry-After": "17" } },
+      ),
+  });
+  attach(header.provider);
+  await assert.rejects(header.provider.getStatus(BASE_ORDER), { kind: "rate_limited" });
+  const body = makeProvider({
+    order: () =>
+      Response.json(
+        { code: 429, msg: "Rate limit", data: { errors: ["RATE_LIMIT"], retry_after: 41 } },
+        { status: 429 },
+      ),
+  });
+  attach(body.provider);
+  await assert.rejects(body.provider.getStatus(BASE_ORDER), { kind: "rate_limited" });
+  const bare = makeProvider({
+    order: () => Response.json({ code: 1, msg: "Too many requests" }, { status: 429 }),
+  });
+  attach(bare.provider);
+  await assert.rejects(bare.provider.getStatus(BASE_ORDER), { kind: "rate_limited" });
+  assert.deepEqual(notices, [
+    { path: "order", retryAfterSeconds: 17 },
+    { path: "order", retryAfterSeconds: 41 },
+    { path: "order" },
+  ]);
+});
+
+test("a create the guard would refuse is refused before an invoice is made", async () => {
+  let invoices = 0;
+  let creates = 0;
+  const client = createTestkitReceiveClient({ now: () => NOW });
+  const makeInvoice = client.makeInvoice.bind(client);
+  client.makeInvoice = async (...args) => {
+    invoices += 1;
+    return makeInvoice(...args);
+  };
+  let budget;
+  const logs = [];
+  const service = await createOpenReceive({
+    client,
+    clock: () => NOW,
+    logLevel: "warn",
+    logger: (entry) => logs.push(entry),
+    swap: {
+      provider: {
+        name: "fixedfloat",
+        supportedPayInAssets: async () => new Set(["USDT_TRON"]),
+        invoiceExpirySeconds: () => 1800,
+        attachWeightBudget: (attached) => {
+          budget = attached;
+        },
+        assertCreateAvailable: () => budget.assertAvailable("create"),
+        createSwap: async () => {
+          creates += 1;
+          throw new Error("the provider must not be asked");
+        },
+      },
+    },
+  });
+  for (let index = 0; index < 3; index += 1) await budget.reserve("create");
+  const request = {
+    reference: "order-busy",
+    amount: { currency: "SAT", value: "20000" },
+    payInAsset: "USDT_TRON",
+  };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(service.createSwap(request), (error) => {
+      assert.equal(error.status, 503);
+      assert.equal(error.message, "The swap provider is rate limited. Please try again shortly.");
+      return true;
+    });
+  }
+  assert.equal(invoices, 0);
+  assert.equal(creates, 0);
+  // Two refusals, one log line: status polls must not bury the log.
+  const refusals = logs.filter((entry) => entry.event === "swap.provider.rate_limited");
+  assert.equal(refusals.length, 1);
+  assert.equal(refusals[0].reason, "exhausted");
 });

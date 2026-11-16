@@ -20,6 +20,12 @@
 // `lightningRequested` is a render flag (create mode defers the QR until the
 // payer asks for it).
 //
+// Beside those sits the picker's price-first rule: `quoteSwap` asks what the
+// checkout costs in a coin and starts nothing, so the payer sees the amount
+// before Continue and a coin that was only looked at leaves no order with the
+// swap provider. `swapQuotes` holds the answers and `quotingSwapAsset` is the
+// render flag for the one in flight.
+//
 // What is NOT here, deliberately: rendering, and how a new snapshot reaches the
 // screen. The element publishes by writing its own attributes and rebuilding a
 // shadow tree; React publishes with setState and hands a started swap attempt
@@ -139,7 +145,15 @@ export interface CheckoutSession {
   /** In-flight swap create; a second click must not mint a colliding attempt. */
   readonly startingSwapAsset: string | null;
   /**
-   * Quotes observed for each pay-in asset, keyed by `pay_in_asset`. An entry
+   * The pay-in asset whose amount is being asked for: the one most recently
+   * passed to {@link quoteSwap}, while its request is in flight, else null. A
+   * render flag for the amount line's spinner; it gates nothing.
+   */
+  readonly quotingSwapAsset: string | null;
+  /**
+   * Quotes observed for each pay-in asset, keyed by `pay_in_asset`, from
+   * {@link quoteSwap} and from `startSwap`'s own quote. An entry's
+   * `pay_amount` is the amount the picker shows before Continue. An entry
    * with `available: false` is why `startSwap` stopped before starting, and
    * carries the accepted range the host renders in its unavailable panel.
    */
@@ -150,6 +164,23 @@ export interface CheckoutSession {
   dispose(): void;
   capture(): { readonly signal: AbortSignal; isCurrent(): boolean };
   ensureLightning(): Promise<void>;
+  /**
+   * Ask what this checkout costs in one pay-in asset, and START NOTHING. The
+   * answer lands in {@link swapQuotes}; the server reads it off its rates feed
+   * and opens no order with the swap provider.
+   *
+   * This is the price-first half of the picker. Call it when an asset becomes
+   * the one on review — a one-network coin's tile, a network button, a network
+   * carried over to the coin just opened — and call {@link startSwap} only
+   * from Continue. Starting from a tile opened a provider order for every coin
+   * a payer looked at, and providers cap how many a merchant may hold unpaid.
+   *
+   * Safe to call on every such click: a second call for an asset already being
+   * quoted joins the first request. A failure is logged and otherwise silent,
+   * because nothing is lost by it: the amount line stays empty and Continue
+   * still works, since `startSwap` quotes again and reports its own errors.
+   */
+  quoteSwap(payInAsset: string): Promise<void>;
   /**
    * Quote the pay-in asset, then start the swap when the quote confirms the
    * amount is in range. Both steps live HERE so the element and React behave
@@ -322,6 +353,11 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
   let mintingLightning = false;
   let startingSwapAsset: string | null = null;
   let swapQuotes: Record<string, CheckoutPaymentMethod> = {};
+  // The picker's quotes in flight, one request per asset, and the asset asked
+  // for last — the one whose amount line is on screen. Non-null only while
+  // that asset's request is open.
+  const quotesInFlight = new Map<string, Promise<void>>();
+  let quotingSwapAsset: string | null = null;
   let generation = 0;
   let abort = new AbortController();
   const identityKey = () =>
@@ -336,6 +372,8 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     generation += 1;
     mintingLightning = false;
     startingSwapAsset = null;
+    quotesInFlight.clear();
+    quotingSwapAsset = null;
   }
   function reset(): void {
     invalidateActions();
@@ -556,6 +594,68 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     return quote;
   }
 
+  async function quoteSwap(payInAsset: string): Promise<void> {
+    const action = capture();
+    const swap = options.swap;
+    const prefix = swap?.prefix();
+    const fetcher = swap?.fetch();
+    const reference = options.reference();
+    // Said nowhere, unlike in startSwap: a host that cannot quote cannot start
+    // either, and Continue is where that wiring mistake is reported. Here it
+    // only means there is no amount to show.
+    if (
+      swap === undefined ||
+      prefix === undefined ||
+      fetcher === undefined ||
+      reference === undefined ||
+      reference.length === 0
+    ) {
+      return;
+    }
+    const retargeted = quotingSwapAsset !== payInAsset;
+    quotingSwapAsset = payInAsset;
+    // One request per asset at a time: a second click, or a re-render that
+    // asks again, joins the request already open instead of sending another.
+    const open = quotesInFlight.get(payInAsset);
+    if (open !== undefined) {
+      if (retargeted) options.onChange();
+      return open;
+    }
+    const csrfHeader = swap.csrfHeader?.();
+    const request = (async () => {
+      try {
+        await quoteSwapAsset(payInAsset, prefix, fetcher, reference, csrfHeader, action);
+      } catch (error) {
+        if (!action.isCurrent()) return;
+        // The payer is told nothing: no amount is not an error, and the start
+        // behind Continue quotes again and reports what it finds.
+        const { code, status } = (error ?? {}) as { code?: unknown; status?: unknown };
+        emitBrowserLog(
+          options.logger,
+          "warn",
+          "swap.quote.failed",
+          "Could not quote the pay-in asset. The picker shows no amount; Continue still works.",
+          {
+            reference,
+            pay_in_asset: payInAsset,
+            ...(typeof status === "number" ? { status } : {}),
+            ...(typeof code === "string" ? { error_code: code } : {}),
+            error_message: error instanceof Error ? error.message : String(error),
+          },
+        );
+      } finally {
+        if (action.isCurrent()) {
+          quotesInFlight.delete(payInAsset);
+          if (quotingSwapAsset === payInAsset) quotingSwapAsset = null;
+          options.onChange();
+        }
+      }
+    })();
+    quotesInFlight.set(payInAsset, request);
+    options.onChange();
+    return request;
+  }
+
   function failSwapStart(error: unknown): void {
     swapStartError = payerErrorMessage(error, SWAP_START_FAILED, {
       action: "swap.start",
@@ -581,6 +681,9 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     get startingSwapAsset() {
       return startingSwapAsset;
     },
+    get quotingSwapAsset() {
+      return quotingSwapAsset;
+    },
     get swapQuotes() {
       return swapQuotes;
     },
@@ -589,6 +692,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     dispose: reset,
     capture,
     ensureLightning,
+    quoteSwap,
     startSwap,
     resetLightningRequest() {
       reset();

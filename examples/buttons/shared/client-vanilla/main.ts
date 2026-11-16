@@ -518,11 +518,14 @@ const renderCheckout = (): DocumentFragment => {
     image.alt = item.name;
     thumbs.append(image);
   }
+  // A swap screen shows ONE amount, the one to send. "$36.00" here beside
+  // "37.04 USDC" in the checkout is a second figure a payer can type into their
+  // wallet, so both copies of the order total leave the page while a swap is on
+  // it (the state listener below hides them).
+  const stripTotal = el("div", "or-shop-order-total", formatUsdCents(order.total_cents));
+  const footerTotal = el("span", "", formatUsdCents(order.total_cents));
   const copy = el("div");
-  copy.append(
-    el("div", "or-shop-order-title", order.description),
-    el("div", "or-shop-order-total", formatUsdCents(order.total_cents)),
-  );
+  copy.append(el("div", "or-shop-order-title", order.description), stripTotal);
   strip.append(thumbs, copy);
 
   const checkout = document.createElement(CHECKOUT_TAG);
@@ -551,7 +554,10 @@ const renderCheckout = (): DocumentFragment => {
   checkout.addEventListener(CHECKOUT_EVENTS.state, (event) => {
     const { state } = (event as CustomEvent<{ state: { rail: string; payment_hash: string } }>)
       .detail;
-    if (state.rail === "swap" && state.payment_hash) {
+    const swapOnScreen = state.rail === "swap";
+    stripTotal.hidden = swapOnScreen;
+    footerTotal.hidden = swapOnScreen;
+    if (swapOnScreen && state.payment_hash) {
       rememberSwapAttempt(order.reference, state.payment_hash);
     }
   });
@@ -586,7 +592,7 @@ const renderCheckout = (): DocumentFragment => {
   const footer = el("div", "or-shop-footer");
   footer.append(
     button("Start over", "or-vanilla-button or-vanilla-button-subtle", startOver),
-    el("span", "", formatUsdCents(order.total_cents)),
+    footerTotal,
   );
   fragment.append(footer);
 

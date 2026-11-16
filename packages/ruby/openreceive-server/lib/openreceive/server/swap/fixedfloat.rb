@@ -62,7 +62,9 @@ module OpenReceive
         DEFAULT_INVOICE_EXPIRY_MARGIN_SECONDS = 5 * 60
         PROVIDER_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,63}\z/
 
-        attr_reader :name
+        # `limits` are the provider's API limits (a SwapProviderLimits), which
+        # size the request guard the service attaches.
+        attr_reader :name, :limits
 
         def initialize(key:, secret:, id: "fixedfloat", base_url: nil, lightning_ccy: nil,
                        http: nil, now: nil, cache_seconds: nil, rates_cache_seconds: nil,
@@ -77,6 +79,9 @@ module OpenReceive
           @key = key
           @secret = secret
           @base_url = (base_url || DEFAULT_BASE_URL).sub(%r{/+\z}, "")
+          # The host names the provider, and the provider sets the limits: the
+          # same wire contract is served at very different rates.
+          @limits = SwapProviderLimits.for_base_url(@base_url)
           normalized_lightning = lightning_ccy.to_s.strip
           @lightning_ccy = normalized_lightning.empty? ? nil : normalized_lightning
           @http = http || Swap.method(:default_http_request)
@@ -150,6 +155,15 @@ module OpenReceive
 
         def attach_weight_budget(budget)
           @weight_budget = budget
+          nil
+        end
+
+        # Raise now when the attached guard would refuse a create, so the
+        # service can refuse a new swap before it does any other work for it.
+        # Uses no budget; the create itself still reserves.
+        def assert_create_available
+          budget = @weight_budget
+          budget.assert_available("create") if budget.respond_to?(:assert_available)
           nil
         end
 
@@ -343,7 +357,16 @@ module OpenReceive
           log_api_response(path: path, status: status, ok: ok,
                            code: parsed["code"], msg: parsed["msg"], data: parsed["data"])
           unless ok
-            @weight_budget&.mark_rate_limited if status == 429
+            if status == 429
+              # The guard hears which call was refused and the wait the
+              # provider named, when it named one.
+              @weight_budget&.mark_rate_limited(
+                **{
+                  path: path,
+                  retry_after_seconds: self.class.read_retry_after_seconds(response, parsed["data"])
+                }.compact
+              )
+            end
             raise FixedFloatApiError.new(
               path: path,
               kind: status == 429 ? "rate_limited" : "http",
@@ -586,6 +609,29 @@ module OpenReceive
             whole_btc = sats / 100_000_000
             fractional = (sats % 100_000_000).to_s.rjust(8, "0").sub(/0+\z/, "")
             fractional.empty? ? whole_btc.to_s : "#{whole_btc}.#{fractional}"
+          end
+
+          # How long a 429 asks the caller to wait: the Retry-After header in
+          # whole seconds, else a positive `retry_after` number in the response
+          # data. nil when the provider named no wait.
+          def read_retry_after_seconds(response, data)
+            header = read_response_header(response, "retry-after")
+            return Integer(header, 10) if !header.nil? && /\A\d{1,9}\z/.match?(header)
+
+            from_body = data.is_a?(Hash) ? data["retry_after"] : nil
+            numeric = from_body.is_a?(Integer) || (from_body.is_a?(Float) && from_body.finite?)
+            numeric && from_body.positive? ? from_body : nil
+          end
+
+          # One response header by case-insensitive name, trimmed; nil when the
+          # transport returned no headers or not this one.
+          def read_response_header(response, name)
+            headers = response[:headers] || response["headers"]
+            return nil unless headers.respond_to?(:each_pair)
+
+            _, value = headers.each_pair.find { |key, _| key.to_s.downcase == name }
+            value = value.first if value.is_a?(Array)
+            value.nil? ? nil : value.to_s.strip
           end
 
           def format_api_error_message(path, status, msg)

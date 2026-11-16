@@ -31,13 +31,39 @@ const USDT_ETH = option({ pay_in_asset: "USDT_ETH", label: "USDT", network_label
 const SOL = option({ pay_in_asset: "SOL_SOL", label: "SOL", network_label: "Solana" });
 const entriesOf = (options) => buildMethodGridEntries(paymentMethods, options);
 
-test("a one-network group has no question, so it resolves to start_swap", () => {
+test("a one-network group has no question, so it resolves to review_swap", () => {
   const entries = entriesOf([USDT_TRON, USDT_ETH, SOL]);
-  assert.deepEqual(
-    resolveWizardSelection({ pickerKey: swapPickerKey("SOL"), entries }),
-    { kind: "start_swap", payInAsset: "SOL_SOL" },
-    "a single-network group must start the swap, never open a one-answer step",
+  const resolved = resolveWizardSelection({
+    pickerKey: swapPickerKey("SOL"),
+    previousKey: swapPickerKey("USDT"),
+    entries,
+    selectedAssetByGroup: { USDT: "USDT_TRON" },
+  });
+  assert.equal(
+    resolved.kind,
+    "review_swap",
+    "a single-network group must open its amount, never a one-answer network step",
   );
+  // The asset to quote, in hand: the renderer derives nothing.
+  assert.equal(resolved.payInAsset, "SOL_SOL");
+  assert.equal(resolved.groupKey, "SOL");
+  assert.equal(resolved.group.options.length, 1);
+  assert.equal(resolved.panelId, "network-panel-sol");
+  // The map to store back. A one-network coin adds nothing to it, and the
+  // network picked for USDT is still there when the payer goes back to it.
+  assert.deepEqual(resolved.selectedAssetByGroup, { USDT: "USDT_TRON" });
+});
+
+// Price first: looking at a coin opens no order with the swap provider. A tile
+// click that started the swap opened one per coin a payer looked at, and a
+// provider account holds only so many unpaid orders at once. So nothing a tile
+// click can mean starts anything.
+test("no tile click resolves to a swap start", () => {
+  const entries = entriesOf([USDT_TRON, USDT_ETH, SOL]);
+  const kinds = ["method:bitcoin", swapPickerKey("USDT"), swapPickerKey("SOL"), "swap:NOPE"].map(
+    (pickerKey) => resolveWizardSelection({ pickerKey, entries }).kind,
+  );
+  assert.deepEqual(kinds, ["select_method", "choose_network", "review_swap", "none"]);
 });
 
 test("a multi-network group resolves to the network step, with everything it needs", () => {
@@ -56,6 +82,31 @@ test("a multi-network group resolves to the network step, with everything it nee
   assert.equal(resolved.panelId, "network-panel-usdt");
   assert.equal(resolved.headingId, "network-heading-usdt");
   assert.deepEqual(resolved.selectedAssetByGroup, {});
+  assert.equal(resolved.payInAsset, undefined, "no network is chosen yet, so nothing to quote");
+});
+
+test("a network already set for the coin is the asset on review, straight from the tile", () => {
+  const usdcTron = option({ pay_in_asset: "USDC_TRON", label: "USDC", network_label: "Tron" });
+  const usdcEth = option({ pay_in_asset: "USDC_ETH", label: "USDC", network_label: "Ethereum" });
+  const entries = entriesOf([USDT_TRON, USDT_ETH, usdcTron, usdcEth]);
+  // The coin's own earlier pick.
+  const own = resolveWizardSelection({
+    pickerKey: swapPickerKey("USDT"),
+    entries,
+    selectedAssetByGroup: { USDT: "USDT_ETH" },
+  });
+  assert.equal(own.kind, "choose_network");
+  assert.equal(own.payInAsset, "USDT_ETH");
+  // The previous coin's network, carried over to a coin that has it too.
+  const carried = resolveWizardSelection({
+    pickerKey: swapPickerKey("USDC"),
+    previousKey: swapPickerKey("USDT"),
+    entries,
+    selectedAssetByGroup: { USDT: "USDT_ETH" },
+  });
+  assert.equal(carried.kind, "choose_network");
+  assert.equal(carried.payInAsset, "USDC_ETH");
+  assert.deepEqual(carried.selectedAssetByGroup, { USDT: "USDT_ETH", USDC: "USDC_ETH" });
 });
 
 test("an unresolvable or all-unavailable key resolves to none", () => {
@@ -101,7 +152,6 @@ test("the grid display model carries the rule as data", () => {
   ).group;
   assert.equal(usdt.multiNetwork, true);
   assert.equal(usdt.needsNetworkStep, true);
-  assert.equal(usdt.startPayInAsset, undefined, "a multi-network tile has nothing to start");
   assert.equal(usdt.selected, true);
   assert.equal(usdt.selectedOption.pay_in_asset, "USDT_ETH");
   assert.equal(usdt.activeOption.pay_in_asset, "USDT_ETH");
@@ -112,8 +162,9 @@ test("the grid display model carries the rule as data", () => {
     (entry) => entry.kind === "swap" && entry.group.label === "SOL",
   ).group;
   assert.equal(sol.needsNetworkStep, false);
-  assert.equal(sol.startPayInAsset, "SOL_SOL", "a one-network tile starts its swap outright");
   assert.equal(sol.selected, false);
+  assert.equal(sol.selectedOption, undefined, "a closed one-network tile has nothing on review");
+  assert.equal("startPayInAsset" in sol, false, "no tile carries an asset to start");
 
   assert.equal(display.networkRequired, true);
   assert.equal(display.selectedGroup.groupKey, "USDT");
@@ -122,9 +173,189 @@ test("the grid display model carries the rule as data", () => {
     disabled: false,
     starting: false,
     label: checkoutLabels.continue,
+    quoting: false,
   });
   assert.equal(display.canContinue, true);
   assert.equal(display.gridBusy, false);
+});
+
+// ------------------------------------------------- the review step, as data
+
+const estimateOf = (amount, asset, network) =>
+  (network === undefined ? checkoutLabels.swapEstimate : checkoutLabels.swapEstimateOnNetwork)
+    .replace("{amount}", amount)
+    .replace("{asset}", asset)
+    .replace("{network}", network);
+
+test("an open one-network tile is on review: Continue is there with no network step", () => {
+  const display = createMethodGridDisplay({
+    entries: entriesOf([USDT_TRON, USDT_ETH, SOL]),
+    selectedPickerKey: swapPickerKey("SOL"),
+    selectedAssetByGroup: {},
+  });
+  const sol = display.selectedGroup;
+  assert.equal(sol.label, "SOL");
+  assert.equal(sol.selected, true);
+  assert.equal(sol.needsNetworkStep, false);
+  assert.equal(sol.selectedOption.pay_in_asset, "SOL_SOL");
+  assert.equal(display.networkRequired, false, "one network is not a question");
+  // Before any quote has answered: Continue works, and there is no amount.
+  assert.deepEqual(display.continueTarget, {
+    payInAsset: "SOL_SOL",
+    disabled: false,
+    starting: false,
+    label: checkoutLabels.continue,
+    quoting: false,
+  });
+  assert.equal(display.canContinue, true);
+});
+
+test("the amount line is the quote for the asset on review, marked as an estimate", () => {
+  const entries = entriesOf([USDT_TRON, USDT_ETH, SOL]);
+  const swapQuotes = {
+    // What the quote route sends: availability, limits and the amount, keyed
+    // by asset. Trailing zeros are the provider's, not the payer's.
+    SOL_SOL: { pay_in_asset: "SOL_SOL", available: true, pay_amount: "0.04210000" },
+    USDT_TRON: { pay_in_asset: "USDT_TRON", available: true, pay_amount: "12.50" },
+    USDT_ETH: { pay_in_asset: "USDT_ETH", available: true, pay_amount: "12.75" },
+  };
+  const sol = createMethodGridDisplay({
+    entries,
+    selectedPickerKey: swapPickerKey("SOL"),
+    swapQuotes,
+  });
+  assert.equal(sol.continueTarget.amountText, estimateOf("0.0421", "SOL"));
+  assert.match(sol.continueTarget.amountText, /^≈ /, "an estimate until the order exists");
+  assert.equal(sol.continueTarget.disabled, false);
+  // A quote has eight decimals. The line is read at a glance, so it carries
+  // four significant digits; the exact figure is the deposit panel's.
+  assert.equal(
+    createMethodGridDisplay({
+      entries,
+      selectedPickerKey: swapPickerKey("USDT"),
+      selectedAssetByGroup: { USDT: "USDT_ETH" },
+      swapQuotes: { USDT_ETH: { available: true, pay_amount: "12.34567891" } },
+    }).continueTarget.amountText,
+    estimateOf("12.35", "USDT", "Ethereum"),
+  );
+  // A coin pegged to a currency is money to the payer, so its estimate is to
+  // the cent ("≈ 7.477 USDT" on a $7.00 order looked like a typo). A floating
+  // coin given the same digits keeps four significant ones.
+  assert.equal(
+    createMethodGridDisplay({
+      entries,
+      selectedPickerKey: swapPickerKey("USDT"),
+      selectedAssetByGroup: { USDT: "USDT_ETH" },
+      swapQuotes: { USDT_ETH: { available: true, pay_amount: "7.47712345" } },
+    }).continueTarget.amountText,
+    estimateOf("7.48", "USDT", "Ethereum"),
+  );
+  assert.equal(
+    createMethodGridDisplay({
+      entries,
+      selectedPickerKey: swapPickerKey("SOL"),
+      swapQuotes: { SOL_SOL: { available: true, pay_amount: "7.47712345" } },
+    }).continueTarget.amountText,
+    estimateOf("7.477", "SOL"),
+  );
+
+  // A coin on several networks names the one the amount is for, and each
+  // network shows its own amount.
+  const onNetwork = (payInAsset) =>
+    createMethodGridDisplay({
+      entries,
+      selectedPickerKey: swapPickerKey("USDT"),
+      selectedAssetByGroup: { USDT: payInAsset },
+      swapQuotes,
+    }).continueTarget.amountText;
+  assert.equal(onNetwork("USDT_TRON"), estimateOf("12.50", "USDT", "Tron"));
+  assert.equal(onNetwork("USDT_ETH"), estimateOf("12.75", "USDT", "Ethereum"));
+
+  // Until a network is chosen there is nothing to continue with, and no amount.
+  const unchosen = createMethodGridDisplay({
+    entries,
+    selectedPickerKey: swapPickerKey("USDT"),
+    swapQuotes,
+  });
+  assert.equal(unchosen.continueTarget, undefined);
+  assert.equal(unchosen.canContinue, false);
+});
+
+test("a quote in flight is a flag on the asset it is for, and on no other", () => {
+  const entries = entriesOf([USDT_TRON, USDT_ETH, SOL]);
+  const quotingSol = createMethodGridDisplay({
+    entries,
+    selectedPickerKey: swapPickerKey("SOL"),
+    quotingAsset: "SOL_SOL",
+  });
+  assert.equal(quotingSol.continueTarget.quoting, true);
+  assert.equal(quotingSol.continueTarget.amountText, undefined);
+  assert.equal(quotingSol.continueTarget.disabled, false, "Continue never waits for the quote");
+
+  const quotingOther = createMethodGridDisplay({
+    entries,
+    selectedPickerKey: swapPickerKey("SOL"),
+    quotingAsset: "USDT_TRON",
+  });
+  assert.equal(quotingOther.continueTarget.quoting, false);
+  assert.equal(
+    createMethodGridDisplay({
+      entries,
+      selectedPickerKey: swapPickerKey("SOL"),
+      quotingAsset: "",
+    }).continueTarget.quoting,
+    false,
+  );
+});
+
+test("an unavailable quote disables Continue with the catalog's own limit message", () => {
+  const checkout = { amount_msats: 200_000, fiat: { currency: "USD", value: "0.05" } };
+  const tooSmall = {
+    available: false,
+    unavailable_reason: "amount_too_small",
+    minimum_invoice_amount_msats: 271_000,
+  };
+  // The same figures, once from the catalog and once from the quote: the
+  // payer must read one message whichever of the two noticed.
+  const fromCatalog = createMethodGridDisplay({
+    entries: entriesOf([{ ...USDT_TRON, ...tooSmall }, USDT_ETH]),
+    selectedPickerKey: swapPickerKey("USDT"),
+    selectedAssetByGroup: { USDT: "USDT_TRON" },
+    checkout,
+  }).continueTarget;
+  const fromQuote = createMethodGridDisplay({
+    entries: entriesOf([SOL]),
+    selectedPickerKey: swapPickerKey("SOL"),
+    swapQuotes: { SOL_SOL: { pay_in_asset: "SOL_SOL", ...tooSmall } },
+    checkout,
+  });
+  assert.equal(fromQuote.continueTarget.disabled, true);
+  assert.equal(fromQuote.canContinue, false);
+  assert.match(fromQuote.continueTarget.label, /^Minimum amount /);
+  assert.equal(fromQuote.continueTarget.label, fromCatalog.label);
+  assert.equal(fromQuote.continueTarget.amountText, undefined, "no amount for a coin out of range");
+  // The tile itself stays open: the catalog still offers the coin.
+  assert.equal(fromQuote.selectedGroup.disabled, false);
+
+  // A refusal that carries no reason still says something on the button.
+  const bare = createMethodGridDisplay({
+    entries: entriesOf([SOL]),
+    selectedPickerKey: swapPickerKey("SOL"),
+    swapQuotes: { SOL_SOL: { available: false } },
+  }).continueTarget;
+  assert.equal(bare.disabled, true);
+  assert.equal(bare.label, checkoutLabels.swapUnavailableFallback.replace("{asset}", "SOL"));
+});
+
+test("a quote never renames the coin: only availability, limits and the amount are taken", () => {
+  const display = createMethodGridDisplay({
+    entries: entriesOf([SOL]),
+    selectedPickerKey: swapPickerKey("SOL"),
+    swapQuotes: {
+      SOL_SOL: { label: "USDT", network_label: "Tron", available: true, pay_amount: "0.5" },
+    },
+  });
+  assert.equal(display.continueTarget.amountText, estimateOf("0.5", "SOL"));
 });
 
 test("a disabled group quotes its cheapest entry point, and says why", () => {

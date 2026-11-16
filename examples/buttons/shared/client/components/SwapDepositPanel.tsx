@@ -120,7 +120,6 @@ const FeeBreakdown: React.FC<{ swap: SwapDisplayModel }> = ({ swap }) => {
   if (!fees) return null;
 
   const rows: [string, string | undefined][] = [
-    [checkoutLabels.cartTotal, fees.cartTotal],
     [checkoutLabels.youSend, fees.youSend],
     [
       checkoutLabels.swapAndNetworkFees,

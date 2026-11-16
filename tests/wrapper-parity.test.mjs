@@ -12,10 +12,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  buildMethodGridEntries,
   checkoutLabels,
+  createMethodGridDisplay,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_DEFAULT_PREFIX,
+  paymentMethods,
 } from "../packages/js/browser/src/headless.ts";
 import { checkoutRoutes } from "../packages/js/browser/src/internal/checkout.ts";
 import { createSwapUnavailableModel } from "../packages/js/browser/src/internal/wizard.ts";
@@ -454,6 +457,52 @@ test("both renderers build the unavailable swap pane from the shared model", () 
   }
 });
 
+// Price first: the amount beside Continue is one finished string in the shared
+// grid model, `continueTarget.amountText`. A renderer that built the line
+// itself could show a different figure, drop the "≈", or name the wrong
+// network, and the two would drift on the one number a payer reads before
+// paying. The behaviour (a tile quotes, Continue starts) is pinned per renderer
+// in tests/element-lifecycle.test.mjs and tests/react-checkout-behavior.test.mjs.
+test("both renderers draw the picker's amount line from the shared model", () => {
+  const swapOptions = [
+    {
+      pay_in_asset: "SOL_SOL",
+      label: "SOL",
+      network_label: "Solana",
+      provider: "fixedfloat",
+      available: true,
+    },
+  ];
+  const swapQuotes = { SOL_SOL: { available: true, pay_amount: "0.04213457" } };
+  const model = createMethodGridDisplay({
+    entries: buildMethodGridEntries(paymentMethods, swapOptions),
+    selectedPickerKey: "swap:SOL",
+    swapQuotes,
+  });
+  assert.equal(model.continueTarget.amountText, "≈ 0.04213 SOL");
+
+  const elementHtml = renderPaymentWizardHtml({
+    swapOptions,
+    selectedPickerKey: "swap:SOL",
+    swapQuotes,
+  });
+  assert.ok(
+    elementHtml.includes(`>${model.continueTarget.amountText}</p>`),
+    "the element draws the model's line as it is",
+  );
+
+  for (const [name, file] of [
+    ["React", "packages/js/react/src/wizard.ts"],
+    ["the element", "packages/js/elements/src/render-wizard.ts"],
+  ]) {
+    const source = read(file);
+    assert.match(source, /\.amountText\b/, `${name} must read continueTarget.amountText`);
+    for (const literal of ["≈", "pay_amount", "swapEstimate"]) {
+      assert.ok(!source.includes(literal), `${name} must not build the amount line: ${literal}`);
+    }
+  }
+});
+
 // C6: the two renderers are deliberately separate implementations, but the
 // payer-facing STRINGS are one declaration in @openreceive/browser. The drift
 // this catches already happened: React's route swap buttons showed a hardcoded
@@ -468,7 +517,6 @@ test("both renderers read the shared payer-facing strings, not copies", () => {
     "preparingPaymentAddressDetail",
     "createPaymentAddress",
     "paymentBreakdown",
-    "cartTotal",
     "youSend",
     "swapAndNetworkFees",
     "refundAddressPlaceholder",

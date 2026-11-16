@@ -74,6 +74,13 @@ export interface ElementsWizardView {
   readonly selectedPickerKey?: string | null;
   /** Pay-in asset whose swap create is in flight — method tiles spin and disable. */
   readonly startingSwapAsset?: string | null;
+  /**
+   * Quotes answered so far, keyed by pay-in asset. The picker shows the open
+   * coin's `pay_amount` beside Continue before anything is started.
+   */
+  readonly swapQuotes?: Readonly<Record<string, CheckoutPaymentMethod>>;
+  /** Pay-in asset whose picker quote is in flight — the amount line spins. */
+  readonly quotingSwapAsset?: string | null;
   /** When set, the wizard shows the focused swap deposit flow for this pay-in asset. */
   readonly selectedSwapAsset?: string | null;
   /**

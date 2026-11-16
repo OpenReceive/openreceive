@@ -47,7 +47,9 @@ module OpenReceive
 
       # Default HTTP transport on stdlib Net::HTTP. Injectable replacements
       # must be callable as call(method:, url:, headers:, body:, timeout_ms:)
-      # and return a Hash with :status (Integer) and :body (String).
+      # and return a Hash with :status (Integer) and :body (String). They may
+      # add :headers (a Hash of response headers, names in any case): the
+      # wait a 429 names in Retry-After is read from it.
       def default_http_request(method:, url:, headers:, body: nil, timeout_ms: nil)
         uri = URI.parse(url)
         http = Net::HTTP.new(uri.host, uri.port)
@@ -67,7 +69,7 @@ module OpenReceive
         headers.each { |key, value| request[key] = value }
         request.body = body unless body.nil?
         response = http.start { |connection| connection.request(request) }
-        { status: Integer(response.code), body: response.body.to_s }
+        { status: Integer(response.code), headers: response.each_header.to_h, body: response.body.to_s }
       end
 
       # Timeout classification shared by the API client and the rates feed
@@ -82,6 +84,14 @@ module OpenReceive
 
       def weight_budget_error?(error)
         error.respond_to?(:weight_budget?) && error.weight_budget? == true
+      end
+
+      # The denial a weight-budget error carries, for the log line that
+      # reports it; nil for any other error.
+      def weight_budget_denial(error)
+        return nil unless weight_budget_error?(error) && error.respond_to?(:denial)
+
+        error.denial
       end
 
       # A provider call's failure as "unreachable" (no answer: network,

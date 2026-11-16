@@ -93,12 +93,20 @@ test("the swap quote, start and status poll go through the host's fetch", async 
     React.createElement(Checkout, { reference: "order-token-swap", fetch: tokenFetch }),
   );
   try {
+    // The tile's quote is the first swap request, and a refused one is silent:
+    // the payer would simply never see the amount. So the amount on screen is
+    // the proof that it went out with the host's token.
     (await until(() => handle.button("SOL"), { label: "SOL tile" })).click();
+    await until(() => /≈ [\d.]+ SOL/.test(handle.text()), { label: "the quoted amount" });
+    assert.ok(paths().includes("POST /openreceive/swaps/quote"), paths().join("\n"));
+    assert.ok(!paths().includes("POST /openreceive/swaps"), "a tile click starts no swap");
+    assert.deepEqual(refused(), [], "the picker's quote must carry the host's token");
+
+    handle.button(checkoutLabels.continue).click();
     await until(() => paths().includes("POST /openreceive/swaps"), { label: "swap start" });
     await until(() => paths().includes("POST /openreceive/swaps/status"), {
       label: "swap status poll",
     });
-    assert.ok(paths().includes("POST /openreceive/swaps/quote"), paths().join("\n"));
     assert.deepEqual(refused(), [], "every request must carry the host's token");
   } finally {
     handle.unmount();

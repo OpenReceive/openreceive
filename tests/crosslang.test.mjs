@@ -315,6 +315,87 @@ test("rate-limit-window pins the column both engines count on", () => {
   }
 });
 
+test("rate-limit-address: the per-IP limit never counts a proxy's or the host's own address", async () => {
+  const { clientIpBucket, isPayerAddress } = await import("../packages/js/http/src/rate-limit.ts");
+  const family = vector("rate-limit-address");
+  assert.ok(family.cases.length > 30);
+  for (const item of family.cases) {
+    assert.equal(isPayerAddress(item.address), item.expected.payer, item.name);
+    // The limiter classifies the bucket it counts, so the two must agree.
+    assert.equal(
+      isPayerAddress(clientIpBucket(item.address)),
+      item.expected.payer,
+      `${item.name} (bucketed)`,
+    );
+  }
+});
+
+test("swap-provider-limits: the request guard is sized by the provider's host", async () => {
+  const {
+    FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
+    LIGHTNING_SWAP_PROVIDER_LIMITS,
+    SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS,
+    SwapProviderWeightBudget,
+    swapProviderLimitsForBaseUrl,
+  } = await import("../packages/js/node/src/swap/weight-budget.ts");
+  const family = vector("swap-provider-limits");
+  const profiles = {
+    fixedfloat: FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
+    "lightning-swap": LIGHTNING_SWAP_PROVIDER_LIMITS,
+  };
+  assert.equal(SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS, family.window_seconds);
+  assert.deepEqual(Object.keys(family.profiles).sort(), Object.keys(profiles).sort());
+  for (const [name, expected] of Object.entries(family.profiles)) {
+    const limits = profiles[name];
+    assert.deepEqual(
+      {
+        soft_cap: limits.softCap,
+        create_gate: limits.createGate,
+        create_weight: limits.createWeight,
+        default_weight: limits.defaultWeight,
+        create_limit: limits.createLimit ?? null,
+        backoff_seconds: limits.backoffSeconds,
+        min_backoff_seconds: limits.minBackoffSeconds,
+        max_backoff_seconds: limits.maxBackoffSeconds,
+        create_backoff_only: limits.createBackoffOnly,
+      },
+      expected,
+      name,
+    );
+  }
+  for (const item of family.hosts) {
+    assert.equal(swapProviderLimitsForBaseUrl(item.base_url).profile, item.profile, item.base_url);
+  }
+  for (const scenario of family.scenarios) {
+    let now = scenario.steps[0].at;
+    const budget = new SwapProviderWeightBudget("vector", () => now, profiles[scenario.profile]);
+    for (const [index, step] of scenario.steps.entries()) {
+      now = step.at;
+      const label = `${scenario.name}: step ${index + 1} (${step.op} ${step.path} at ${step.at})`;
+      for (let run = 0; run < (step.repeat ?? 1); run += 1) {
+        if (step.op === "rate_limited") {
+          await budget.markRateLimited({
+            path: step.path,
+            ...(step.retry_after === undefined ? {} : { retryAfterSeconds: step.retry_after }),
+          });
+          continue;
+        }
+        const outcome = await (step.op === "check"
+          ? budget.assertAvailable(step.path)
+          : budget.reserve(step.path)
+        ).then(
+          () => ({ result: "ok" }),
+          (error) => ({ result: error.denial.reason, until: error.denial.backoff_until }),
+        );
+        assert.equal(outcome.result, step.expect, label);
+        if (step.backoff_until !== undefined) {
+          assert.equal(outcome.until, step.backoff_until, label);
+        }
+      }
+    }
+  }
+});
+
 test("a public swap body conforms to swap-order.schema.json", async () => {
   const Ajv2020 = (await import("ajv/dist/2020.js")).default;
   const { createOpenReceive } = await import("../packages/js/node/src/index.ts");

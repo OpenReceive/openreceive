@@ -342,9 +342,10 @@ components.
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
 - `createCheckoutStatusModel` for the status line. Do not draw a
   Cart → Pay → Done stepper. Read the model's `phase`, not the snapshot's.
-- `resolveWizardSelection` decides whether to ask "which network?". A
-  one-network asset starts the swap from the tile. Key `selectedAssetByGroup`
-  by group (`USDT`), valued by `pay_in_asset` (`USDT_TRON`).
+- `resolveWizardSelection` decides whether to ask "which network?". A tile
+  only selects: show the amount with `session.quoteSwap`, and call
+  `startSwap` from Continue. Key `selectedAssetByGroup` by group (`USDT`),
+  valued by `pay_in_asset` (`USDT_TRON`).
 - `createMethodGridDisplay` for tiles, including `limitMessage` so an
   unavailable method says the minimum in the payer's currency.
 - `createSwapDisplayModel` → `display.copyRows` for deposits: address, memo,

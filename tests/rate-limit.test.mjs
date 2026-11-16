@@ -375,3 +375,81 @@ test("clientIpBucket collapses v4-mapped and buckets IPv6 by /64", () => {
   // Unparsable input passes through so the limit still gets a consistent key.
   assert.equal(clientIpBucket("not-an-ip:zz"), "not-an-ip:zz");
 });
+
+// Capture console.warn for the duration of `run`, and always restore it.
+async function captureWarnings(run) {
+  const original = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    await run();
+  } finally {
+    console.warn = original;
+  }
+  return warnings;
+}
+
+test("a proxy's own address is never counted: every payer would share its limit", async () => {
+  // The count says the limit is long gone. For a payer's address that is a 429;
+  // for a loopback or private address it is the host's proxy, and refusing it
+  // would stop every checkout on the site.
+  for (const proxy of ["127.0.0.1", "::ffff:10.0.0.7", "172.18.0.3", "::1", "fd12:3456::9"]) {
+    let counted = 0;
+    const limit = createIpRateLimit({
+      limitPerHour: 1,
+      ip: () => proxy,
+      countAttemptsFromIp: async () => {
+        counted += 1;
+        return 500;
+      },
+      now: () => 10_000,
+    });
+    const warnings = await captureWarnings(async () => {
+      for (let index = 0; index < 3; index += 1) {
+        assert.equal(await limit({ action: "checkout.create" }), true, proxy);
+      }
+    });
+    assert.equal(counted, 0, `${proxy} must not be counted`);
+    // Said once, not on every request.
+    assert.equal(warnings.length, 1, proxy);
+    assert.match(warnings[0], /private or loopback address/);
+    assert.match(warnings[0], /not the payer/);
+  }
+});
+
+test("a refusal names the address in the server log, at most once a minute", async () => {
+  let at = 10_000;
+  const limit = createIpRateLimit({
+    limitPerHour: 60,
+    ip: () => "203.0.113.9",
+    countAttemptsFromIp: async () => 61,
+    now: () => at,
+  });
+  const warnings = await captureWarnings(async () => {
+    for (let index = 0; index < 3; index += 1) {
+      await assert.rejects(limit({ action: "swap.create" }), { code: "RATE_LIMITED" });
+    }
+    at += 60;
+    await assert.rejects(limit({ action: "swap.create" }), { code: "RATE_LIMITED" });
+  });
+  assert.equal(warnings.length, 2);
+  assert.match(
+    warnings[0],
+    /refused a new payment from 203\.0\.113\.9: 61 made in the last hour, limit 60/,
+  );
+  // The line an operator needs when the address is their own load balancer.
+  assert.match(warnings[0], /every payer is sharing this limit/);
+});
+
+test("a host-supplied identifier is counted as given", async () => {
+  const limit = createIpRateLimit({
+    limitPerHour: 2,
+    ip: () => "account-42",
+    countAttemptsFromIp: async (key) => (key === "account-42" ? 2 : 0),
+    now: () => 10_000,
+  });
+  const warnings = await captureWarnings(async () => {
+    await assert.rejects(limit({ action: "checkout.create" }), { code: "RATE_LIMITED" });
+  });
+  assert.match(warnings[0], /refused a new payment from account-42/);
+});

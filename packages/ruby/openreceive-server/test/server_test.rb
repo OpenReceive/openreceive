@@ -1437,6 +1437,40 @@ class ClientIpBucketTest < Minitest::Test
     assert_equal "2001:db8:1:2::/64",
                  OpenReceive::Server::ClientIp.attributed("2001:DB8:1:2:AAAA:BBBB:CCCC:DDDD")
   end
+
+  # Twin of "rate-limit-address: the per-IP limit never counts a proxy's or
+  # the host's own address" in tests/crosslang.test.mjs.
+  def test_rate_limit_address_vector_says_which_values_are_one_payer
+    family = JSON.parse(
+      File.read(File.expand_path("../../../../spec/test-vectors/rate-limit-address.json", __dir__))
+    )
+    cases = family.fetch("cases")
+    assert_operator cases.length, :>, 30
+    cases.each do |item|
+      address = item.fetch("address")
+      expected = item.dig("expected", "payer")
+      assert_equal expected, OpenReceive::Server::ClientIp.payer_address?(address), item.fetch("name")
+      # The limiter classifies the bucket it counts, so the two must agree.
+      assert_equal expected, OpenReceive::Server::ClientIp.payer_address?(bucket(address)),
+                   "#{item.fetch('name')} (bucketed)"
+    end
+  end
+
+  def test_payer_address_reads_every_form_the_limiter_can_hold
+    payer = ->(value) { OpenReceive::Server::ClientIp.payer_address?(value) }
+    # What ClientIp.attributed stores for a loopback or private client.
+    ["127.0.0.1", "::ffff:10.0.0.7", "172.18.0.3", "::1", "fd12:3456::9"].each do |proxy|
+      refute payer.call(OpenReceive::Server::ClientIp.attributed(proxy)), proxy
+    end
+    assert payer.call(OpenReceive::Server::ClientIp.attributed("2001:DB8:1:2:AAAA:BBBB:CCCC:DDDD"))
+    # The edges of each range.
+    refute payer.call("100.64.0.0")
+    assert payer.call("100.63.255.255")
+    refute payer.call("fdff:ffff:ffff:ffff::/64")
+    assert payer.call("fec0::1")
+    # Not an IP at all: a host-supplied identifier is counted as given.
+    assert payer.call("not-an-ip:zz")
+  end
 end
 
 class StorageFreeServerTest

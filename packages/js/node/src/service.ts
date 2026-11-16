@@ -93,7 +93,9 @@ export async function createOpenReceive(
   const swapCache = new TransientSwapCache(clock);
   for (const provider of swapProviders) {
     provider.attachSwapCache?.(swapCache);
-    provider.attachWeightBudget?.(new SwapProviderWeightBudget(provider.name, clock));
+    provider.attachWeightBudget?.(
+      new SwapProviderWeightBudget(provider.name, clock, provider.limits),
+    );
     provider.attachApiRequestLogger?.((entry) =>
       emitLog(
         nodeOptions,

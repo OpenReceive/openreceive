@@ -13,16 +13,21 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
 from openreceive.swap import assets, rates_feed
 from openreceive.swap import state as swap_state
-from openreceive.swap.budget import SwapProviderWeightBudget
+from openreceive.swap.budget import (
+    SwapProviderLimits,
+    SwapProviderWeightBudget,
+    limits_for_base_url,
+)
 from openreceive.swap.cache import MAX_STALE_SECONDS, TransientSwapCache, limits_meta_key
 from openreceive.swap.http import HttpTransport, default_http_request, is_timeout_error
 from openreceive.values import compact
@@ -174,6 +179,10 @@ class FixedFloatProvider:
         self._key = key
         self._secret = secret
         self._base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
+        # The host names the provider, and the provider sets the limits: the
+        # same wire contract is served at very different rates. The service
+        # sizes the request guard it attaches with these.
+        self.limits: SwapProviderLimits = limits_for_base_url(self._base_url)
         self._lightning_ccy = (lightning_ccy or "").strip() or None
         self._http: HttpTransport = http or default_http_request
         self._now: Callable[[], int] = now or (lambda: int(time.time()))
@@ -243,6 +252,13 @@ class FixedFloatProvider:
 
     def attach_weight_budget(self, budget: SwapProviderWeightBudget) -> None:
         self._weight_budget = budget
+
+    def assert_create_available(self) -> None:
+        """Raise now when the attached guard would refuse a create, so the
+        service can refuse a new swap before it does any other work for it.
+        Uses no budget; the create itself still reserves."""
+        if self._weight_budget is not None:
+            self._weight_budget.assert_available("create")
 
     def attach_api_request_logger(self, logger: ApiLogger) -> None:
         self._api_request_logger = logger
@@ -458,7 +474,12 @@ class FixedFloatProvider:
         )
         if not ok:
             if status == 429 and self._weight_budget is not None:
-                self._weight_budget.mark_rate_limited()
+                self._weight_budget.mark_rate_limited(
+                    path=path,
+                    retry_after_seconds=read_retry_after_seconds(
+                        response.get("headers"), parsed.get("data")
+                    ),
+                )
             raise FixedFloatApiError(
                 path=path,
                 kind="rate_limited" if status == 429 else "http",
@@ -841,6 +862,25 @@ class FixedFloatProvider:
             if key not in keys:
                 keys.append(key)
         return keys
+
+
+def read_retry_after_seconds(headers: object, data: object) -> float | None:
+    """How long a 429 asks the caller to wait: the `Retry-After` header in
+    whole seconds, else a `retry_after` number in the response data. None when
+    the provider named no wait."""
+    if isinstance(headers, Mapping):
+        for name, value in headers.items():
+            if str(name).lower() != "retry-after":
+                continue
+            if re.fullmatch(r"[0-9]{1,9}", str(value).strip()) is not None:
+                return int(str(value).strip())
+            break
+    from_body = data.get("retry_after") if isinstance(data, dict) else None
+    if isinstance(from_body, bool) or not isinstance(from_body, (int, float)):
+        return None
+    if isinstance(from_body, float) and not math.isfinite(from_body):
+        return None
+    return from_body if from_body > 0 else None
 
 
 def _as_record(value: object) -> dict[str, Any]:

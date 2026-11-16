@@ -130,6 +130,25 @@ export const orClasses = {
     "grid size-4 place-items-center rounded-full bg-info text-[0.65rem] text-info-content",
   methodConfirmDesktop:
     "btn btn-primary h-auto min-h-11 min-w-0 w-full whitespace-normal break-words gap-2 px-2 py-2",
+  /** The amount line stacked over Continue, in the network step's last column. */
+  methodConfirmStack: "grid min-w-0 content-start gap-2",
+  /**
+   * A one-network coin's review step: the amount to send and Continue, in the
+   * same box the network step uses. Nothing else belongs in it.
+   */
+  methodReviewLayout:
+    "grid gap-2 @lg/openreceive:grid-cols-[minmax(0,1fr)_minmax(8rem,auto)] @lg/openreceive:items-center",
+  /**
+   * The amount line beside Continue ("≈ 0.0421 SOL"). One line of height is
+   * held whether or not the quote has answered, so Continue does not move
+   * under the payer's finger when the amount arrives. For the same reason the
+   * type shrinks with the picker's width (`cqi` is 1% of `methodBody`) rather
+   * than wrap: "≈ 12.35 USDT · Ethereum" stays on its one line on a phone.
+   */
+  methodEstimate:
+    "m-0 flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-[length:clamp(0.875rem,6.5cqi,1.125rem)] leading-7 font-bold tabular-nums text-base-content",
+  /** The amount line's spinner while its quote is in flight: small and quiet. */
+  methodEstimateSpinner: "loading loading-spinner loading-sm shrink-0 text-base-content/60",
   methodTile: "grid h-full min-w-0 content-start gap-0.5",
   breadcrumbs: "breadcrumbs text-sm",
   breadcrumbCurrent: "font-bold",

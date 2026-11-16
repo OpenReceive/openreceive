@@ -5,6 +5,9 @@ require "active_support/testing/time_helpers"
 require "yaml"
 require "erb"
 require "json"
+require "logger"
+require "stringio"
+require "ipaddr"
 require "securerandom"
 require "openreceive/rails"
 require "active_record"
@@ -832,6 +835,257 @@ class EngineHostIntegrationTest < Minitest::Test
 
     payment = OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: Time.now.to_i)
     assert_equal "settled", payment.status
+  end
+end
+
+# The built-in per-IP limiter counts one client address as one payer. Mirrors
+# the limiter tests at the end of tests/rate-limit.test.mjs: a loopback or
+# private address is the host's own proxy and is never counted, and a refusal
+# names the address it refused in the server log.
+class RateLimitingAddressTest < Minitest::Test
+  include OpenReceivePaymentTestHelpers
+  include ActiveSupport::Testing::TimeHelpers
+
+  START = 1_700_000_000
+
+  def setup
+    reset_tables!
+    travel_to(Time.at(START).utc)
+    @previous_logger = ::Rails.logger
+    @log = StringIO.new
+    ::Rails.logger = Logger.new(@log)
+    OpenReceive.configure do |config|
+      config.authorize = ->(_context) { true }
+      config.nwc_client = FakeWallet.new
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
+      config.on_paid = ->(_settlement) {}
+    end
+  end
+
+  def teardown
+    travel_back
+    ::Rails.logger = @previous_logger
+    OpenReceive.reset_config!
+  end
+
+  # A fresh limiter, as a newly booted process has.
+  def limit!(settings)
+    OpenReceive.config.rate_limiting = settings
+    OpenReceive.config.reset_runtime!
+    @log.truncate(0)
+    @log.rewind
+  end
+
+  def create_from(remote_addr)
+    OpenReceive.config.request_handler.create_checkout(
+      raw_body: JSON.generate("reference" => create_order.id),
+      request: JSON_REQUEST.merge("REMOTE_ADDR" => remote_addr), request_id: "req-address"
+    )
+  end
+
+  def assert_refused(response)
+    status, _headers, body = response
+    # The 429 itself is what it always was.
+    assert_equal [429, "RATE_LIMITED", "Too many payment attempts. Please try again later.", true],
+                 [status, body["code"], body["message"], body["retryable"]]
+  end
+
+  def limiter_warnings
+    @log.string.lines.grep(/\[openreceive\] rate limiting/)
+  end
+
+  def test_a_proxys_own_address_is_never_counted
+    counted = 0
+    count = OpenReceivePayment.method(:count_attempts_from_ip)
+    OpenReceivePayment.define_singleton_method(:count_attempts_from_ip) do |*arguments|
+      counted += 1
+      count.call(*arguments)
+    end
+    {
+      "127.0.0.1" => "127.0.0.1", "::ffff:10.0.0.7" => "10.0.0.7", "172.18.0.3" => "172.18.0.3",
+      "::1" => "0:0:0:0::/64", "fd12:3456::9" => "fd12:3456:0:0::/64"
+    }.each do |proxy, stamped|
+      OpenReceivePayment.delete_all
+      limit!(limit_per_hour: 1)
+      # For a payer's address the second of these is a 429. This is the host's
+      # proxy, and refusing it would stop every checkout on the site.
+      3.times { assert_equal 201, create_from(proxy).first, proxy }
+      assert_equal 0, counted, "#{proxy} must not be counted"
+      # The row still records the address the request came from.
+      assert_equal [stamped], OpenReceivePayment.pluck(:client_ip).uniq
+      # Said once, not on every request.
+      assert_equal 1, limiter_warnings.length, proxy
+      assert_includes limiter_warnings.first,
+                      "rate limiting is on, but this request's client address is #{stamped}, a private " \
+                      "or loopback address: your own proxy or network, not the payer."
+      assert_includes limiter_warnings.first, "such requests are not limited"
+      assert_includes limiter_warnings.first, "https://openreceive.org/guides/rate-limiting.md"
+    end
+  ensure
+    OpenReceivePayment.define_singleton_method(:count_attempts_from_ip, count) unless count.nil?
+  end
+
+  def test_a_payer_is_still_limited_after_a_proxy_address_was_allowed
+    limit!(limit_per_hour: 1)
+    2.times { assert_equal 201, create_from("10.0.0.7").first }
+    assert_equal 201, create_from("203.0.113.9").first
+    assert_refused(create_from("203.0.113.9"))
+    2.times { assert_equal 201, create_from("10.0.0.7").first }
+  end
+
+  def test_a_refusal_names_the_address_in_the_log_at_most_once_a_minute
+    limit!(limit_per_hour: 1)
+    assert_equal 201, create_from("203.0.113.9").first
+    assert_empty limiter_warnings
+    3.times { assert_refused(create_from("203.0.113.9")) }
+    travel_to(Time.at(START + 59).utc)
+    assert_refused(create_from("203.0.113.9"))
+    assert_equal 1, limiter_warnings.length
+    travel_to(Time.at(START + 60).utc)
+    assert_refused(create_from("203.0.113.9"))
+    assert_equal 2, limiter_warnings.length
+    assert_includes limiter_warnings.first,
+                    "rate limiting refused a new payment from 203.0.113.9: 1 made in the last hour, limit 1."
+    # The line an operator needs when the address is their own load balancer.
+    assert_includes limiter_warnings.first,
+                    "If 203.0.113.9 is your proxy, load balancer or CDN rather than one payer, " \
+                    "every payer is sharing this limit"
+    assert_includes limiter_warnings.first, "https://openreceive.org/guides/rate-limiting.md"
+  end
+
+  def test_a_daily_refusal_names_the_24_hour_window
+    limit!(limit_per_hour: 5, limit_per_day: 2)
+    2.times { assert_equal 201, create_from("2001:db8:1:2::9").first }
+    assert_refused(create_from("2001:db8:1:2::9"))
+    assert_includes limiter_warnings.first,
+                    "refused a new payment from 2001:db8:1:2::/64: 2 made in the last 24 hours, limit 2."
+  end
+
+  def test_a_host_supplied_identifier_is_counted_as_given
+    OpenReceive.config.client_ip = ->(_request) { "account-42" }
+    limit!(limit_per_hour: 1)
+    assert_equal 201, create_from("10.0.0.7").first
+    assert_equal ["account-42"], OpenReceivePayment.pluck(:client_ip)
+    assert_refused(create_from("10.0.0.7"))
+    assert_includes limiter_warnings.first, "refused a new payment from account-42: 1 made in the last hour"
+  end
+
+  def test_the_limiter_decides_the_same_without_a_logger
+    ::Rails.logger = nil
+    limit!(limit_per_hour: 1)
+    2.times { assert_equal 201, create_from("192.168.1.10").first }
+    assert_equal 201, create_from("203.0.113.9").first
+    assert_refused(create_from("203.0.113.9"))
+  end
+end
+
+# What the engine takes as the client address when the host set no
+# config.client_ip. For a Rails request the address that connected decides:
+# one of the app's trusted proxies is answered with the client it forwarded
+# (remote_ip), and any other address is the client itself, whatever its
+# headers say. No application is booted here, so the trusted proxies are
+# Rails' own private ranges; client_ip_trusted_proxies_test.rb runs every case
+# through a booted application, with and without a listed public proxy.
+class DefaultClientIpTest < Minitest::Test
+  CLIENT = "203.0.113.9"
+  PROXY = "198.51.100.20"
+  # A client that connects straight to the app, and the address it would
+  # like to be taken for.
+  DIRECT = "203.0.113.50"
+  FORGED = "192.0.2.99"
+  # The app's own reverse proxy on a private address, with the public proxy
+  # in front of it.
+  ENV_THROUGH_PROXY = { "REMOTE_ADDR" => "10.0.0.5", "HTTP_X_FORWARDED_FOR" => "#{CLIENT}, #{PROXY}" }.freeze
+
+  def setup
+    OpenReceive.reset_config!
+  end
+
+  def teardown
+    OpenReceive.reset_config!
+  end
+
+  def client_ip(request)
+    OpenReceive.config.send(:resolved_client_ip).call(request)
+  end
+
+  # The request as the engine's controller sees it behind Rails' RemoteIp
+  # middleware.
+  def rails_request(env)
+    seen = nil
+    app = lambda do |inner|
+      seen = ActionDispatch::Request.new(inner)
+      [200, {}, []]
+    end
+    ActionDispatch::RemoteIp.new(app).call(env.dup)
+    seen
+  end
+
+  def test_a_trusted_proxy_is_answered_with_the_client_it_forwarded
+    # The private proxy appended the client after whatever the client sent.
+    request = rails_request("REMOTE_ADDR" => "10.0.0.5", "HTTP_X_FORWARDED_FOR" => "#{FORGED}, #{CLIENT}")
+    assert_equal CLIENT, client_ip(request)
+    # A server listening on IPv6 reports an IPv4 proxy in its mapped form.
+    request = rails_request("REMOTE_ADDR" => "::ffff:10.0.0.5", "HTTP_X_FORWARDED_FOR" => CLIENT)
+    assert_equal CLIENT, client_ip(request)
+    # A public proxy the app has not listed is the last address Rails will
+    # not look past, exactly as with Rack.
+    assert_equal PROXY, Rack::Request.new(ENV_THROUGH_PROXY.dup).ip
+    assert_equal PROXY, client_ip(rails_request(ENV_THROUGH_PROXY))
+  end
+
+  def test_any_other_address_is_the_client_whatever_its_headers_say
+    forged = rails_request("REMOTE_ADDR" => DIRECT, "HTTP_X_FORWARDED_FOR" => FORGED)
+    # Rails on its own takes the header's word for it.
+    assert_equal FORGED, forged.remote_ip
+    assert_equal DIRECT, client_ip(forged)
+    [
+      { "HTTP_CLIENT_IP" => FORGED },
+      { "HTTP_FORWARDED" => "for=#{FORGED}" },
+      { "HTTP_X_FORWARDED_FOR" => "#{FORGED}, 10.0.0.5" },
+      { "HTTP_X_FORWARDED_FOR" => FORGED, "HTTP_CLIENT_IP" => "192.0.2.50" },
+      {}
+    ].each do |headers|
+      assert_equal DIRECT, client_ip(rails_request(headers.merge("REMOTE_ADDR" => DIRECT))), headers.inspect
+    end
+    assert_equal DIRECT, client_ip(rails_request("REMOTE_ADDR" => "::ffff:#{DIRECT}", "HTTP_X_FORWARDED_FOR" => FORGED))
+    assert_equal "2001:db8:1:2::/64",
+                 client_ip(rails_request("REMOTE_ADDR" => "2001:db8:1:2::9", "HTTP_X_FORWARDED_FOR" => FORGED))
+    # A public proxy the app has not listed is counted as one client.
+    assert_equal PROXY, client_ip(rails_request("REMOTE_ADDR" => PROXY, "HTTP_X_FORWARDED_FOR" => CLIENT))
+  end
+
+  def test_a_request_no_address_connected_for_is_attributed_by_rack
+    # A Unix socket: Rack takes it for the app's own proxy, as before.
+    socket = { "REMOTE_ADDR" => "unix:", "HTTP_X_FORWARDED_FOR" => CLIENT }
+    assert_equal CLIENT, Rack::Request.new(socket.dup).ip
+    assert_equal CLIENT, client_ip(rails_request(socket))
+    assert_nil client_ip(ActionDispatch::Request.new({}))
+  end
+
+  def test_anything_else_is_attributed_as_before
+    # A Rails request no RemoteIp middleware has seen answers with Rack's ip.
+    assert_equal PROXY, client_ip(ActionDispatch::Request.new(ENV_THROUGH_PROXY.dup))
+    # A plain Rack request, a Rack env Hash from a bare handler call, nothing.
+    assert_equal PROXY, client_ip(Rack::Request.new(ENV_THROUGH_PROXY.dup))
+    assert_equal "10.0.0.5", client_ip(ENV_THROUGH_PROXY)
+    assert_equal "2001:db8:1:2::/64", client_ip("REMOTE_ADDR" => "2001:db8:1:2::9")
+    assert_nil client_ip({})
+    assert_nil client_ip(nil)
+  end
+
+  def test_a_request_rails_calls_a_spoofing_attempt_is_attributed_by_rack
+    env = ENV_THROUGH_PROXY.merge("HTTP_CLIENT_IP" => "192.0.2.50")
+    request = rails_request(env)
+    assert_raises(ActionDispatch::RemoteIp::IpSpoofAttackError) { request.remote_ip }
+    assert_equal PROXY, client_ip(request)
+  end
+
+  def test_the_hosts_own_client_ip_still_wins
+    OpenReceive.config.client_ip = ->(request) { request.get_header("HTTP_CF_CONNECTING_IP") }
+    env = ENV_THROUGH_PROXY.merge("HTTP_CF_CONNECTING_IP" => "2001:db8:9:9::1")
+    assert_equal "2001:db8:9:9::/64", client_ip(rails_request(env))
+    assert_equal "2001:db8:9:9::/64", client_ip(rails_request(env.merge("REMOTE_ADDR" => DIRECT)))
   end
 end
 

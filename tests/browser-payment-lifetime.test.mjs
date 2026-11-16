@@ -393,3 +393,131 @@ test("dismissed swap actions cannot reopen the panel", async () => {
     if (delayed === "quote") assert.equal(calls.length, 1);
   }
 });
+
+// The picker's quote (`quoteSwap`) is an action like the other two: it belongs
+// to the order it was asked for. One that lands after the order changed, or
+// after the payer left the coin, must not put an amount on the next screen.
+test("a picker quote belongs to the order and the visit it was asked for", async () => {
+  for (const left of ["identity", "dismissal"]) {
+    let reference = "A";
+    const requests = [];
+    let changes = 0;
+    const session = createCheckoutSession({
+      snapshot: () => undefined,
+      reference: () => reference,
+      onChange: () => {
+        changes += 1;
+      },
+      onError: (e) => {
+        throw e;
+      },
+      swap: {
+        prefix: () => "/pay",
+        fetch: () => async (url, init) => {
+          const pending = deferred();
+          requests.push({ url, body: JSON.parse(init.body), signal: init.signal, pending });
+          return pending.promise;
+        },
+        selection: {
+          started: () => undefined,
+          setStarted: () => {},
+          dismissedInvoiceId: () => null,
+          setDismissedInvoiceId: () => {},
+          setSelectedAsset: () => {},
+        },
+      },
+    });
+    const answer = (request, pay_amount) =>
+      request.pending.resolve(
+        Response.json({
+          quote: { pay_asset: request.body.pay_in_asset, available: true, pay_amount },
+        }),
+      );
+
+    const stale = session.quoteSwap("USDT_TRON");
+    await flush();
+    assert.equal(session.quotingSwapAsset, "USDT_TRON");
+    assert.equal(requests.length, 1);
+    if (left === "identity") {
+      reference = "B";
+      session.syncIdentity();
+    } else {
+      session.clearSwapStartError();
+    }
+    assert.equal(session.quotingSwapAsset, null, "nothing is being quoted for the new screen");
+    assert.equal(requests[0].signal.aborted, true, "the request it can abort is aborted");
+
+    // The same coin, asked again: a request of its own, not the dead one's.
+    const fresh = session.quoteSwap("USDT_TRON");
+    await flush();
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].body.reference, reference);
+    assert.equal(session.quotingSwapAsset, "USDT_TRON");
+
+    // The dead quote lands first. It is not stored, and it does not end the
+    // live one's spinner.
+    answer(requests[0], "1.11");
+    await stale;
+    assert.deepEqual(session.swapQuotes, {});
+    assert.equal(session.quotingSwapAsset, "USDT_TRON");
+
+    const before = changes;
+    answer(requests[1], "2.22");
+    await fresh;
+    assert.equal(session.swapQuotes.USDT_TRON.pay_amount, "2.22");
+    assert.equal(session.quotingSwapAsset, null);
+    assert.equal(changes, before + 1, "one re-render for the amount that arrived");
+  }
+});
+
+// Two coins looked at in quick succession: both quotes are kept, and the
+// spinner follows the coin the payer is on now.
+test("the quoting flag follows the asset asked for last", async () => {
+  const requests = new Map();
+  const session = createCheckoutSession({
+    snapshot: () => undefined,
+    reference: () => "A",
+    onChange: () => {},
+    onError: (e) => {
+      throw e;
+    },
+    swap: {
+      prefix: () => "/pay",
+      fetch: () => async (_url, init) => {
+        const pending = deferred();
+        requests.set(JSON.parse(init.body).pay_in_asset, pending);
+        return pending.promise;
+      },
+      selection: {
+        started: () => undefined,
+        setStarted: () => {},
+        dismissedInvoiceId: () => null,
+        setDismissedInvoiceId: () => {},
+        setSelectedAsset: () => {},
+      },
+    },
+  });
+  const quote = (pay_asset, pay_amount) =>
+    Response.json({ quote: { pay_asset, available: true, pay_amount } });
+
+  const sol = session.quoteSwap("SOL_SOL");
+  const eth = session.quoteSwap("ETH_ETH");
+  await flush();
+  assert.equal(session.quotingSwapAsset, "ETH_ETH");
+  // Back to SOL while its first request is still open: no second request.
+  const solAgain = session.quoteSwap("SOL_SOL");
+  await flush();
+  assert.equal(requests.size, 2);
+  assert.equal(session.quotingSwapAsset, "SOL_SOL");
+
+  requests.get("ETH_ETH").resolve(quote("ETH_ETH", "0.0031"));
+  await eth;
+  assert.equal(session.quotingSwapAsset, "SOL_SOL", "ETH landing does not stop SOL's spinner");
+  requests.get("SOL_SOL").resolve(quote("SOL_SOL", "0.0421"));
+  await Promise.all([sol, solAgain]);
+  assert.equal(session.quotingSwapAsset, null);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(session.swapQuotes).map(([k, v]) => [k, v.pay_amount])),
+    { ETH_ETH: "0.0031", SOL_SOL: "0.0421" },
+  );
+});

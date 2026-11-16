@@ -498,9 +498,9 @@ test("characterization: swap pending", () => {
     { label: "Workflow", value: "invoice_created" },
     { label: "Amount", value: "3,028 sats" },
     { label: "Amount (msats)", value: "3028000" },
-    // PRODUCT CHANGE (divergence (a)): this row was missing from the browser
-    // path for every swap.
-    { label: "Fiat", value: "$2.10" },
+    // PRODUCT CHANGE (2026-11-16): no "Fiat" row while a swap is still to be
+    // paid. A swap shows one amount, the one to send; the order's own total
+    // comes back once the payment has settled (the next case).
     { label: "Payment hash", value: "dddddddd...dddddddd", copyValue: hash("d") },
     { label: "Expires at", value: iso(NOW + 900) },
     { label: "Swap provider", value: "lightning-swap-com" },

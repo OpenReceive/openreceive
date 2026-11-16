@@ -65,6 +65,11 @@ blanket security guarantees or implying that a helper package is a full backend.
   bundled SDK does); a custom client that skips author verification must not be granted it.
 - Use `amount_msats` for millisatoshi values in public results and exact integer/decimal money
   math. Never use binary floats for fiat math.
+- A swap screen shows one amount: the amount the payer sends, in the pay-in token. While a
+  swap is waiting to be paid, no checkout, display model, demo, or example in this repository
+  shows the order's own total, or another valuation of the same payment, beside it: a payer who
+  sends the order total has not paid. Hosts cannot be made to follow this, so the guides state
+  it as the best practice (`docs/guides/checkout-ux.md`, "One amount to send").
 - Swap provider credentials live only in the host payment attempt's optional server-only
   `swap_data` field.
   They never appear in browser responses or logs. Provider completion is not wallet

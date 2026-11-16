@@ -32,6 +32,7 @@ use OpenReceive\Support\Integers;
 use OpenReceive\Support\Records;
 use OpenReceive\Support\SharedCache;
 use OpenReceive\Swap\Assets;
+use OpenReceive\Swap\GuardedSwapProvider;
 use OpenReceive\Swap\LscUri;
 use OpenReceive\Swap\Swap;
 use OpenReceive\Swap\SwapAddress;
@@ -39,6 +40,7 @@ use OpenReceive\Swap\SwapProvider;
 use OpenReceive\Swap\SwapProviderRuntime;
 use OpenReceive\Swap\TransientCache;
 use OpenReceive\Swap\WeightBudget;
+use OpenReceive\Swap\WeightBudgetError;
 use OpenReceive\ConfigurationError;
 use Psr\Log\LoggerInterface;
 
@@ -62,6 +64,8 @@ final class Service
     public const SWAP_PROVIDER_REFUSED_MESSAGE = 'The swap provider refused this request.';
     public const SWAP_PROVIDER_RATE_LIMITED_MESSAGE = 'The swap provider is rate limited. Please try again shortly.';
     public const SWAP_PROVIDER_UNREACHABLE_MESSAGE = 'The swap provider is temporarily unreachable. Please try again shortly.';
+    /** A swap call refused for rate is logged at most this often per cause. */
+    public const SWAP_PROVIDER_RATE_LIMIT_LOG_INTERVAL_SECONDS = 60;
 
     /** @var list<string> */
     private readonly array $priceCurrencies;
@@ -70,6 +74,8 @@ final class Service
     private readonly array $swapProviders;
     /** @var callable(): int */
     private $clock;
+    /** @var array<string, int> when each rate-refusal cause (provider, path, reason) was last logged */
+    private array $rateLimitLogTimes = [];
 
     /**
      * `$swapProviders` null (the default) auto-builds FixedFloat-compatible
@@ -77,8 +83,9 @@ final class Service
      * (possibly empty) to override. `$priceProvider` null uses the built-in
      * cached live feed (with OPENRECEIVE_PRICE_FEED_*_URL overrides); pass a
      * provider to override, or `false` to run without rates entirely.
-     * `$sharedCache` keeps the built-in price feed and the swap providers'
-     * catalogs and rates across requests (see SharedCache).
+     * `$sharedCache` keeps the built-in price feed, the swap providers'
+     * catalogs and rates, and a provider's 429 stand-off across requests (see
+     * SharedCache).
      *
      * @param PriceProvider|false|null $priceProvider
      * @param list<SwapProvider>|null $swapProviders
@@ -114,8 +121,8 @@ final class Service
      * the environment, the bundled nostr-php transport, live prices.
      *
      * PHP builds the engine again on every request, so `$sharedCache` keeps
-     * the market data and the wallet's info event (the preflight) between
-     * requests. Left null, a web request uses a FileSharedCache in a private
+     * the market data, the wallet's info event (the preflight) and a swap
+     * provider's 429 stand-off between requests. Left null, a web request uses a FileSharedCache in a private
      * temp directory and a command-line run (doctor, the notifications
      * worker, a cron pass) asks the wallet live. Pass your own cache, or
      * `false` for none. `$walletInfoCacheSeconds` 0 always runs the live
@@ -391,6 +398,14 @@ final class Service
             throw new ValidationError('amount is required.');
         }
         $provider = $this->selectProvider($asset);
+        // Refuse before the invoice is made when the provider guard would
+        // refuse the create anyway: a refused swap then costs nothing.
+        if ($provider instanceof GuardedSwapProvider) {
+            $this->throughProvider(static function () use ($provider): null {
+                $provider->assertCreateAvailable();
+                return null;
+            });
+        }
         $expiry = $provider->invoiceExpirySeconds($asset);
         // The shadow-invoice expiry is provider-mandated: build the checkout
         // input explicitly from validated fields so no payer-supplied key can override it.
@@ -580,7 +595,13 @@ final class Service
         return Rates::createCachedLivePriceFeed($this->priceCurrencies, $http, $this->clock, null, $overrides['primary_url'], $overrides['fallback_url'], sharedCache: $sharedCache);
     }
 
-    /** One shared transient cache and one per-provider weight budget, attached to every provider that accepts them. */
+    /**
+     * One shared transient cache and one per-provider request guard, attached
+     * to every provider that accepts them. The guard is sized by the
+     * provider's own limits; a provider that states none gets the FixedFloat
+     * ones. With a shared cache the guard also keeps a provider's 429
+     * stand-off there, so the next request does not ask again too soon.
+     */
     private function attachSwapProviderRuntime(?SharedCache $sharedCache): void
     {
         if ($this->swapProviders === []) {
@@ -591,7 +612,8 @@ final class Service
             $name = $provider->name();
             if ($provider instanceof SwapProviderRuntime) {
                 $provider->attachSwapCache($cache);
-                $provider->attachWeightBudget(new WeightBudget($name, $this->clock));
+                $limits = $provider instanceof GuardedSwapProvider ? $provider->limits() : null;
+                $provider->attachWeightBudget(new WeightBudget($name, $this->clock, $limits, $sharedCache, $this->logger));
             }
         }
     }
@@ -750,7 +772,7 @@ final class Service
     /**
      * Run one outbound provider call, mapping its transport failures to the
      * 502/503 the swap routes declare (the JS throughProvider). A provider
-     * refusal, outage, 429 or this process's weight budget is not an
+     * refusal, outage, 429 or this process's request guard is not an
      * OpenReceive bug: unmapped, it would reach the payer as the opaque 500.
      * The provider's own text is logged for the operator, never sent.
      *
@@ -769,7 +791,11 @@ final class Service
             if ($failure === null) {
                 throw $error;
             }
-            $this->logger?->warning('swap.provider.' . $failure . ': ' . Errors::redactErrorText($error::class . ': ' . $error->getMessage()));
+            if ($failure === 'rate_limited') {
+                $this->logProviderRateLimit($error);
+            } else {
+                $this->logger?->warning('swap.provider.' . $failure . ': ' . Errors::redactErrorText($error::class . ': ' . $error->getMessage()));
+            }
             if ($failure === 'refused') {
                 throw new ServiceError(502, 'INTERNAL', self::SWAP_PROVIDER_REFUSED_MESSAGE);
             }
@@ -780,6 +806,48 @@ final class Service
                 true,
             );
         }
+    }
+
+    /**
+     * Say in the server log why a swap call was refused for rate, and until
+     * when. The payer only reads "try again shortly"; the operator needs to
+     * know whether this library's own guard stopped the call or the provider
+     * answered 429.
+     */
+    private function logProviderRateLimit(\Throwable $error): void
+    {
+        $denial = $error instanceof WeightBudgetError ? $error->denial : null;
+        // Status polls arrive every few seconds per open checkout: one line a
+        // minute per cause says what is happening without burying the log.
+        $cause = ($denial['provider'] ?? '') . ':' . ($denial['path'] ?? '') . ':' . ($denial['reason'] ?? 'provider');
+        $now = ($this->clock)();
+        $last = $this->rateLimitLogTimes[$cause] ?? null;
+        if ($last !== null && $now - $last < self::SWAP_PROVIDER_RATE_LIMIT_LOG_INTERVAL_SECONDS) {
+            return;
+        }
+        $this->rateLimitLogTimes[$cause] = $now;
+        if ($denial === null) {
+            $this->logger?->warning(
+                'swap.provider.rate_limited: The swap provider answered 429 (rate limited); new calls stand off until its wait is over.',
+                ['error' => Errors::redactErrorText($error::class . ': ' . $error->getMessage())],
+            );
+            return;
+        }
+        $this->logger?->warning(
+            'swap.provider.rate_limited: ' . (($denial['reason'] ?? null) === 'backoff'
+                ? "Swap provider call refused locally: standing off after the provider's 429."
+                : "Swap provider call refused locally: this process reached the provider's per-minute limit."),
+            Records::compact([
+                'provider' => $denial['provider'] ?? null,
+                'path' => $denial['path'] ?? null,
+                'reason' => $denial['reason'] ?? null,
+                'used' => $denial['used'] ?? null,
+                'gate' => $denial['gate'] ?? null,
+                'creates' => $denial['creates'] ?? null,
+                'create_limit' => $denial['create_limit'] ?? null,
+                'backoff_until' => $denial['backoff_until'] ?? null,
+            ]),
+        );
     }
 
     /** Primary-only while healthy; backup only when primary is down, never to fill gaps for assets the primary omits. */

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "ipaddr"
 require "openreceive/server"
 
 module OpenReceive
@@ -63,9 +64,10 @@ module OpenReceive
       # engine-owned openreceive_payments rows; or a Hash with
       # limit_per_hour / limit_per_day. Mutually exclusive with rate_limit.
       @rate_limiting = false
-      # Client IP attribution: a proc receiving the framework request.
-      # Defaults to ActionDispatch::Request#ip (which honors the app's
-      # trusted-proxy configuration).
+      # Client IP attribution: a proc receiving the framework request. nil
+      # (the default) takes the address that connected, or the client a
+      # trusted proxy forwarded (config.action_dispatch.trusted_proxies); see
+      # default_client_ip. A proc set here replaces that default.
       @client_ip = nil
       # nil (the default) mirrors the JS createOpenReceive defaults: the
       # price provider becomes the built-in cached live price feed (with
@@ -140,7 +142,7 @@ module OpenReceive
     end
 
     def reset_runtime!
-      %i[@service @request_handler @settlement_hook @resolved_nwc_client].each do |name|
+      %i[@service @request_handler @settlement_hook @resolved_nwc_client @rails_trusted_proxies].each do |name|
         remove_instance_variable(name) if instance_variable_defined?(name)
       end
       self
@@ -205,20 +207,75 @@ module OpenReceive
     DEFAULT_RATE_LIMIT_PER_HOUR = 60
     HOUR_SECONDS = 3_600
     DAY_SECONDS = 86_400
+    REFUSAL_WARNING_SECONDS = 60
 
     def resolved_client_ip
-      extractor = @client_ip || lambda do |request|
-        if request.respond_to?(:ip)
-          request.ip
-        elsif request.is_a?(Hash)
-          request["REMOTE_ADDR"]
-        end
-      end
+      extractor = @client_ip || method(:default_client_ip)
       # Mirrors the JS handler: the extracted IP (custom hook or framework
       # default) is normalized into the bucket the limiter counts with (IPv6
       # /64, v4-mapped collapsed) and that same bucket is what gets stamped on
       # committed attempt rows. No attributable IP stays nil (fail open).
       ->(request) { OpenReceive::Server::ClientIp.attributed(extractor.call(request)) }
+    end
+
+    # The client address when the host set no config.client_ip. The engine's
+    # controllers pass a Rails request; bare handler calls pass a Rack env
+    # Hash or nothing.
+    #
+    # For a Rails request the address that connected (REMOTE_ADDR) decides.
+    # When it is one of the app's trusted proxies, the client is the one that
+    # proxy forwarded: request.remote_ip. Any other address is the client
+    # itself, whatever X-Forwarded-For, Client-Ip or Forwarded say: a client
+    # that connects directly cannot choose its address, and a public proxy
+    # the app has not listed is counted as one client.
+    def default_client_ip(request)
+      if defined?(::ActionDispatch::Request) && request.is_a?(::ActionDispatch::Request)
+        rails_client_ip(request)
+      elsif request.respond_to?(:ip)
+        request.ip
+      elsif request.is_a?(Hash)
+        request["REMOTE_ADDR"]
+      end
+    end
+
+    def rails_client_ip(request)
+      peer = connecting_address(request)
+      # No address connected (a Unix socket): attributed as before, by Rack.
+      return request.ip if peer.nil?
+      return peer unless rails_trusted_proxies.any? { |proxy| proxy === peer }
+
+      begin
+        request.remote_ip
+      rescue StandardError
+        # RemoteIp raises when Client-Ip and X-Forwarded-For disagree (its
+        # spoofing check). Such a request is attributed as before, by Rack.
+        request.ip
+      end
+    end
+
+    # REMOTE_ADDR when it is one IP address, nil otherwise. An IPv4-mapped
+    # IPv6 address is read as its IPv4, so Rails' IPv4 ranges match it.
+    def connecting_address(request)
+      raw = request.remote_addr.to_s.strip
+      address = IPAddr.new(raw)
+      range = address.to_range
+      return nil unless range.begin == range.end
+
+      address.ipv4_mapped? ? address.native.to_s : raw
+    rescue ArgumentError
+      nil
+    end
+
+    # The app's trusted proxies, resolved by Rails itself: its RemoteIp
+    # middleware turns config.action_dispatch.trusted_proxies into the list
+    # it filters with, which is Rails' own private ranges when the app sets
+    # none. Matched the way that middleware matches (proxy === address).
+    def rails_trusted_proxies
+      @rails_trusted_proxies ||= begin
+        application = defined?(::Rails) && ::Rails.respond_to?(:application) ? ::Rails.application : nil
+        configured = application&.config&.action_dispatch&.trusted_proxies
+        ::ActionDispatch::RemoteIp.new(nil, true, configured).proxies
+      end
     end
 
     # The built-in limiter (config.rate_limiting): a COUNT over the
@@ -240,6 +297,24 @@ module OpenReceive
       limit_per_day = positive_rate_limit(limit_per_day, "limit_per_day") unless limit_per_day.nil?
       extract_ip = resolved_client_ip
       warned_unattributable = false
+      warned_not_a_payer = false
+      last_refusal_warning = nil
+      # Say which address was refused, at most once a minute. When that
+      # address is the host's own proxy, every payer shares its budget and
+      # this line is the only place the operator can see why checkouts
+      # stopped. The wording follows the JS limiter's.
+      refuse = lambda do |ip, counted, limit, window, at|
+        if last_refusal_warning.nil? || at - last_refusal_warning >= REFUSAL_WARNING_SECONDS
+          last_refusal_warning = at
+          rails_logger&.warn(
+            "[openreceive] rate limiting refused a new payment from #{ip}: #{counted} made in the " \
+            "last #{window}, limit #{limit}. If #{ip} is your proxy, load balancer or CDN " \
+            "rather than one payer, every payer is sharing this limit: pass the payer's own " \
+            "address — see https://openreceive.org/guides/rate-limiting.md"
+          )
+        end
+        raise OpenReceive::Server::RateLimitedError, BUILT_IN_RATE_LIMIT_MESSAGE
+      end
       lambda do |context|
         next true unless %w[checkout.create swap.create].include?(context[:action].to_s)
         ip = extract_ip.call(context[:request]).to_s
@@ -256,13 +331,30 @@ module OpenReceive
           end
           next true
         end
+        unless OpenReceive::Server::ClientIp.payer_address?(ip)
+          # A loopback or private address is the host's own proxy or network,
+          # never a payer on the internet. Counting it would put every payer
+          # in one bucket and stop the whole site at the limit, so it is not
+          # counted. Said once per process.
+          unless warned_not_a_payer
+            warned_not_a_payer = true
+            rails_logger&.warn(
+              "[openreceive] rate limiting is on, but this request's client address is #{ip}, a " \
+              "private or loopback address: your own proxy or network, not the payer. Limiting " \
+              "it would make every payer share one limit, so the request was allowed and such " \
+              "requests are not limited. Pass the payer's own address — see " \
+              "https://openreceive.org/guides/rate-limiting.md"
+            )
+          end
+          next true
+        end
         now = Time.now
-        over_hour = OpenReceivePayment.count_attempts_from_ip(ip, now - HOUR_SECONDS) >= limit_per_hour
-        raise OpenReceive::Server::RateLimitedError, BUILT_IN_RATE_LIMIT_MESSAGE if over_hour
+        last_hour = OpenReceivePayment.count_attempts_from_ip(ip, now - HOUR_SECONDS)
+        refuse.call(ip, last_hour, limit_per_hour, "hour", now) if last_hour >= limit_per_hour
 
-        if limit_per_day &&
-           OpenReceivePayment.count_attempts_from_ip(ip, now - DAY_SECONDS) >= limit_per_day
-          raise OpenReceive::Server::RateLimitedError, BUILT_IN_RATE_LIMIT_MESSAGE
+        if limit_per_day
+          last_day = OpenReceivePayment.count_attempts_from_ip(ip, now - DAY_SECONDS)
+          refuse.call(ip, last_day, limit_per_day, "24 hours", now) if last_day >= limit_per_day
         end
         true
       end

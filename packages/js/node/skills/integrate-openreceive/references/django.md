@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Django)
 
 ```sh
-# READ THIS FIRST: this file is 49 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 50 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/django/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/django/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -378,9 +378,10 @@ built on `@openreceive/browser/headless`. Read that before writing components.
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
 - `createCheckoutStatusModel` for the status line. Do not draw a
   Cart → Pay → Done stepper. Read the model's `phase`, not the snapshot's.
-- `resolveWizardSelection` decides whether to ask "which network?". A
-  one-network asset starts the swap from the tile. Key `selectedAssetByGroup`
-  by group (`USDT`), valued by `pay_in_asset` (`USDT_TRON`).
+- `resolveWizardSelection` decides whether to ask "which network?". A tile
+  only selects: show the amount with `session.quoteSwap`, and call
+  `startSwap` from Continue. Key `selectedAssetByGroup` by group (`USDT`),
+  valued by `pay_in_asset` (`USDT_TRON`).
 - `createMethodGridDisplay` for tiles, including `limitMessage` so an
   unavailable method says the minimum in the payer's currency.
 - `createSwapDisplayModel` → `display.copyRows` for deposits: address, memo,

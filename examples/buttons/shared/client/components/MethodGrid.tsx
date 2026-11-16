@@ -6,6 +6,7 @@ import {
   getPaymentMethodIcon,
   getSwapOptionIcon,
   type MethodGridGroupDisplay,
+  swapOptionLimitMessage,
 } from "@openreceive/browser/headless";
 import { IconCheck } from "@tabler/icons-react";
 import { observer } from "mobx-react";
@@ -23,6 +24,11 @@ type MethodGroup = MethodGridGroupDisplay<CheckoutPaymentMethod>;
 // send is unrecoverable. The store hands the click to `resolveWizardSelection`,
 // which cannot represent that mistake; this component only draws what the
 // display model already decided.
+//
+// The other rule is price first. A coin tile only selects: the payer sees what
+// the order costs in that coin (`continueTarget.amountText`, an estimate from
+// a quote that opens nothing) and the swap starts on Continue. A tile that
+// started the swap opened a provider order for every coin a payer looked at.
 //
 // The icon getters answer `data:` URIs: everything the checkout draws ships
 // inside the OpenReceive JavaScript, so no bundler has to find a file for it.
@@ -89,14 +95,21 @@ export const MethodGrid: React.FC<{ checkout: ShopCheckout }> = observer(({ chec
       ) : null}
 
       {grid.continueTarget ? (
-        <Button
-          size="md"
-          disabled={grid.continueTarget.disabled}
-          loading={grid.continueTarget.starting}
-          onClick={checkout.continueWithSelection}
-        >
-          {grid.continueTarget.label}
-        </Button>
+        <>
+          {/* One line, held open while the quote is in flight so the button
+              below it does not move when the amount arrives. */}
+          <Text fw={700} size="lg" mih={28} aria-live="polite">
+            {grid.continueTarget.amountText ?? ""}
+          </Text>
+          <Button
+            size="md"
+            disabled={grid.continueTarget.disabled}
+            loading={grid.continueTarget.starting}
+            onClick={checkout.continueWithSelection}
+          >
+            {grid.continueTarget.label}
+          </Button>
+        </>
       ) : null}
     </Stack>
   );
@@ -114,22 +127,32 @@ const NetworkChooser: React.FC<{ checkout: ShopCheckout; group: MethodGroup }> =
         <Text id={group.headingId} className="or-shop-section-title">
           {group.heading}
         </Text>
-        <Group gap="xs" mt={6}>
+        <Group gap="xs" mt={6} align="flex-start">
           {group.options.map((option) => {
             const icon = getNetworkIcon(option.network_label);
             const isSelected = selectedAsset === option.pay_in_asset;
+            // A network this order cannot use is greyed AND says why, the same
+            // way a tile does: a chip that looks live and ignores the click
+            // reads as a broken page. "Minimum amount $15.13" tells the payer
+            // it is the order, not them.
+            const unavailable = option.available === false;
+            const limit = swapOptionLimitMessage(option, checkout.swapLimitContext);
             return (
-              <UnstyledButton
-                key={option.pay_in_asset}
-                className="or-shop-network"
-                data-selected={isSelected || undefined}
-                disabled={option.available === false}
-                onClick={() => checkout.chooseNetwork(group.groupKey, option.pay_in_asset)}
-              >
-                {icon ? <Image src={icon} alt="" w={18} h={18} /> : null}
-                <Text size="sm">{option.network_label}</Text>
-                {isSelected ? <IconCheck size={14} /> : null}
-              </UnstyledButton>
+              <div key={option.pay_in_asset} className="or-shop-network-choice">
+                <UnstyledButton
+                  className="or-shop-network"
+                  data-selected={isSelected || undefined}
+                  disabled={unavailable}
+                  onClick={() => checkout.chooseNetwork(group.groupKey, option.pay_in_asset)}
+                >
+                  {icon ? <Image src={icon} alt="" w={18} h={18} /> : null}
+                  <Text size="sm">{option.network_label}</Text>
+                  {isSelected ? <IconCheck size={14} /> : null}
+                </UnstyledButton>
+                {unavailable && limit ? (
+                  <Text className="or-shop-network-limit">{limit}</Text>
+                ) : null}
+              </div>
             );
           })}
         </Group>

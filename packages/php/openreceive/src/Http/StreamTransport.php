@@ -36,6 +36,28 @@ final class StreamTransport implements HttpTransport
         if (preg_match('#\AHTTP/\S+\s+(\d{3})#', $responseHeaders[0], $match) === 1) {
             $status = (int) $match[1];
         }
-        return ['status' => $status, 'body' => $responseBody];
+        return ['status' => $status, 'body' => $responseBody, 'headers' => self::headersByName($responseHeaders)];
+    }
+
+    /**
+     * The wrapper's raw header lines as lower-case name → value; a repeated
+     * header keeps its values comma-joined, as HTTP defines.
+     *
+     * @param list<string> $lines
+     * @return array<string, string>
+     */
+    public static function headersByName(array $lines): array
+    {
+        $headers = [];
+        foreach ($lines as $line) {
+            $colon = strpos($line, ':');
+            if ($colon === false || $colon === 0) {
+                continue;
+            }
+            $name = strtolower(trim(substr($line, 0, $colon)));
+            $value = trim(substr($line, $colon + 1));
+            $headers[$name] = isset($headers[$name]) ? "{$headers[$name]}, {$value}" : $value;
+        }
+        return $headers;
     }
 }

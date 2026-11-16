@@ -77,8 +77,9 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
     React.useState<CheckoutInvoiceSnapshot | null>(null);
   const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
   // When a swap provider is configured, each pay-in coin is promoted to a top-level
-  // choice. Selecting one jumps straight to its deposit address, bypassing the
-  // country/route/provider steps. Null means the standard method grid is shown.
+  // choice. This is the coin the payer pressed Continue on: the wizard leaves the
+  // grid for its deposit address, bypassing the country/route/provider steps. A
+  // coin tile alone never sets it. Null means the standard method grid is shown.
   //
   // A snapshot that already carries an attempt starts ON that attempt. Adopting
   // it here, not in an effect, is what keeps the first paint off the Lightning
@@ -126,7 +127,14 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
   });
   // Read once per render: the session's fields are plain values, and its
   // `onChange` is what turns a change in them into the next render.
-  const { startSwap, swapStartError, startingSwapAsset: swapStartingAsset } = session;
+  const {
+    quoteSwap,
+    startSwap,
+    swapStartError,
+    startingSwapAsset: swapStartingAsset,
+    swapQuotes: sessionSwapQuotes,
+    quotingSwapAsset,
+  } = session;
   // Leave the focused swap flow and restore the default method grid (nothing selected).
   // The start failure belongs to the asset being left: keeping it would show the previous
   // coin's message on the next one, with retry wired to the new coin. Leaving the swap for
@@ -167,8 +175,9 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
     [checkout, startedSwapInvoice, dismissedSwapInvoiceId],
   );
   const now = useTickingUnixSeconds(currentSwapInvoice !== undefined);
-  // Enter the focused flow for a pay-in coin. The effect below calls the shared
-  // session, which quotes first and starts only when the amount is in range.
+  // Enter the focused flow for a pay-in coin: Continue's handler, and the route
+  // buttons'. The effect below calls the shared session, which quotes first and
+  // starts only when the amount is in range.
   const selectSwapAsset = React.useCallback(
     (payInAsset: string) => {
       if (props.prefix === undefined) return;
@@ -355,7 +364,7 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
     setSelectedSwapAsset(payInAsset);
   }, [currentSwapInvoice, selectedSwapAsset]);
 
-  // Selecting a top-level coin hands the asset to the shared session, which
+  // Continuing with a coin hands the asset to the shared session, which
   // quotes it first (to confirm the amount is in range) and, when available,
   // starts the swap so the payer lands on the deposit address. A start that
   // fails leaves its entry in the attempted set, so this effect never re-POSTs
@@ -510,10 +519,12 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
           selectedPickerKey,
           startingAsset: swapStartingAsset,
           selectedSwapAssetByGroup,
+          swapQuotes: sessionSwapQuotes,
+          quotingAsset: quotingSwapAsset,
           // One resolver decides what a tile click MEANS, so the "ask the
           // network question only when it is a real question" rule is not
-          // re-derived here: a single-network group comes back as start_swap
-          // and the wizard starts it instead of opening a one-answer step.
+          // re-derived here: a single-network group comes back as review_swap
+          // and a multi-network one as choose_network. Neither starts a swap.
           onSelectPicker: (key, previousKey) => {
             const resolved = resolveWizardSelection({
               pickerKey: key,
@@ -530,19 +541,22 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
               if (resolved.methodId === "bitcoin") void props.onRequestLightning?.();
               return;
             }
-            if (resolved.kind === "start_swap") {
-              setSelectedPickerKey(null);
-              selectSwapAsset(resolved.payInAsset);
-              return;
-            }
             setSelectedPickerKey(key);
             setSelectedSwapAssetByGroup(resolved.selectedAssetByGroup);
+            // Price first: the tile only opens the review step. When the asset
+            // on review is already known (a one-network coin, or a network
+            // carried over) ask what it costs, which opens no provider order.
+            // The swap itself starts on Continue.
+            if (resolved.payInAsset !== undefined) void quoteSwap(resolved.payInAsset);
           },
           onSelectNetwork: (groupKey, payInAsset) => {
             setSelectedSwapAssetByGroup((current) => ({
               ...current,
               [groupKey]: payInAsset,
             }));
+            // The chosen network is now the asset on review: show its amount
+            // beside Continue. A quote, never a start.
+            void quoteSwap(payInAsset);
           },
           onContinueMethod: (methodId) => {
             updateWizardSelection((controller) =>
@@ -730,27 +744,54 @@ function renderCompactPaymentMethodSelector(options: {
   readonly selectedPickerKey: string | null;
   readonly startingAsset: string | null;
   readonly selectedSwapAssetByGroup: Readonly<Record<string, string>>;
+  /** Quotes answered so far, keyed by pay-in asset; the open coin's is the amount line. */
+  readonly swapQuotes: Readonly<Record<string, SwapOptionDisplay>>;
+  /** The asset whose quote is in flight, so the amount line spins instead of gaping. */
+  readonly quotingAsset: string | null;
   readonly onSelectPicker: (key: string, previousKey: string | null) => void;
   readonly onSelectNetwork: (groupKey: string, payInAsset: string) => void;
   readonly onContinueMethod: (methodId: string) => void;
   readonly onContinueSwap: (payInAsset: string) => void;
 }): React.ReactElement {
   // One model, both renderers: which tile is open, which network each coin is
-  // set to, which asset is starting, and every derivation that used to be
-  // re-done by hand on each side of the pair.
+  // set to, which asset is starting, what the quotes have answered, and every
+  // derivation that used to be re-done by hand on each side of the pair.
   const display = createMethodGridDisplay({
     entries: buildMethodGridEntries(paymentMethods, options.swapAssetOptions),
     selectedPickerKey: options.selectedPickerKey,
     selectedAssetByGroup: options.selectedSwapAssetByGroup,
     startingAsset: options.startingAsset,
+    swapQuotes: options.swapQuotes,
+    quotingAsset: options.quotingAsset,
     ...(options.checkout === undefined ? {} : { checkout: options.checkout }),
   });
   const currenciesLoading =
     options.currenciesLoading === true && options.swapAssetOptions.length === 0;
-  const { gridBusy, networkRequired, selectedGroup, continueTarget, canContinue, offersChoice } =
-    display;
+  const { gridBusy, selectedGroup, continueTarget, canContinue, offersChoice } = display;
   const continueStarting = continueTarget?.starting === true;
+  const estimateWaiting = continueTarget?.amountText === undefined && continueTarget?.quoting;
 
+  // The amount line beside Continue. Always drawn, empty until a quote answers,
+  // so its height is already there and Continue does not move when it fills.
+  const estimate = () =>
+    React.createElement(
+      "p",
+      {
+        "aria-live": "polite",
+        "aria-busy": estimateWaiting ? "true" : undefined,
+        className: orClasses.methodEstimate,
+      },
+      continueTarget?.amountText ??
+        (estimateWaiting
+          ? React.createElement("span", {
+              className: orClasses.methodEstimateSpinner,
+              "aria-hidden": "true",
+            })
+          : null),
+    );
+
+  // The only control in the picker that starts a swap. A tile and a network
+  // button only select.
   const continueButton = (className: string) =>
     React.createElement(
       "button",
@@ -874,7 +915,12 @@ function renderCompactPaymentMethodSelector(options: {
             );
           }),
         ),
-        continueButton(orClasses.methodConfirmDesktop),
+        React.createElement(
+          "div",
+          { className: orClasses.methodConfirmStack },
+          estimate(),
+          continueButton(orClasses.methodConfirmDesktop),
+        ),
       ),
       selectedOption !== undefined
         ? React.createElement(
@@ -896,6 +942,32 @@ function renderCompactPaymentMethodSelector(options: {
         : null,
     );
   };
+
+  // A one-network coin's review step: the amount and Continue, and nothing to
+  // read. There is no network question to ask, so none is drawn.
+  const renderSwapReview = (group: MethodGridGroupDisplay<SwapOptionDisplay>, mobile: boolean) =>
+    React.createElement(
+      "div",
+      {
+        id: group.panelId,
+        role: "group",
+        "aria-label": group.label,
+        className: mobile
+          ? networkMobileRevealClasses(group.accent)
+          : orClasses.methodNetworkReveal,
+      },
+      React.createElement(
+        "div",
+        { className: orClasses.methodReviewLayout },
+        estimate(),
+        continueButton(orClasses.methodConfirmDesktop),
+      ),
+    );
+
+  // `needsNetworkStep` is the rule as data: only a coin on more than one
+  // network is asked which one. A one-network coin goes straight to its amount.
+  const renderReviewStep = (group: MethodGridGroupDisplay<SwapOptionDisplay>, mobile: boolean) =>
+    group.needsNetworkStep ? renderNetworkSelector(group, mobile) : renderSwapReview(group, mobile);
 
   return React.createElement(
     React.Fragment,
@@ -977,17 +1049,8 @@ function renderCompactPaymentMethodSelector(options: {
           }
 
           const group = entry.group;
-          const {
-            pickerKey,
-            selected,
-            multiNetwork,
-            displayOption,
-            starting,
-            disabled,
-            accent,
-            limitMessage,
-            panelId,
-          } = group;
+          const { pickerKey, selected, displayOption, starting, disabled, accent, limitMessage } =
+            group;
 
           return React.createElement(
             "div",
@@ -996,29 +1059,24 @@ function renderCompactPaymentMethodSelector(options: {
               "button",
               {
                 type: "button",
-                "aria-pressed": starting || (multiNetwork && selected),
-                "aria-expanded": multiNetwork ? selected : undefined,
-                "aria-controls": multiNetwork ? panelId : undefined,
+                "aria-pressed": starting || selected,
+                "aria-expanded": selected,
+                "aria-controls": group.panelId,
                 "aria-busy": starting ? "true" : undefined,
                 disabled: disabled || gridBusy,
                 "aria-disabled": disabled || gridBusy ? "true" : undefined,
                 className: assetButtonClasses({
                   accent,
-                  selected: starting || (multiNetwork && selected),
+                  selected: starting || selected,
                   disabled: disabled || (gridBusy && !starting),
                 }),
+                // A tile only SELECTS, whatever the coin: the swap starts on
+                // Continue, once the payer has seen the amount. Starting here
+                // opened a provider order for every coin a payer looked at.
                 onClick:
                   disabled || gridBusy
                     ? undefined
-                    : // `needsNetworkStep` / `startPayInAsset` are the
-                      // options.length > 1 rule as DATA, so neither renderer
-                      // re-derives which of the two a tile click means.
-                      group.needsNetworkStep
-                      ? () => options.onSelectPicker(pickerKey, options.selectedPickerKey)
-                      : () =>
-                          options.onContinueSwap(
-                            group.startPayInAsset ?? displayOption.pay_in_asset,
-                          ),
+                    : () => options.onSelectPicker(pickerKey, options.selectedPickerKey),
               },
               React.createElement(
                 "span",
@@ -1048,24 +1106,25 @@ function renderCompactPaymentMethodSelector(options: {
             disabled && limitMessage !== undefined
               ? React.createElement("span", { className: orClasses.methodLimitHint }, limitMessage)
               : null,
-            multiNetwork
-              ? React.createElement(
-                  "div",
-                  {
-                    className: joinClassNames(
-                      orClasses.methodNetworkRevealAnim,
-                      selected
-                        ? orClasses.methodNetworkRevealAnimOpen
-                        : orClasses.methodNetworkRevealAnimClosed,
-                    ),
-                  },
-                  React.createElement(
-                    "div",
-                    { className: orClasses.methodNetworkRevealInner },
-                    selected ? renderNetworkSelector(group, true) : null,
-                  ),
-                )
-              : null,
+            // Below 18rem the review step opens under its own tile; wider, it
+            // is the full-width panel under the grid. Both are drawn and CSS
+            // shows one.
+            React.createElement(
+              "div",
+              {
+                className: joinClassNames(
+                  orClasses.methodNetworkRevealAnim,
+                  selected
+                    ? orClasses.methodNetworkRevealAnimOpen
+                    : orClasses.methodNetworkRevealAnimClosed,
+                ),
+              },
+              React.createElement(
+                "div",
+                { className: orClasses.methodNetworkRevealInner },
+                selected ? renderReviewStep(group, true) : null,
+              ),
+            ),
           );
         }),
         currenciesLoading
@@ -1089,11 +1148,11 @@ function renderCompactPaymentMethodSelector(options: {
             )
           : null,
       ),
-      networkRequired && selectedGroup !== undefined
+      selectedGroup !== undefined
         ? React.createElement(
             "div",
             { className: orClasses.methodNetworkRevealDesktop },
-            renderNetworkSelector(selectedGroup, false),
+            renderReviewStep(selectedGroup, false),
           )
         : null,
     ),

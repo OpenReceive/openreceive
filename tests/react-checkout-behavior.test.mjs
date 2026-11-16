@@ -54,6 +54,22 @@ function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * The payer's whole way into a one-network coin: its tile, then Continue. The
+ * tile only opens the coin's review step; Continue is what starts the swap.
+ */
+async function payWithCoin(handle, label) {
+  (await until(() => handle.button(label), { label: `${label} tile` })).click();
+  const next = await until(
+    () => {
+      const button = handle.button(checkoutLabels.continue);
+      return button !== undefined && !button.disabled && button;
+    },
+    { label: `Continue for ${label}` },
+  );
+  next.click();
+}
+
 test("inline host callbacks do not restart the poll controller on every render", async () => {
   // The controller reloads state as soon as it is created. Keeping any of the
   // caller's callbacks (refreshStatus, logger, onError, onState, onSettled) in the
@@ -762,7 +778,7 @@ test("a second Bitcoin selection during the mint does not POST a second checkout
   }
 });
 
-test("double-clicking a swap asset starts exactly one swap", async () => {
+test("double-clicking Continue starts exactly one swap", async () => {
   const stack = await createLifecycleStack();
   stack.addOrder("order-swap-guard", 2000);
   let swapStarts = 0;
@@ -780,13 +796,16 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
   };
   const handle = mount(React.createElement(Checkout, { reference: "order-swap-guard" }));
   try {
-    const sol = await until(() => handle.button("SOL"), { label: "SOL tile" });
+    (await until(() => handle.button("SOL"), { label: "SOL tile" })).click();
+    const next = await until(() => handle.button(checkoutLabels.continue), {
+      label: "Continue for SOL",
+    });
     // React's first click replaces the whole method grid with the focused swap
-    // flow, so the DOM half of the guard is that the tile is simply gone. The
+    // flow, so the DOM half of the guard is that Continue is simply gone. The
     // state half — one start at a time, whatever the tree looks like — is the
     // session's, and the next test pins it directly.
-    sol.click();
-    sol.click();
+    next.click();
+    next.click();
     await until(() => swapStarts === 1, { label: "swap start in flight" });
     await flush();
     assert.equal(swapStarts, 1, "a second click must not POST a second swap start");
@@ -954,8 +973,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
   const solDeposit = "So11111111111111111111111111111111111111112";
   const handle = mount(React.createElement(Checkout, { reference: "order-swap-reselect" }));
   try {
-    const sol = await until(() => handle.button("SOL"), { label: "SOL tile" });
-    sol.click();
+    await payWithCoin(handle, "SOL");
     await until(() => handle.container.innerHTML.includes(solDeposit), {
       label: "SOL deposit panel",
     });
@@ -965,8 +983,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
       label: "back breadcrumb",
     });
     back.click();
-    const again = await until(() => handle.button("SOL"), { label: "asset grid again" });
-    again.click();
+    await payWithCoin(handle, "SOL");
     await until(() => handle.container.innerHTML.includes(solDeposit), {
       label: "deposit panel again",
     });
@@ -1080,6 +1097,291 @@ test("the session refuses a second start for an asset it already holds instructi
   }
 });
 
+// PRICE FIRST. Starting a swap opens an order with the swap provider, and a
+// provider account holds only so many unpaid orders at once. A tile that
+// started the swap opened one for every coin a payer looked at. So a tile, and
+// a network button, only select: the payer sees what the order costs in that
+// coin, from a quote that opens nothing, and the swap starts on Continue.
+// These run against the real handler and the testkit's swap provider, so
+// "starts nothing" is the provider's own count of orders created. The
+// element's twins are in tests/element-lifecycle.test.mjs under the same names.
+const PAY_AMOUNTS = {
+  USDT_TRON: "12.50",
+  USDT_SOL: "12.60",
+  USDT_ETH: "12.75",
+  USDC_SOL: "12.70",
+  USDC_ETH: "12.80",
+  SOL_SOL: "0.04210000",
+  ETH_ETH: "0.0031",
+};
+const quotesOf = (stack) => stack.requests.filter((entry) => entry.path.endsWith("/swaps/quote"));
+const startsOf = (stack) => stack.requests.filter((entry) => entry.path.endsWith("/swaps"));
+const SOL_DEPOSIT = "So11111111111111111111111111111111111111112";
+
+test("a one-network coin tile asks for the amount, shows it, and starts nothing until Continue", async () => {
+  const stack = await createLifecycleStack({ swapPayAmounts: PAY_AMOUNTS });
+  stack.addOrder("order-price-first", 2000);
+  globalThis.fetch = stack.fetchStub;
+  const handle = mount(React.createElement(Checkout, { reference: "order-price-first" }));
+  try {
+    (await until(() => handle.button("SOL"), { label: "SOL tile" })).click();
+    await until(() => handle.text().includes("≈ 0.0421 SOL"), { label: "the SOL amount" });
+    assert.deepEqual(
+      quotesOf(stack).map((entry) => entry.body),
+      [{ reference: "order-price-first", pay_in_asset: "SOL_SOL" }],
+      "the tile sends exactly one quote, for the coin it opened",
+    );
+    assert.equal(startsOf(stack).length, 0, "a tile click must not POST a swap start");
+    assert.equal(stack.swapProvider.createCalls, 0, "and no order is opened with the provider");
+
+    // One network is not a question: the review step is the amount and
+    // Continue, with no network chooser to click past.
+    assert.equal(handle.text().includes("Choose SOL network"), false);
+    const tile = handle.button("SOL");
+    assert.equal(tile.getAttribute("aria-pressed"), "true");
+    assert.equal(tile.getAttribute("aria-expanded"), "true");
+    assert.ok(handle.container.querySelector(`#${tile.getAttribute("aria-controls")}`));
+    const line = [...handle.container.querySelectorAll('p[aria-live="polite"]')].find((node) =>
+      node.textContent.includes("≈ 0.0421 SOL"),
+    );
+    assert.ok(line, "the amount is in a polite live region");
+    const next = handle.button(checkoutLabels.continue);
+    assert.equal(next.disabled, false);
+
+    next.click();
+    await until(() => handle.container.innerHTML.includes(SOL_DEPOSIT), {
+      label: "SOL deposit panel",
+    });
+    assert.equal(startsOf(stack).length, 1, "Continue starts exactly one swap");
+    assert.equal(stack.swapProvider.createCalls, 1);
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+test("choosing a network asks for that network's amount, and switching shows the other one", async () => {
+  const stack = await createLifecycleStack({ swapPayAmounts: PAY_AMOUNTS });
+  stack.addOrder("order-price-network", 2000);
+  globalThis.fetch = stack.fetchStub;
+  const handle = mount(React.createElement(Checkout, { reference: "order-price-network" }));
+  const quoted = () => quotesOf(stack).map((entry) => entry.body.pay_in_asset);
+  try {
+    // The tile alone: a network is still owed, so there is nothing to quote
+    // and nothing to continue with.
+    (await until(() => handle.button("USDT"), { label: "USDT tile" })).click();
+    await until(() => handle.button("Tron"), { label: "Tron network" });
+    await flush();
+    assert.deepEqual(quoted(), []);
+    assert.equal(handle.text().includes("≈"), false);
+    assert.equal(handle.button(checkoutLabels.continue).disabled, true);
+
+    handle.button("Tron").click();
+    await until(() => handle.text().includes("≈ 12.50 USDT · Tron"), { label: "the Tron amount" });
+    assert.deepEqual(quoted(), ["USDT_TRON"]);
+    assert.equal(handle.button(checkoutLabels.continue).disabled, false);
+
+    handle.button("Ethereum").click();
+    await until(() => handle.text().includes("≈ 12.75 USDT · Ethereum"), {
+      label: "the Ethereum amount",
+    });
+    assert.equal(handle.text().includes("≈ 12.50 USDT"), false, "one amount: the chosen network's");
+    assert.deepEqual(quoted(), ["USDT_TRON", "USDT_ETH"]);
+
+    // A network carried over to the next coin is on review straight from the
+    // tile, so its amount is asked for without another click.
+    handle.button("USDC").click();
+    await until(() => handle.text().includes("≈ 12.80 USDC · Ethereum"), {
+      label: "the carried-over network's amount",
+    });
+    assert.deepEqual(quoted(), ["USDT_TRON", "USDT_ETH", "USDC_ETH"]);
+
+    assert.equal(startsOf(stack).length, 0, "choosing a network must not start a swap");
+    assert.equal(stack.swapProvider.createCalls, 0);
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+test("a failed quote is silent: no amount, no error, and Continue still starts the swap", async () => {
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-quote-fails", 2000);
+  // The picker's quote meets an outage; the one behind Continue is answered.
+  let quotes = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (url.pathname === "/openreceive/swaps/quote") {
+      quotes += 1;
+      if (quotes === 1) {
+        return new Response(
+          JSON.stringify({
+            code: "INTERNAL",
+            message: "The swap provider is temporarily unreachable. Please try again shortly.",
+            retryable: true,
+          }),
+          { status: 503, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+    return stack.fetchStub(input, init);
+  };
+  const errors = [];
+  const logs = [];
+  const handle = mount(
+    React.createElement(Checkout, {
+      reference: "order-quote-fails",
+      onError: (error) => errors.push(error),
+      logger: (entry) => logs.push(entry),
+    }),
+  );
+  try {
+    (await until(() => handle.button("SOL"), { label: "SOL tile" })).click();
+    await until(() => logs.some((entry) => entry.event === "swap.quote.failed"), {
+      label: "the quote failure in the log",
+    });
+    await flush();
+    assert.equal(handle.text().includes("≈"), false, "no amount, and nothing in its place");
+    assert.equal(handle.container.querySelector('[role="alert"]'), null, "the payer sees no error");
+    assert.doesNotMatch(handle.text(), /unreachable|Try again|Could not/);
+    assert.deepEqual(errors, [], "a failed quote is not a host error either");
+    const failed = logs.filter((entry) => entry.event === "swap.quote.failed");
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0].level, "warn");
+    assert.equal(failed[0].pay_in_asset, "SOL_SOL");
+    assert.equal(failed[0].status, 503);
+
+    const next = handle.button(checkoutLabels.continue);
+    assert.equal(next.disabled, false);
+    assert.equal(stack.swapProvider.createCalls, 0);
+    next.click();
+    await until(() => handle.container.innerHTML.includes(SOL_DEPOSIT), {
+      label: "SOL deposit panel",
+    });
+    assert.equal(stack.swapProvider.createCalls, 1);
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+test("a quote that says out of range disables Continue with the limit message", async () => {
+  const { swapOptionLimitMessage } = await import("../packages/js/browser/src/headless.ts");
+  const outOfRange = {
+    available: false,
+    unavailable_reason: "amount_too_small",
+    unavailable_message: "This invoice is below the provider minimum.",
+    minimum_invoice_amount_msats: 9_000_000,
+  };
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-quote-range", 2000);
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (url.pathname === "/openreceive/swaps/quote") {
+      return Response.json({
+        quote: { provider: "fixedfloat", pay_asset: "SOL_SOL", ...outOfRange },
+      });
+    }
+    return stack.fetchStub(input, init);
+  };
+  const handle = mount(React.createElement(Checkout, { reference: "order-quote-range" }));
+  try {
+    (await until(() => handle.button("SOL"), { label: "SOL tile" })).click();
+    // The same words a catalog entry out of range puts on a tile.
+    const expected = swapOptionLimitMessage(
+      { label: "SOL", ...outOfRange },
+      { amount_msats: 2_000_000 },
+    );
+    assert.match(expected, /^Minimum amount /);
+    const blocked = await until(() => handle.button(expected), {
+      label: "Continue disabled by the quote",
+    });
+    assert.equal(blocked.disabled, true);
+    assert.equal(blocked.getAttribute("aria-disabled"), "true");
+    assert.equal(handle.button(checkoutLabels.continue), undefined);
+    assert.equal(handle.text().includes("≈"), false);
+    blocked.click();
+    await flush();
+    assert.equal(startsOf(stack).length, 0);
+    assert.equal(stack.swapProvider.createCalls, 0);
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+test("looking at every coin and every network starts no swap", async () => {
+  const stack = await createLifecycleStack({ swapPayAmounts: PAY_AMOUNTS });
+  stack.addOrder("order-window-shopping", 2000);
+  globalThis.fetch = stack.fetchStub;
+  const handle = mount(React.createElement(Checkout, { reference: "order-window-shopping" }));
+  try {
+    await until(() => handle.button("ETH"), { label: "the coin tiles" });
+    // Twice round, the way a payer comparing prices does it.
+    for (const coin of ["USDT", "USDC", "SOL", "ETH", "USDT", "USDC", "SOL", "ETH"]) {
+      handle.button(coin).click();
+      await flush();
+      for (const network of ["Tron", "Solana", "Ethereum"]) {
+        handle.button(network)?.click();
+        await flush();
+      }
+    }
+    await until(() => handle.text().includes("≈ 0.0031 ETH"), { label: "the last amount" });
+    await until(() => new Set(quotesOf(stack).map((entry) => entry.body.pay_in_asset)).size === 7, {
+      label: "every coin and network priced",
+    });
+    assert.deepEqual(
+      [...new Set(quotesOf(stack).map((entry) => entry.body.pay_in_asset))].sort(),
+      Object.keys(PAY_AMOUNTS).sort(),
+    );
+    assert.equal(startsOf(stack).length, 0, "not one swap start was sent");
+    assert.equal(stack.swapProvider.createCalls, 0, "and not one provider order was opened");
+    assert.equal(handle.button(checkoutLabels.switchPaymentMethod), undefined, "still on the grid");
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+// The amount arrives a moment after the click. Continue must be the same
+// button afterwards, in the same place: a payer who had already tabbed to it,
+// or whose finger is on its way down, must not find it replaced.
+test("the amount arriving does not take keyboard focus off Continue", async () => {
+  const stack = await createLifecycleStack({ swapPayAmounts: PAY_AMOUNTS });
+  stack.addOrder("order-quote-focus", 2000);
+  let releaseQuote = () => {};
+  const heldQuote = new Promise((resolve) => {
+    releaseQuote = resolve;
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (url.pathname === "/openreceive/swaps/quote") await heldQuote;
+    return stack.fetchStub(input, init);
+  };
+  const handle = mount(React.createElement(Checkout, { reference: "order-quote-focus" }));
+  try {
+    (await until(() => handle.button("SOL"), { label: "SOL tile" })).click();
+    const before = await until(() => handle.button(checkoutLabels.continue), {
+      label: "Continue for SOL",
+    });
+    // While the quote is out: the amount line is busy, Continue is usable.
+    assert.equal(before.disabled, false);
+    assert.ok(handle.container.querySelector('p[aria-live="polite"][aria-busy="true"]'));
+    before.focus();
+    assert.equal(document.activeElement, before);
+
+    releaseQuote();
+    await until(() => handle.text().includes("≈ 0.0421 SOL"), { label: "the SOL amount" });
+    assert.equal(handle.button(checkoutLabels.continue), before, "the same button, not a new one");
+    assert.equal(document.activeElement, before);
+    assert.equal(handle.container.querySelector('p[aria-busy="true"]'), null);
+  } finally {
+    releaseQuote();
+    handle.unmount();
+    await stack.close();
+  }
+});
+
 // THE ONE CLICK THAT MUST NOT BE THERE. A swap attempt in `refund_required` is
 // a payer whose deposit came up short: the refund form is the only screen that
 // can claim that money back, and the wizard's "switch payment method"
@@ -1160,13 +1462,15 @@ test("dismissing a quoted swap prevents its delayed response from reopening the 
     }),
   );
   try {
-    (await until(() => handle.button("USDT"))).click();
-    await until(() => requests.length === 1);
+    // Two quotes are held: the picker's, from the tile, and the one the start
+    // behind Continue sends before it creates anything.
+    await payWithCoin(handle, "USDT");
+    await until(() => requests.length === 2);
     (await until(() => handle.button("Switch payment method"))).click();
     resolveQuote(Response.json({ quote: { pay_asset: "USDT_SOL", available: true } }));
     await flush();
     await flush();
-    assert.equal(requests.length, 1, "a dismissed quote cannot proceed to create");
+    assert.equal(requests.length, 2, "a dismissed quote cannot proceed to create");
     assert.equal(handle.text().includes("Preparing payment address"), false);
     assert.equal(handle.text().includes("SoLDeposit"), false);
   } finally {

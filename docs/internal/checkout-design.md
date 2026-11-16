@@ -50,14 +50,71 @@ keys** (`USDT`). Its values are the chosen option's **`pay_in_asset`**
 (`USDT_TRON`), not its `network_label`. Writing the wrong value still
 type-checks. The tile just stays unselected, with no error.
 
-A group with one option comes back as `start_swap`, never `choose_network`. We
+A group with one option comes back as `review_swap`, never `choose_network`. We
 ask the network question because the deposit address depends on the network,
 and sending on the wrong one cannot be undone. Asking it for SOL would teach the
 payer that the step is a formality. One screen later, for USDT, it is the whole
 decision.
 
 `createMethodGridDisplay` applies the same rule per tile, through
-`needsNetworkStep` / `startPayInAsset`.
+`needsNetworkStep`.
+
+## Price first: a tile never starts a swap
+
+No selection kind starts a swap. Through 0.4.35 a one-network tile resolved to
+`start_swap` and both renderers called `startSwap` from the click. `startSwap`
+creates an order with the swap provider. A payer who looked at SOL, then ETH,
+then went back to Bitcoin left two unpaid provider orders behind, and a
+provider account holds only so many unpaid orders at once.
+
+Now every coin tile only selects, and the swap starts on Continue:
+
+- A one-network tile resolves to `review_swap`. The review step is one amount
+  line and Continue. It adds one tap for SOL and ETH. It asks no network
+  question, so the rule above still holds.
+- A multi-network tile resolves to `choose_network`, as before. The amount line
+  sits above the Continue button it already had.
+- The amount comes from `CheckoutSession.quoteSwap`, which posts
+  `/swaps/quote`. The server answers that from its cached rates feed and
+  creates no provider order. `startSwap` still quotes again before it creates,
+  unchanged.
+- `MethodGridContinueDisplay` carries the line as `amountText` and the
+  in-flight flag as `quoting`. The quote is laid over the catalog option, so a
+  quote that says "out of range" disables Continue with the catalog's own
+  limit message.
+
+The amount is marked `≈`: it is the rate feed's figure until the order exists.
+A failed quote is silent to the payer and logged as `swap.quote.failed`.
+
+The element rebuilds its shadow tree when the quote lands. It hands keyboard
+focus back to the picker control that held it (`capturePickerFocus` in
+`define-elements.ts`), and the amount line keeps its height while empty, so
+Continue neither loses focus nor moves.
+
+## A swap screen shows one amount
+
+Decided 2026-11-16, after a $36.00 order showed "37.04 USDC" to send next to
+"$36.00" in three places. A payer who sends the order total has not paid.
+
+The rule for everything this repository ships: while a swap is waiting to be
+paid, the page shows one amount, the one to send. Where it is implemented:
+
+- `SwapFeeBreakdown` has no order total and `checkoutLabels` has no label for
+  one, so the element, the React checkout and a headless renderer have nothing
+  to draw. The host's amount is still the base the fee is measured from
+  (`createSwapFeeBreakdown`'s `total` argument); it is just not returned.
+- `createTransactionDetails` leaves out `Fiat` and the raw `Payout fiat` row
+  while a swap attempt is unsettled.
+- Every demo host hides its own order total while a swap is on screen:
+  `OrderStrip`'s `hideTotal`, the stage footers, and the vanilla client's
+  state listener. The packaged-checkout hosts read `state.rail === "swap"`.
+- The picker's estimate for a pegged coin is to the cent
+  (`formatEstimateAmount(amount, { cents: true })`, chosen by
+  `swapPayInAssetPeggedTo`), so "≈ 7.477 USDT" never sits beside "$7.00".
+
+A new screen, renderer or demo that shows a swap must keep to it. Hosts cannot
+be made to, so `docs/guides/checkout-ux.md` ("One amount to send") states it as
+the best practice.
 
 ## Deposit risk is derived, not tabulated
 

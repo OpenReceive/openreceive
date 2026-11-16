@@ -1,0 +1,481 @@
+{
+  "schema_version": "0.1.0",
+  "decision": "size_the_request_guard_by_provider",
+  "rationale": "Every engine attaches a per-process request guard to a swap provider so a busy site stays inside the provider's API limits. The same wire contract is served at very different rates: FixedFloat allows 250 weight a minute per key with a create costing 50, and blocks a key for longer each time it goes over; Lightning Swap allows an account 30 new swaps and 400 calls a minute, answers 429 with the wait, and never blocks a key. The provider's HTTPS host picks the limits. An unknown host gets the FixedFloat limits because they are the stricter. The provider stays the authority: its 429 always starts a stand-off, for the wait it names when it names one.",
+  "window_seconds": 60,
+  "profiles": {
+    "fixedfloat": {
+      "soft_cap": 200,
+      "create_gate": 150,
+      "create_weight": 50,
+      "default_weight": 1,
+      "create_limit": null,
+      "backoff_seconds": 60,
+      "min_backoff_seconds": 60,
+      "max_backoff_seconds": 3600,
+      "create_backoff_only": false
+    },
+    "lightning-swap": {
+      "soft_cap": 400,
+      "create_gate": 400,
+      "create_weight": 1,
+      "default_weight": 1,
+      "create_limit": 30,
+      "backoff_seconds": 60,
+      "min_backoff_seconds": 1,
+      "max_backoff_seconds": 300,
+      "create_backoff_only": true
+    }
+  },
+  "hosts": [
+    {
+      "base_url": "https://lightning-swap.com",
+      "profile": "lightning-swap"
+    },
+    {
+      "base_url": "https://lightning-swap.com/",
+      "profile": "lightning-swap"
+    },
+    {
+      "base_url": "https://api.lightning-swap.com/v1",
+      "profile": "lightning-swap"
+    },
+    {
+      "base_url": "https://LIGHTNING-SWAP.com",
+      "profile": "lightning-swap"
+    },
+    {
+      "base_url": "https://lightning-swap.com:8443/api",
+      "profile": "lightning-swap"
+    },
+    {
+      "base_url": "https://ff.io",
+      "profile": "fixedfloat"
+    },
+    {
+      "base_url": "https://swap.example/v1",
+      "profile": "fixedfloat"
+    },
+    {
+      "base_url": "https://evil-lightning-swap.com",
+      "profile": "fixedfloat",
+      "note": "A look-alike host is not Lightning Swap."
+    },
+    {
+      "base_url": "https://lightning-swap.com.example",
+      "profile": "fixedfloat",
+      "note": "A look-alike host is not Lightning Swap."
+    },
+    {
+      "base_url": "not a url",
+      "profile": "fixedfloat"
+    }
+  ],
+  "steps_note": "A scenario builds one guard for `profile` with its clock at the first step's `at`, then runs the steps in order with the clock set to each step's `at`. `reserve` uses budget; `check` asks whether a reserve would be allowed and uses none; `rate_limited` tells the guard the provider answered 429 on `path` (`retry_after` is the provider's wait in seconds, absent when it named none). `repeat` runs the step that many times. `expect` is `ok`, `exhausted` or `backoff`; `backoff_until` is the unix second the stand-off ends, as the denial reports it.",
+  "scenarios": [
+    {
+      "name": "FixedFloat: three creates a minute, then the window rolls",
+      "profile": "fixedfloat",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "repeat": 3,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "repeat": 50,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "exhausted",
+          "note": "150 + 50 = the 200 soft cap."
+        },
+        {
+          "at": 1059,
+          "op": "reserve",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1060,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "a check uses no budget",
+      "profile": "fixedfloat",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
+          "repeat": 10,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "repeat": 3,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "order",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "FixedFloat: a 429 stops every call for at least a minute, and outlives the window",
+      "profile": "fixedfloat",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        },
+        {
+          "at": 1059,
+          "op": "rate_limited",
+          "path": "order"
+        },
+        {
+          "at": 1059,
+          "op": "reserve",
+          "path": "order",
+          "expect": "backoff",
+          "backoff_until": 1119
+        },
+        {
+          "at": 1061,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1119
+        },
+        {
+          "at": 1119,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "FixedFloat: a shorter wait is raised to a minute, a longer one is honored up to an hour",
+      "profile": "fixedfloat",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "rate_limited",
+          "path": "create",
+          "retry_after": 5
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "backoff",
+          "backoff_until": 1060
+        },
+        {
+          "at": 2000,
+          "op": "rate_limited",
+          "path": "create",
+          "retry_after": 600
+        },
+        {
+          "at": 2599,
+          "op": "reserve",
+          "path": "order",
+          "expect": "backoff",
+          "backoff_until": 2600
+        },
+        {
+          "at": 2600,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        },
+        {
+          "at": 5000,
+          "op": "rate_limited",
+          "path": "order",
+          "retry_after": 999999
+        },
+        {
+          "at": 8599,
+          "op": "reserve",
+          "path": "order",
+          "expect": "backoff",
+          "backoff_until": 8600
+        },
+        {
+          "at": 8600,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Lightning Swap: thirty creates a minute, and status calls keep going",
+      "profile": "lightning-swap",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "repeat": 30,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "repeat": 100,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "emergency",
+          "expect": "ok"
+        },
+        {
+          "at": 1060,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Lightning Swap: four hundred calls a minute in all",
+      "profile": "lightning-swap",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "repeat": 10,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "repeat": 390,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1060,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Lightning Swap: a 429 on a create stops creates only, for the wait it names",
+      "profile": "lightning-swap",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "rate_limited",
+          "path": "create",
+          "retry_after": 12
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1012
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1012
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        },
+        {
+          "at": 1011,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1012
+        },
+        {
+          "at": 1012,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Lightning Swap: a 429 on any other call stops every call",
+      "profile": "lightning-swap",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "rate_limited",
+          "path": "order",
+          "retry_after": 30
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "backoff",
+          "backoff_until": 1030
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1030
+        },
+        {
+          "at": 1030,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Lightning Swap: no wait named means a minute; a long wait is retried after five",
+      "profile": "lightning-swap",
+      "steps": [
+        {
+          "at": 2000,
+          "op": "rate_limited",
+          "path": "create"
+        },
+        {
+          "at": 2059,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 2060
+        },
+        {
+          "at": 2060,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        },
+        {
+          "at": 3000,
+          "op": "rate_limited",
+          "path": "create",
+          "retry_after": 86000
+        },
+        {
+          "at": 3299,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 3300
+        },
+        {
+          "at": 3300,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "a later, shorter 429 never shortens a stand-off already running",
+      "profile": "lightning-swap",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "rate_limited",
+          "path": "create",
+          "retry_after": 200
+        },
+        {
+          "at": 1010,
+          "op": "rate_limited",
+          "path": "create",
+          "retry_after": 5
+        },
+        {
+          "at": 1100,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1200
+        },
+        {
+          "at": 1200,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        }
+      ]
+    }
+  ]
+}

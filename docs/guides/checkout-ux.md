@@ -38,14 +38,47 @@ It is one display string. For a richer order summary, pass markup:
 
 See [Frontend checkout](frontend-checkout.md#show-the-payer-what-they-are-buying).
 
+## Show the amount before you start a swap
+
+A coin tile only selects. It must not start the swap.
+
+Starting a swap opens an order with the swap provider. A payer who looks at
+four coins would leave four unpaid orders behind, and a provider account holds
+only so many unpaid orders at once.
+
+So show the amount first:
+
+1. The payer picks a coin, and a network if the coin has more than one.
+2. Call `session.quoteSwap(payInAsset)`. It asks the server what this order
+   costs in that coin. It opens no order.
+3. Draw `continueTarget.amountText` from `createMethodGridDisplay`, such as
+   `≈ 0.0421 SOL`, beside one Continue button. Pass the model
+   `session.swapQuotes` and `session.quotingSwapAsset`.
+4. Call `session.startSwap` from Continue, and from nowhere else.
+
+The amount is an estimate until the order exists. That is what `≈` says. The
+deposit panel then shows the order's own amount. Keep it to that one line. Do
+not add a sentence that explains it.
+
+A coin pegged to a currency (USDT, USDC) is read as money, so its estimate is
+to the cent: `≈ 7.48 USDT · Solana`, not `≈ 7.477 USDT`. Other coins keep four
+significant digits. `amountText` already does both.
+
+Keep room for the line while the quote loads, so Continue does not move when
+the amount arrives. A failed quote shows no error. The line stays empty and
+Continue still works, because `startSwap` quotes again and reports its own
+errors. A quote that says the amount is out of range disables Continue, and
+`continueTarget.label` says why.
+
 ## Ask "which network?" only when there is more than one
 
-USDT has several networks. SOL and ETH have one. For a single-network coin,
-start the swap from the tile. Do not ask a question that has only one answer.
+USDT has several networks. SOL and ETH have one. For a single-network coin, go
+straight to the amount. Do not ask a question that has only one answer.
 
 Call `resolveWizardSelection` and branch on `kind`. A one-network group comes
-back as `start_swap`, never `choose_network`. Key the selection map by group
-(`USDT`), with `pay_in_asset` as the value (`USDT_TRON`).
+back as `review_swap`, never `choose_network`. Both carry `payInAsset` when
+there is already an asset to quote. Key the selection map by group (`USDT`),
+with `pay_in_asset` as the value (`USDT_TRON`).
 
 ## Say why a method is unavailable
 
@@ -53,6 +86,12 @@ A greyed tile that just says "unavailable" does not tell the payer whether to
 add a dollar or give up. `createMethodGridDisplay` puts `limitMessage` on the
 tile ("Minimum amount $2.71"). The limit comes from the group's cheapest
 network.
+
+Do the same for a network inside a coin. A $7.00 order can pay with USDT on
+Solana but not on Ethereum. Grey the network the order cannot use
+(`option.available === false`) and put `swapOptionLimitMessage(option,
+checkout)` under it. A network that looks live and ignores the tap reads as a
+broken page.
 
 ## Give every pasteable value a copy row
 
@@ -68,17 +107,36 @@ be refundable. Put it in a copy row, not inside a warning banner.
 
 ## One amount to send
 
-A payer on a USDC checkout asked "50.05 or 50.03?". The header said "Pay 50.05
-USDC". The payment breakdown, one line below, said "You send $50.03". That
-second number was the rate feed's USD value of the first. The payer could not
-tell which one to type into their wallet.
+A swap screen shows one amount: the one the payer sends. Do not show the
+order's total, or any other figure for the same payment, beside it.
+
+A $36.00 order was paid with USDC on Ethereum. The deposit panel said "37.04
+USDC". The order summary, the payment breakdown and the footer each said
+"$36.00". A payer who sends 36 has not paid. The deposit is short, the swap
+does not complete, and the money has to be refunded.
+
+OpenReceive cannot enforce this on your page. It is the best practice, and the
+packaged checkout and every demo follow it:
+
+- While a swap is waiting to be paid, take your own order total off the page:
+  the cart summary, the header, the footer. `state.rail === "swap"` on the
+  checkout state says a swap is on screen. Show the total again on the receipt.
+- Do not add a "Total" row to the payment breakdown. `createSwapFeeBreakdown`
+  returns `youSend`, `fee` and `feePercent`, and no total.
+- The transaction details follow the same rule. They carry no `Fiat` row while
+  a swap is waiting to be paid. The row comes back once the payment settles.
+
+The same rule covers a second copy of the amount itself. A payer on a USDC
+checkout asked "50.05 or 50.03?". The header said "Pay 50.05 USDC". The payment
+breakdown, one line below, said "You send $50.03". That second number was the
+rate feed's USD value of the first. The payer could not tell which one to type
+into their wallet.
 
 `swap.deposit_amount` is the only amount a payer is ever told to send. It is in
-the pay-in token. `swap.fee.pay_in_fiat` and `payout_fiat` are valuations. They
-explain why the deposit is larger than the total, and they are not
-instructions. The Total row is the checkout's own fiat amount when it is in the
-fee's currency: `payout_fiat` is the provider's valuation, rounded on its own
-rate, so a $49.00 order can come back as $48.99.
+the pay-in token. `swap.fee.pay_in_fiat` and `payout_fiat` are valuations, and
+they are not instructions. The fee is measured from the checkout's own fiat
+amount when it is in the fee's currency: `payout_fiat` is the provider's
+valuation, rounded on its own rate, so a $49.00 order can come back as $48.99.
 
 Some stablecoins are pegged to the fee currency. The shared asset table marks
 this with `pegged_to`: USDT and USDC are pegged to USD. For these coins:
@@ -87,7 +145,6 @@ this with `pegged_to`: USDT and USDC are pegged to USD. For these coins:
   1.05 USDC (2.1%)".
 - `pay_in_fiat` is never rendered, neither in the breakdown nor in the
   transaction details.
-- The total stays in fiat.
 
 Floating assets (SOL, ETH) keep the fiat breakdown. There, "$50.03" cannot be
 mistaken for "0.71 SOL".

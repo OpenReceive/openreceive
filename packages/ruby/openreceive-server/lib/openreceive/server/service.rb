@@ -31,6 +31,9 @@ module OpenReceive
       SWAP_PROVIDER_REFUSED_MESSAGE = "The swap provider refused this request."
       SWAP_PROVIDER_RATE_LIMITED_MESSAGE = "The swap provider is rate limited. Please try again shortly."
       SWAP_PROVIDER_UNREACHABLE_MESSAGE = "The swap provider is temporarily unreachable. Please try again shortly."
+      # A swap call refused for rate is logged once per cause in this many
+      # seconds (the JS RATE_LIMIT_LOG_INTERVAL_SECONDS).
+      SWAP_RATE_LIMIT_LOG_INTERVAL_SECONDS = 60
 
       # A wallet check that could not reach the relay runs again on the first
       # wallet call after this wait. The wait doubles after each failure up to
@@ -102,6 +105,8 @@ module OpenReceive
         @monotonic = monotonic || -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
         @env = env
         @logger = logger
+        @swap_rate_limit_logged_at = {}
+        @swap_rate_limit_log_lock = Mutex.new
         @price_currencies = Array(price_currencies || ["USD"]).map { |value| value.to_s.upcase }
         @price_provider = price_provider == false ? nil : price_provider || default_price_provider(env)
         @swap_providers =
@@ -346,6 +351,12 @@ module OpenReceive
           raise ValidationError, e.message
         end
         provider = select_provider(asset)
+        # Refuse before the invoice is made when the provider guard would
+        # refuse the create anyway: a refused swap then costs nothing. A
+        # provider without the check is simply not asked.
+        if provider.respond_to?(:assert_create_available)
+          through_provider { provider.assert_create_available }
+        end
         expiry = provider.respond_to?(:invoice_expiry_seconds) ? provider.invoice_expiry_seconds(pay_in_asset: asset) : SWAP_INVOICE_EXPIRY_SECONDS
         # The shadow-invoice expiry is provider-mandated: build the checkout
         # input explicitly from validated fields so no payer-supplied key (e.g.
@@ -604,7 +615,8 @@ module OpenReceive
 
       # Mirrors the JS createOpenReceive provider wiring: one shared transient
       # cache and one per-provider weight budget, attached to every provider
-      # that supports them (host-supplied or auto-built).
+      # that supports them (host-supplied or auto-built). The budget is sized
+      # by the provider's own limits.
       def attach_swap_provider_runtime!
         return if @swap_providers.empty?
 
@@ -613,10 +625,17 @@ module OpenReceive
           provider.attach_swap_cache(cache) if provider.respond_to?(:attach_swap_cache)
           if provider.respond_to?(:attach_weight_budget)
             provider.attach_weight_budget(
-              Swap::SwapProviderWeightBudget.new(provider.name, @clock)
+              Swap::SwapProviderWeightBudget.new(provider.name, @clock, swap_provider_limits(provider))
             )
           end
         end
+      end
+
+      # A provider that names no limits (a custom provider, a test double)
+      # gets the FixedFloat ones, the stricter of the two.
+      def swap_provider_limits(provider)
+        limits = provider.respond_to?(:limits) ? provider.limits : nil
+        limits.is_a?(Swap::SwapProviderLimits) ? limits : Swap::FIXEDFLOAT_SWAP_PROVIDER_LIMITS
       end
 
       # Use exactly one live provider's catalog: primary when healthy,
@@ -896,7 +915,11 @@ module OpenReceive
         failure = Swap.classify_transport_failure(e)
         raise if failure.nil?
 
-        @logger&.warn("swap.provider.#{failure}: #{OpenReceive::Nwc.redact_error_text("#{e.class}: #{e.message}")}")
+        if failure == "rate_limited"
+          log_swap_provider_rate_limit(e)
+        else
+          @logger&.warn("swap.provider.#{failure}: #{OpenReceive::Nwc.redact_error_text("#{e.class}: #{e.message}")}")
+        end
         raise ServiceError.new(502, "INTERNAL", SWAP_PROVIDER_REFUSED_MESSAGE) if failure == "refused"
 
         raise ServiceError.new(
@@ -905,6 +928,54 @@ module OpenReceive
           failure == "rate_limited" ? SWAP_PROVIDER_RATE_LIMITED_MESSAGE : SWAP_PROVIDER_UNREACHABLE_MESSAGE,
           retryable: true
         )
+      end
+
+      # Say in the server log why a swap call was refused for rate, and until
+      # when (the JS logProviderRateLimit). The payer only reads "try again
+      # shortly"; the operator needs to know whether this library's own guard
+      # stopped the call or the provider answered 429. Status polls arrive
+      # every few seconds per open checkout: one line a minute per cause
+      # (provider, path, reason) says what is happening without burying the
+      # log.
+      def log_swap_provider_rate_limit(error)
+        return if @logger.nil?
+
+        denial = Swap.weight_budget_denial(error)
+        cause = "#{denial&.[]('provider')}:#{denial&.[]('path')}:#{denial&.[]('reason') || 'provider'}"
+        now = @clock.call
+        due = @swap_rate_limit_log_lock.synchronize do
+          last = @swap_rate_limit_logged_at[cause]
+          next false if !last.nil? && now - last < SWAP_RATE_LIMIT_LOG_INTERVAL_SECONDS
+
+          @swap_rate_limit_logged_at[cause] = now
+          true
+        end
+        return unless due
+
+        @logger.warn("swap.provider.rate_limited: #{swap_provider_rate_limit_line(denial, error)}")
+      end
+
+      # The Logger sink takes one string, so the fields the JS line carries
+      # (provider, path, reason, used, gate, creates, create_limit,
+      # backoff_until) follow the sentence as key=value, in parentheses. A
+      # provider's 429 carries no denial; its own words follow instead,
+      # redacted.
+      def swap_provider_rate_limit_line(denial, error)
+        if denial.nil?
+          return "The swap provider answered 429 (rate limited); new calls stand off until its " \
+                 "wait is over. (#{OpenReceive::Nwc.redact_error_text("#{error.class}: #{error.message}")})"
+        end
+
+        sentence =
+          if denial["reason"] == "backoff"
+            "Swap provider call refused locally: standing off after the provider's 429."
+          else
+            "Swap provider call refused locally: this process reached the provider's per-minute limit."
+          end
+        fields = %w[provider path reason used gate creates create_limit backoff_until].filter_map do |key|
+          "#{key}=#{denial[key]}" unless denial[key].nil?
+        end
+        fields.empty? ? sentence : "#{sentence} (#{fields.join(' ')})"
       end
 
       def call_provider(provider, method, *args)

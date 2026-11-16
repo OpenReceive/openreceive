@@ -17,7 +17,7 @@ final class Gateway extends \WC_Payment_Gateway
             'title' => ['title' => __('Title', 'openreceive'), 'type' => 'text', 'default' => '', 'description' => __('Leave empty for the default, which names stablecoins once a swap code is saved.', 'openreceive')],
             'description' => ['title' => __('Description', 'openreceive'), 'type' => 'textarea', 'default' => __('Pay directly with Lightning or a supported swap currency.', 'openreceive')],
             'allow_spend' => ['title' => __('Spend-capable wallet override', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Danger: a spend-capable code can drain your wallet if this server is compromised. Use a receive-only code instead.', 'openreceive')],
-            'rate_limiting' => ['title' => __('Rate limiting', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Recommended for public shops. Limits invoice creation per client IP.', 'openreceive')],
+            'rate_limiting' => ['title' => __('Rate limiting', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Limits invoice creation per client IP. Behind a CDN or proxy, first set up your server to pass the visitor\'s address, or every customer shares one limit.', 'openreceive')],
             'remove_data' => ['title' => __('Remove data on uninstall', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Delete OpenReceive payment attempts when deleting this plugin. WooCommerce orders are retained.', 'openreceive')],
         ];
         // Merchants know these as codes from their wallet and swap provider; the

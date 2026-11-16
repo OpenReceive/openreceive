@@ -593,7 +593,6 @@ test("swap fee breakdown stays exact on the shared decimal engine", () => {
       payout_fiat: "100.00",
     }),
     {
-      cartTotal: "$100.00",
       youSend: "$105.50",
       fee: "$5.50",
       feePercent: "5.5%",
@@ -620,7 +619,6 @@ test("a USD stablecoin's fee breakdown is in the token and never shows the pay-i
   const fee = { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "49" };
   const pegged = createSwapFeeBreakdown(fee, { pay_in_asset: "USDC_SOL", deposit_amount: "50.05" });
   assert.deepEqual(pegged, {
-    cartTotal: "$49.00",
     youSend: "50.05 USDC",
     fee: "1.05 USDC",
     feePercent: "2.1%",
@@ -645,7 +643,7 @@ test("a USD stablecoin's fee breakdown is in the token and never shows the pay-i
   // two strings are byte-identical; the fee stays at two places.
   assert.deepEqual(
     createSwapFeeBreakdown(fee, { pay_in_asset: "USDT_TRON", deposit_amount: "50.500000" }),
-    { cartTotal: "$49.00", youSend: "50.5 USDT", fee: "1.50 USDT", feePercent: "3.1%" },
+    { youSend: "50.5 USDT", fee: "1.50 USDT", feePercent: "3.1%" },
   );
   // A deposit valued under the cart total is a zero fee, never a negative one.
   assert.equal(
@@ -655,7 +653,6 @@ test("a USD stablecoin's fee breakdown is in the token and never shows the pay-i
 
   // Floating assets keep the fiat rows, byte for byte.
   const fiatRows = {
-    cartTotal: "$49.00",
     youSend: "$50.03",
     fee: "$1.03",
     feePercent: "2.1%",
@@ -675,43 +672,66 @@ test("a USD stablecoin's fee breakdown is in the token and never shows the pay-i
       { currency: "EUR", pay_in_fiat: "46.10", payout_fiat: "45.00" },
       { pay_in_asset: "USDC_SOL", deposit_amount: "50.05" },
     ),
-    { cartTotal: "45.00 EUR", youSend: "46.10 EUR", fee: "1.10 EUR", feePercent: "2.4%" },
+    { youSend: "46.10 EUR", fee: "1.10 EUR", feePercent: "2.4%" },
   );
 });
 
-// Video 10 (2026-11-06): a $49.00 order showed "Cart total $48.99". The row
-// was FixedFloat's own USD valuation of the payout (`to.usd`), rounded on its
-// rate. The total is the host's amount whenever the attempt carries it in the
-// fee's currency, and the fee is measured from it.
-test("the Total row is the host's amount, not the provider's rounding of it", () => {
+// Video 10 (2026-11-06): a $49.00 order was measured from $48.99, FixedFloat's
+// own USD valuation of the payout (`to.usd`), rounded on its rate. The fee is
+// measured from the host's amount whenever the attempt carries it in the fee's
+// currency.
+test("the fee is measured from the host's amount, not the provider's rounding of it", () => {
   const fee = { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "48.99" };
   const host = { currency: "USD", value: "49.00" };
   assert.deepEqual(
     createSwapFeeBreakdown(fee, { pay_in_asset: "USDT_SOL", deposit_amount: "50.05" }, host),
-    { cartTotal: "$49.00", youSend: "50.05 USDT", fee: "1.05 USDT", feePercent: "2.1%" },
+    { youSend: "50.05 USDT", fee: "1.05 USDT", feePercent: "2.1%" },
   );
   assert.deepEqual(
     createSwapFeeBreakdown(fee, { pay_in_asset: "SOL_SOL", deposit_amount: "0.71" }, host),
-    { cartTotal: "$49.00", youSend: "$50.03", fee: "$1.03", feePercent: "2.1%" },
+    { youSend: "$50.03", fee: "$1.03", feePercent: "2.1%" },
   );
   // A host amount in another currency than the provider's valuation cannot be
-  // compared with it, so the provider's figure stays.
+  // compared with it, so the fee is measured from the provider's figure.
   assert.equal(
     createSwapFeeBreakdown(
       fee,
       { pay_in_asset: "SOL_SOL", deposit_amount: "0.71" },
       { currency: "EUR", value: "45.00" },
-    )?.cartTotal,
-    "$48.99",
+    )?.fee,
+    "$1.04",
   );
-  // The row reads "Total": a donation has no cart.
-  assert.equal(checkoutLabels.cartTotal, "Total");
 });
 
-// F27: a swap read back from the server can arrive without its quote. The Total
-// row fell back to the provider's valuation ($15.86 for a $12.00 item) though
-// the checkout still knew the price the payer had seen.
-test("the Total row uses the checkout's amount when the attempt has no quote", () => {
+// 2026-11-16: a $36.00 order paid in USDC showed "Total $36.00" one row above
+// "You send 37.04 USDC". A payer who sends the first number has not paid. A
+// swap screen shows ONE amount, the one to send, so the breakdown has no order
+// total for a renderer to draw, and no label to draw it under.
+test("a swap fee breakdown carries no order total", () => {
+  const fee = { currency: "USD", pay_in_fiat: "37.02", payout_fiat: "35.99" };
+  const host = { currency: "USD", value: "36.00" };
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "USDC_ETH", deposit_amount: "37.04" }, host),
+    { youSend: "37.04 USDC", fee: "1.04 USDC", feePercent: "2.9%" },
+  );
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "SOL_SOL", deposit_amount: "0.21" }, host),
+    { youSend: "$37.02", fee: "$1.02", feePercent: "2.8%" },
+  );
+  for (const swap of [
+    { pay_in_asset: "USDC_ETH", deposit_amount: "37.04" },
+    { pay_in_asset: "SOL_SOL", deposit_amount: "0.21" },
+  ]) {
+    const text = JSON.stringify(createSwapFeeBreakdown(fee, swap, host));
+    assert.ok(!text.includes("36.00") && !text.includes("35.99"), swap.pay_in_asset);
+  }
+  assert.equal("cartTotal" in checkoutLabels, false);
+});
+
+// F27: a swap read back from the server can arrive without its quote. The
+// breakdown fell back to the provider's valuation ($15.86 for a $12.00 item)
+// though the checkout still knew the price the payer had seen.
+test("the fee is measured from the checkout's amount when the attempt has no quote", () => {
   const invoice = {
     invoice_id: "b".repeat(64),
     rail: "swap",
@@ -727,23 +747,24 @@ test("the Total row uses the checkout's amount when the attempt has no quote", (
     },
   };
   const now = 1_900_000_000;
-  assert.equal(createSwapDisplayModel(invoice, { now }).feeBreakdown.cartTotal, "$15.86");
+  // $16.40 sent: the fee is what is left over the amount it is measured from.
+  assert.equal(createSwapDisplayModel(invoice, { now }).feeBreakdown.fee, "$0.54");
   const display = createSwapDisplayModel(invoice, {
     now,
     fiat: { currency: "USD", value: "12.00" },
   });
-  assert.equal(display.feeBreakdown.cartTotal, "$12.00");
+  assert.equal(display.feeBreakdown.fee, "$4.40");
   // The attempt's own quote still wins over the checkout's.
   assert.equal(
     createSwapDisplayModel(
       { ...invoice, fiat_quote: { fiat: { currency: "USD", value: "13.00" } } },
       { now, fiat: { currency: "USD", value: "12.00" } },
-    ).feeBreakdown.cartTotal,
-    "$13.00",
+    ).feeBreakdown.fee,
+    "$3.40",
   );
 });
 
-test("the swap start keeps the checkout's fiat amount for the Total row", () => {
+test("the swap start keeps the checkout's fiat amount for the fee breakdown", () => {
   const invoice = normalizeSwapStartInvoice({
     swap: {
       payment_hash: "c".repeat(64),
@@ -758,9 +779,10 @@ test("the swap start keeps the checkout's fiat amount for the Total row", () => 
     },
   });
   assert.deepEqual(invoice.fiat_quote, { fiat: { currency: "USD", value: "49.00" } });
+  // 50.05 less the host's $49.00, not less the provider's $48.99.
   assert.equal(
-    createSwapDisplayModel(invoice, { now: 1_999_999_000 })?.feeBreakdown?.cartTotal,
-    "$49.00",
+    createSwapDisplayModel(invoice, { now: 1_999_999_000 })?.feeBreakdown?.fee,
+    "1.05 USDT",
   );
 });
 

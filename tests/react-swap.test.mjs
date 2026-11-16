@@ -467,7 +467,7 @@ test("react refund screen tells the payer to bookmark only when the checkout is 
 // every amount the payer is shown is the deposit amount in the token, and the
 // fiat valuation of the pay-in side appears nowhere — not in the breakdown, not
 // in the transaction details.
-test("both renderers take the Total from the checkout when the attempt has no quote", () => {
+test("both renderers measure the fee from the checkout when the attempt has no quote", () => {
   const invoice = {
     invoice_id: "or_inv_noquote",
     rail: "swap",
@@ -498,7 +498,11 @@ test("both renderers take the Total from the checkout when the attempt has no qu
     ["React", reactHtml],
     ["element", elementHtml],
   ]) {
-    assert.match(html, /\$12\.00/, `${name} shows the price the payer saw`);
+    // $16.40 sent for a $12.00 order: the fee is $4.40, not the $0.54 left
+    // over the provider's $15.86. Neither base is on the screen: a swap shows
+    // one amount, the one to send.
+    assert.match(html, /\$4\.40/, `${name} measures the fee from the price the payer saw`);
+    assert.doesNotMatch(html, /\$12\.00/, `${name} must not show the order total`);
     assert.doesNotMatch(html, /\$15\.86/, `${name} must not show the provider's valuation`);
   }
 });
@@ -529,7 +533,6 @@ test("a pegged stablecoin checkout shows one amount to send, in both renderers",
   assert.equal(display?.feeBreakdown?.youSend, `${display?.depositAmount} ${display?.assetLabel}`);
   assert.equal(display?.copyRows.at(-1)?.value, display?.depositAmount);
   assert.deepEqual(display?.feeBreakdown, {
-    cartTotal: "$49.00",
     youSend: "50.05 USDC",
     fee: "1.05 USDC",
     feePercent: "2.1%",
@@ -550,13 +553,11 @@ test("a pegged stablecoin checkout shows one amount to send, in both renderers",
     assert.ok(!html.includes("50.03"), `${name} must not render the pay-in valuation`);
     assert.match(html, /50\.05 USDC/, `${name} breakdown names the token amount`);
     assert.match(html, /1\.05 USDC \(2\.1%\)/, `${name} fee row is in the token`);
-    // The only fiat figure left on the panel is the cart total.
-    assert.equal(
-      html.match(/\$[0-9]/g)?.length,
-      1,
-      `${name} shows one fiat amount: the cart total`,
-    );
-    assert.match(html, /\$49\.00/, `${name} keeps the cart total in fiat`);
+    // One amount on a swap screen: the one to send. No fiat figure is left on
+    // the panel, and above all not the order's own total.
+    assert.equal(html.match(/\$[0-9]/g), null, `${name} shows no fiat amount`);
+    assert.ok(!html.includes("49.00"), `${name} must not show the order total`);
+    assert.ok(!/>Total</.test(html), `${name} has no Total row`);
   }
 
   const rows = createTransactionDetails({ rail: "swap", transaction_state: "pending", swap });
@@ -564,7 +565,9 @@ test("a pegged stablecoin checkout shows one amount to send, in both renderers",
   assert.equal(byLabel["You send"], "50.05 USDC");
   assert.equal(byLabel["Swap + network fees"], "1.05 USDC (2.1%)");
   assert.equal(byLabel["Pay-in fiat"], undefined);
+  assert.equal(byLabel.Total, undefined);
   assert.ok(!JSON.stringify(rows).includes("50.03"), "details must not carry the pay-in valuation");
+  assert.ok(!JSON.stringify(rows).includes("49"), "details must not carry the order total");
 
   // Control: a floating asset with the same fee object keeps today's fiat rows.
   const sol = createSwapDisplayModel({
@@ -572,7 +575,6 @@ test("a pegged stablecoin checkout shows one amount to send, in both renderers",
     swap: { ...swap, pay_in_asset: "SOL_SOL", deposit_amount: "0.71" },
   });
   assert.deepEqual(sol?.feeBreakdown, {
-    cartTotal: "$49.00",
     youSend: "$50.03",
     fee: "$1.03",
     feePercent: "2.1%",
@@ -597,7 +599,9 @@ test("transaction details never show a pegged asset's pay-in fiat, even in the r
   });
   const labels = rows.map((row) => row.label);
   assert.ok(labels.includes("Fee currency"));
-  assert.ok(labels.includes("Payout fiat"));
+  // The provider's valuation of the payout is the order total by another name:
+  // not shown while the swap is still to be paid.
+  assert.ok(!labels.includes("Payout fiat"));
   assert.ok(!labels.includes("Pay-in fiat"));
   assert.ok(!JSON.stringify(rows).includes("50.03"));
 

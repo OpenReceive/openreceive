@@ -668,12 +668,6 @@ function renderSwapFeeBreakdown(
       { className: joinClassNames(orClasses.swapDetails, orClasses.swapBreakdownRows) },
       React.createElement(
         "dt",
-        { key: "cart-label", className: orClasses.swapDetailsDt },
-        checkoutLabels.cartTotal,
-      ),
-      React.createElement("dd", { key: "cart-value" }, breakdown.cartTotal),
-      React.createElement(
-        "dt",
         { key: "send-label", className: orClasses.swapDetailsDt },
         checkoutLabels.youSend,
       ),

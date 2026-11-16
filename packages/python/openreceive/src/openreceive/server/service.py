@@ -42,7 +42,12 @@ from openreceive.server.errors import (
 from openreceive.swap import assets, providers_from_environment
 from openreceive.swap.address import valid_for_pay_in_asset
 from openreceive.swap.assets import is_pay_in_asset
-from openreceive.swap.budget import SwapProviderWeightBudget
+from openreceive.swap.budget import (
+    FIXEDFLOAT_LIMITS,
+    SwapProviderLimits,
+    SwapProviderWeightBudget,
+    weight_budget_denial,
+)
 from openreceive.swap.cache import TransientSwapCache
 from openreceive.swap.fixedfloat import classify_transport_failure
 from openreceive.values import LOWER_HEX_64_PATTERN, compact, stringify, to_int
@@ -63,6 +68,9 @@ SWAP_PROVIDER_RATE_LIMITED_MESSAGE = "The swap provider is rate limited. Please 
 SWAP_PROVIDER_UNREACHABLE_MESSAGE = (
     "The swap provider is temporarily unreachable. Please try again shortly."
 )
+# A swap call refused for rate is logged at most this often per cause: status
+# polls arrive every few seconds per open checkout.
+RATE_LIMIT_LOG_INTERVAL_SECONDS = 60
 # A wallet check that could not reach the relay runs again on the first wallet
 # call after this wait. The wait doubles after each failure up to the cap, and a
 # pass resets it. There is no timer or thread, so an idle process makes no
@@ -123,6 +131,8 @@ class Service:
         self._monotonic: Callable[[], float] = monotonic or time.monotonic
         self._env: Mapping[str, str] = os.environ if env is None else env
         self._logger = logger
+        self._rate_limit_log_lock = threading.Lock()
+        self._rate_limit_logged: dict[tuple[str, str, str], int] = {}
         self.price_currencies = [str(value).upper() for value in (price_currencies or ["USD"])]
         if price_provider is False:
             self._price_provider: PriceProvider | None = None
@@ -399,6 +409,11 @@ class Service:
         if "amount" not in data:
             raise ValidationError("amount")
         provider = self._select_provider(asset)
+        # Refuse before the invoice is made when the provider guard would refuse
+        # the create anyway: a refused swap then costs nothing. A provider
+        # without the check is not asked.
+        if hasattr(provider, "assert_create_available"):
+            self._through_provider(provider.assert_create_available)
         expiry = (
             provider.invoice_expiry_seconds(pay_in_asset=asset)
             if hasattr(provider, "invoice_expiry_seconds")
@@ -592,7 +607,9 @@ class Service:
 
     def _attach_swap_provider_runtime(self) -> None:
         """One shared transient cache and one per-provider weight budget,
-        attached to every provider that supports them."""
+        attached to every provider that supports them. The budget is sized by
+        the limits the provider exposes; one that exposes none (a test double,
+        a custom provider) gets the FixedFloat limits."""
         if not self._swap_providers:
             return
         cache = TransientSwapCache(self._clock)
@@ -600,7 +617,14 @@ class Service:
             if hasattr(provider, "attach_swap_cache"):
                 provider.attach_swap_cache(cache)
             if hasattr(provider, "attach_weight_budget"):
-                provider.attach_weight_budget(SwapProviderWeightBudget(provider.name, self._clock))
+                limits = getattr(provider, "limits", None)
+                provider.attach_weight_budget(
+                    SwapProviderWeightBudget(
+                        provider.name,
+                        self._clock,
+                        limits if isinstance(limits, SwapProviderLimits) else FIXEDFLOAT_LIMITS,
+                    )
+                )
 
     def _resolve_swap_provider_catalog(self) -> dict[str, dict[str, Any]]:
         """Exactly one live provider's catalog: primary when healthy, otherwise
@@ -770,10 +794,13 @@ class Service:
             failure = classify_transport_failure(error)
             if failure is None:
                 raise
-            self._log(
-                "warning",
-                f"swap.provider.{failure}: {sanitize_failure_message(error)}",
-            )
+            if failure == "rate_limited":
+                self._log_provider_rate_limit(error)
+            else:
+                self._log(
+                    "warning",
+                    f"swap.provider.{failure}: {sanitize_failure_message(error)}",
+                )
             if failure == "refused":
                 raise ServiceError(502, "INTERNAL", SWAP_PROVIDER_REFUSED_MESSAGE) from error
             raise ServiceError(
@@ -784,6 +811,54 @@ class Service:
                 else SWAP_PROVIDER_UNREACHABLE_MESSAGE,
                 retryable=True,
             ) from error
+
+    def _log_provider_rate_limit(self, error: BaseException) -> None:
+        """Say in the server log why a swap call was refused for rate, and
+        until when. The payer only reads "try again shortly"; the operator
+        needs to know whether this library's own guard stopped the call or the
+        provider answered 429. One line a minute per cause (provider, path,
+        reason) says what is happening without burying the log."""
+        denial = weight_budget_denial(error)
+        cause = (
+            "" if denial is None else str(denial.get("provider") or ""),
+            "" if denial is None else str(denial.get("path") or ""),
+            "provider" if denial is None else str(denial.get("reason") or "provider"),
+        )
+        now = self._clock()
+        with self._rate_limit_log_lock:
+            last = self._rate_limit_logged.get(cause)
+            if last is not None and now - last < RATE_LIMIT_LOG_INTERVAL_SECONDS:
+                return
+            self._rate_limit_logged[cause] = now
+        if denial is None:
+            # The provider's own words stay in the log, never on the wire.
+            message = (
+                "The swap provider answered 429 (rate limited); new calls stand off until "
+                f"its wait is over. ({sanitize_failure_message(error)})"
+            )
+        else:
+            fields = " ".join(
+                f"{name}={denial[name]}"
+                for name in (
+                    "provider",
+                    "path",
+                    "reason",
+                    "used",
+                    "gate",
+                    "creates",
+                    "create_limit",
+                    "backoff_until",
+                )
+                if denial.get(name) is not None
+            )
+            sentence = (
+                "Swap provider call refused locally: standing off after the provider's 429."
+                if denial.get("reason") == "backoff"
+                else "Swap provider call refused locally: this process reached the "
+                "provider's per-minute limit."
+            )
+            message = f"{sentence} ({fields})" if fields else sentence
+        self._log("warning", f"swap.provider.rate_limited: {message}")
 
     def _select_provider(self, asset: str) -> Any:
         """Primary-only while healthy; backup only when primary raises, never to

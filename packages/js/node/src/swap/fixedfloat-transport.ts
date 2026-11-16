@@ -6,14 +6,19 @@
  */
 
 import { createHmac } from "node:crypto";
-import { isRecord } from "@openreceive/core";
+import { compact, isRecord } from "@openreceive/core";
 import { optionalCoercedString } from "./fixedfloat-fields.ts";
 import type { SwapProviderApiRequestLog, SwapProviderApiResponseLog } from "./provider.ts";
 
 /** The process-local request weight guard the service attaches (see weight-budget.ts). */
 export interface FixedFloatWeightBudget {
   reserve(path: string): Promise<void>;
-  markRateLimited(): Promise<void>;
+  /** Throws the denial `reserve` would, without using any budget. */
+  assertAvailable?(path: string): Promise<void>;
+  markRateLimited(notice?: {
+    readonly path?: string;
+    readonly retryAfterSeconds?: number;
+  }): Promise<void>;
 }
 
 interface FixedFloatEnvelope {
@@ -103,6 +108,11 @@ export class FixedFloatTransport {
     this.weightBudget = budget;
   }
 
+  /** Refuse now when the attached guard would refuse `path`; uses no budget. */
+  async assertAvailable(path: string): Promise<void> {
+    await this.weightBudget?.assertAvailable?.(path);
+  }
+
   async post(path: string, body: Record<string, unknown>): Promise<unknown> {
     if (this.weightBudget !== undefined) {
       await this.weightBudget.reserve(path);
@@ -170,7 +180,9 @@ export class FixedFloatTransport {
     });
     if (!response.ok) {
       if (response.status === 429 && this.weightBudget !== undefined) {
-        await this.weightBudget.markRateLimited();
+        await this.weightBudget.markRateLimited(
+          compact({ path, retryAfterSeconds: readRetryAfterSeconds(response, parsed.data) }),
+        );
       }
       throw new FixedFloatApiError({
         path,
@@ -229,6 +241,20 @@ export class FixedFloatTransport {
       // Diagnostic sinks cannot interrupt provider operations.
     }
   }
+}
+
+/**
+ * How long a 429 asks the caller to wait: the `Retry-After` header in whole
+ * seconds, else a `retry_after` number in the response data. Undefined when
+ * the provider named no wait.
+ */
+function readRetryAfterSeconds(response: Response, data: unknown): number | undefined {
+  const header = response.headers.get("retry-after")?.trim();
+  if (header !== undefined && /^\d{1,9}$/.test(header)) return Number(header);
+  const fromBody = isRecord(data) ? data.retry_after : undefined;
+  return typeof fromBody === "number" && Number.isFinite(fromBody) && fromBody > 0
+    ? fromBody
+    : undefined;
 }
 
 function formatFixedFloatApiErrorMessage(path: string, status: number, msg: unknown): string {

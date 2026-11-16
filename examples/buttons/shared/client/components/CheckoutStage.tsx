@@ -32,6 +32,9 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
   // quiet checkout note stands down rather than putting the same copy
   // button on the page twice.
   const refunding = swap?.state.startsWith("refund") ?? false;
+  // A swap screen shows one amount, the one to send, so the order total leaves
+  // the page while a swap is on it (see OrderStrip).
+  const swapOnScreen = Boolean(swap);
 
   // Settlement is proven on the server. When the checkout's own poll says the
   // payment landed, we re-read our own order — the row `config.on_paid` wrote —
@@ -63,7 +66,7 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
           column is the one they act in. */}
       <div className="or-shop-stage or-checkout">
         <Stack gap="md" className="or-checkout-summary">
-          <OrderStrip shop={shop} />
+          <OrderStrip shop={shop} hideTotal={swapOnScreen} />
 
           <StatusCard status={status} />
 
@@ -151,9 +154,11 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
         <Button variant="subtle" size="sm" onClick={shop.startOver}>
           {checkoutLabels.startOver}
         </Button>
-        <Text size="sm" c="dimmed">
-          {formatUsdCents(shop.orderTotalCents)}
-        </Text>
+        {swapOnScreen ? null : (
+          <Text size="sm" c="dimmed">
+            {formatUsdCents(shop.orderTotalCents)}
+          </Text>
+        )}
       </div>
     </>
   );

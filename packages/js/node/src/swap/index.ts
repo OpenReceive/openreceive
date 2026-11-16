@@ -40,6 +40,6 @@ export type {
 
 export { OPENRECEIVE_SWAP_STATES } from "./state.ts";
 
-export { SwapProviderWeightBudget } from "./weight-budget.ts";
+export { SwapProviderWeightBudget, swapProviderWeightBudgetDenial } from "./weight-budget.ts";
 
 export { classifySwapTransportFailure } from "./transport-error.ts";

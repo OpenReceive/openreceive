@@ -186,7 +186,27 @@ render it through one model, `createSwapUnavailableModel` in
 React renders it as `renderSwapUnavailable`. The element renders it as
 `renderElementSwapUnavailableHtml`. Neither owns the copy.
 
-The session has six fields.
+### Price first
+
+A coin tile never starts a swap. `quoteSwap(payInAsset)` posts the same
+`/swaps/quote` on its own and starts nothing: the server answers from its rates
+feed and opens no order with the swap provider. Both hosts call it when an
+asset goes on review (a one-network coin's tile, a network button, a network
+carried over to the coin just opened). Both call `startSwap` only from
+Continue.
+
+What a click means, and what the review step shows, is one model in
+`@openreceive/browser`. `resolveWizardSelection` answers `review_swap` or
+`choose_network`, never a start. `createMethodGridDisplay` takes
+`session.swapQuotes` and `session.quotingSwapAsset` and answers
+`continueTarget.amountText` (`≈ 0.0421 SOL`) and `continueTarget.quoting`.
+The renderers only draw them.
+
+A failed `quoteSwap` is logged (`swap.quote.failed`) and tells the payer
+nothing. A second call for an asset already being quoted joins the first
+request.
+
+The session has seven fields.
 - Two of them block duplicate requests: `mintingLightning` and
   `startingSwapAsset`. Both are read in return-early conditions, and both cover
   only the time while the request is in flight.
@@ -194,23 +214,26 @@ The session has six fields.
   repeat. `ensureLightning` reuses a bolt11 that still has time left.
   `startSwap` shows an asset's deposit instructions again instead of starting a
   second attempt.
-- The other four fields decide nothing about requests. `wizardError` and
+- The other five fields decide nothing about requests. `wizardError` and
   `swapStartError` are the payer-facing strings the catch paths set.
-  `lightningRequested` is a render flag. `swapQuotes` is the quote cache above.
+  `lightningRequested` is a render flag. `swapQuotes` is the quote cache above,
+  and `quotingSwapAsset` is the render flag for the picker quote in flight.
 
 Both renderers hide the Lightning pane while the method grid is showing.
 Switching payment method keeps the live bolt11 for reuse. Selecting Bitcoin
 again restores the same invoice without another create request. Vue, Svelte,
 and Angular inherit this behavior from the custom element.
 
-Both renderers must pass all four gates, tested in
+Both renderers must pass all five gates, tested in
 `tests/element-lifecycle.test.mjs` and `tests/react-checkout-behavior.test.mjs`:
+- Price first: a coin tile or a network button POSTs `/swaps/quote` and never
+  `/swaps`. Clicking through every coin and network starts no swap.
 - In flight: a second Bitcoin selection during a mint POSTs `/checkouts` once.
-- In flight: a second swap start POSTs `/swaps` once.
+- In flight: a second Continue during a swap start POSTs `/swaps` once.
 - Already completed: selecting Bitcoin again after the mint has landed POSTs
   nothing at all.
-- Already completed: selecting a swap asset again, when the payer already holds
-  its deposit address, POSTs nothing either.
+- Already completed: continuing with a swap asset again, when the payer already
+  holds its deposit address, starts nothing either.
 
 React's wizard has its own gate in front of that last one: its auto-start effect
 skips an asset it can already see an attempt for. So React's DOM test covers

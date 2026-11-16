@@ -13,8 +13,12 @@ namespace OpenReceive\Http;
 interface HttpTransport
 {
     /**
+     * `headers` in the result are the response headers by lower-case name. A
+     * transport may leave them out: the swap provider then reads how long a
+     * 429 asks it to wait from the response body alone.
+     *
      * @param array<string, string> $headers
-     * @return array{status: int, body: string}
+     * @return array{status: int, body: string, headers?: array<string, string>}
      * @throws TransportException on a network failure or timeout (never on a non-2xx status)
      */
     public function request(string $method, string $url, array $headers = [], ?string $body = null, ?int $timeoutMs = null): array;

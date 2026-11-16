@@ -21,6 +21,7 @@ import {
   getPaymentMethodIconId,
   getSwapOptionIconId,
   getWizardEmptyMessage,
+  type MethodGridContinueDisplay,
   type MethodGridGroupDisplay,
   networkButtonClasses,
   networkCheckClasses,
@@ -370,22 +371,27 @@ function renderElementCompactPaymentSelectorHtml(
   view: ElementsWizardView,
 ): string {
   // One model, both renderers: which tile is open, which network each coin is
-  // set to, which asset is starting, and every derivation that used to be
-  // re-done by hand on each side of the pair.
+  // set to, which asset is starting, what the quotes have answered, and every
+  // derivation that used to be re-done by hand on each side of the pair.
   const limitContext = elementsSwapLimitContext(view);
   const display = createMethodGridDisplay({
     entries: buildMethodGridEntries(paymentMethods, swapAssetOptions),
     selectedPickerKey: view.selectedPickerKey ?? null,
     selectedAssetByGroup: view.selectedSwapAssetByGroup ?? {},
     startingAsset: wizardStartingAsset(view) ?? null,
+    swapQuotes: view.swapQuotes ?? {},
+    quotingAsset: view.quotingSwapAsset ?? null,
     ...(limitContext === undefined ? {} : { checkout: limitContext }),
   });
   const currenciesLoading = view.currenciesLoading === true && swapAssetOptions.length === 0;
-  const { gridBusy, networkRequired, selectedGroup, continueTarget, offersChoice } = display;
+  const { gridBusy, selectedGroup, continueTarget, offersChoice } = display;
 
-  const continueButton = (className: string) =>
-    renderElementMethodConfirmHtml({
-      className,
+  // The review step's two parts, in reading order: what this checkout costs in
+  // the coin on review, then Continue — the only control in the picker that
+  // starts a swap. A tile and a network button only select.
+  const confirmHtml = `${renderElementMethodEstimateHtml(continueTarget)}${renderElementMethodConfirmHtml(
+    {
+      className: orClasses.methodConfirmDesktop,
       disabled: continueTarget === undefined || continueTarget.disabled,
       starting: continueTarget?.starting === true,
       swapStartAsset:
@@ -393,7 +399,14 @@ function renderElementCompactPaymentSelectorHtml(
           ? undefined
           : continueTarget.payInAsset,
       label: escapeHtml(continueTarget?.label ?? checkoutLabels.continue),
-    });
+    },
+  )}`;
+  // `needsNetworkStep` is the rule as data: only a coin on more than one
+  // network is asked which one. A one-network coin goes straight to its amount.
+  const reviewHtml = (group: MethodGridGroupDisplay<ElementsSwapOption>, mobile: boolean) =>
+    group.needsNetworkStep
+      ? renderElementNetworkSelectorHtml(group, view, confirmHtml, mobile)
+      : renderElementSwapReviewHtml(group, confirmHtml, mobile);
 
   const tiles = display.entries
     .map((entry) => {
@@ -421,9 +434,8 @@ function renderElementCompactPaymentSelectorHtml(
       }
       return renderElementSwapMethodGroupHtml(
         entry.group,
-        view,
         gridBusy,
-        entry.group.selected ? continueButton(orClasses.methodConfirmDesktop) : undefined,
+        entry.group.selected ? reviewHtml(entry.group, true) : "",
       );
     })
     .join("");
@@ -435,14 +447,9 @@ function renderElementCompactPaymentSelectorHtml(
     : "";
 
   const desktopReveal =
-    networkRequired && selectedGroup !== undefined
-      ? `<div class="${orClasses.methodNetworkRevealDesktop}">${renderElementNetworkSelectorHtml(
-          selectedGroup,
-          view,
-          continueButton(orClasses.methodConfirmDesktop),
-          false,
-        )}</div>`
-      : "";
+    selectedGroup === undefined
+      ? ""
+      : `<div class="${orClasses.methodNetworkRevealDesktop}">${reviewHtml(selectedGroup, false)}</div>`;
 
   return `
       <header class="${orClasses.wizardHeader}">
@@ -461,7 +468,7 @@ function renderElementCompactPaymentSelectorHtml(
 function renderElementNetworkSelectorHtml(
   group: MethodGridGroupDisplay<ElementsSwapOption>,
   view: ElementsWizardView,
-  continueButtonHtml: string,
+  confirmHtml: string,
   mobile: boolean,
 ): string {
   const { accent, groupKey, panelId, headingId, selectedOption } = group;
@@ -533,10 +540,46 @@ function renderElementNetworkSelectorHtml(
         <div role="group" aria-labelledby="${headingId}" class="${orClasses.methodNetworkGrid}">
           ${networkButtons}
         </div>
-        ${continueButtonHtml}
+        <div class="${orClasses.methodConfirmStack}">${confirmHtml}</div>
       </div>
       ${summary}
     </div>`;
+}
+
+/**
+ * A one-network coin's review step: the amount and Continue, and nothing to
+ * read. There is no network question to ask, so none is drawn.
+ */
+function renderElementSwapReviewHtml(
+  group: MethodGridGroupDisplay<ElementsSwapOption>,
+  confirmHtml: string,
+  mobile: boolean,
+): string {
+  return `
+    <div
+      id="${group.panelId}"
+      part="method-review"
+      role="group"
+      aria-label="${escapeHtml(group.label)}"
+      class="${mobile ? networkMobileRevealClasses(group.accent) : orClasses.methodNetworkReveal}"
+    >
+      <div class="${orClasses.methodReviewLayout}">${confirmHtml}</div>
+    </div>`;
+}
+
+/**
+ * The amount line beside Continue. Always drawn, empty until a quote answers,
+ * so its height is already there and Continue does not move when it fills.
+ */
+function renderElementMethodEstimateHtml(target: MethodGridContinueDisplay | undefined): string {
+  const waiting = target?.amountText === undefined && target?.quoting === true;
+  return `<p part="method-estimate" aria-live="polite"${waiting ? ' aria-busy="true"' : ""} class="${orClasses.methodEstimate}">${
+    target?.amountText !== undefined
+      ? escapeHtml(target.amountText)
+      : waiting
+        ? `<span part="spinner" class="${orClasses.methodEstimateSpinner}" aria-hidden="true"></span>`
+        : ""
+  }</p>`;
 }
 
 function renderElementMethodConfirmHtml(options: {
@@ -568,49 +611,39 @@ function renderElementMethodConfirmHtml(options: {
 
 function renderElementSwapMethodGroupHtml(
   group: MethodGridGroupDisplay<ElementsSwapOption>,
-  view: ElementsWizardView,
   gridBusy: boolean,
-  continueButtonHtml?: string,
+  reviewHtml: string,
 ): string {
-  const {
-    pickerKey,
-    selected,
-    displayOption,
-    multiNetwork,
-    starting,
-    disabled,
-    accent,
-    limitMessage,
-    panelId,
-  } = group;
+  const { pickerKey, selected, displayOption, starting, disabled, accent, limitMessage, panelId } =
+    group;
   // The networks this coin can arrive on, at every width. React's twin reads
   // the same builder — see react/src/wizard.ts.
   const networkDetail = formatMethodNetworkDetail(group.options);
-  const mobileReveal = multiNetwork
-    ? `
+  // Below 18rem the review step opens under its own tile; wider, it is the
+  // full-width panel under the grid. Both are drawn and CSS shows one.
+  const mobileReveal = `
       <div class="${orClasses.methodNetworkRevealAnim} ${
         selected ? orClasses.methodNetworkRevealAnimOpen : orClasses.methodNetworkRevealAnimClosed
       }">
         <div class="${orClasses.methodNetworkRevealInner}">
-          ${
-            selected
-              ? renderElementNetworkSelectorHtml(group, view, continueButtonHtml ?? "", true)
-              : ""
-          }
+          ${reviewHtml}
         </div>
-      </div>`
-    : "";
+      </div>`;
 
+  // A tile only SELECTS, whatever the coin: the swap starts on Continue, once
+  // the payer has seen the amount. Starting here opened a provider order for
+  // every coin a payer looked at.
   return `
     <div class="${orClasses.methodTile}">
       <button
         part="method"
         type="button"
-        aria-pressed="${starting || (multiNetwork && selected) ? "true" : "false"}"
-        ${multiNetwork ? `aria-expanded="${selected ? "true" : "false"}" aria-controls="${panelId}"` : ""}
+        aria-pressed="${starting || selected ? "true" : "false"}"
+        aria-expanded="${selected ? "true" : "false"}"
+        aria-controls="${panelId}"
         class="${assetButtonClasses({
           accent,
-          selected: starting || (multiNetwork && selected),
+          selected: starting || selected,
           disabled: disabled || (gridBusy && !starting),
         })}"
         ${disabled || gridBusy ? 'disabled aria-disabled="true"' : ""}
@@ -618,9 +651,7 @@ function renderElementSwapMethodGroupHtml(
         ${
           disabled || gridBusy
             ? ""
-            : multiNetwork
-              ? `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect}="${escapeHtml(pickerKey)}"`
-              : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(displayOption.pay_in_asset)}"`
+            : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect}="${escapeHtml(pickerKey)}"`
         }
       >
         <span aria-hidden="true" class="${orClasses.methodIconWrap}">

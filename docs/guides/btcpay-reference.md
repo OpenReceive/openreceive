@@ -124,8 +124,8 @@ slow down a payer who tries several assets. Abuse is limited in other ways:
 - The caller must know the invoice id.
 - A repeat create for the same invoice and asset returns the live row without
   calling the provider.
-- Every provider call counts against the per-provider weight budget. A create
-  costs 50 of 150 per minute.
+- Every provider call counts against the per-provider request budget: three
+  new swaps a minute with FixedFloat, 30 with Lightning Swap.
 
 Snapshot fields are snake_case:
 

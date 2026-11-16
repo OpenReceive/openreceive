@@ -71,7 +71,14 @@ public sealed record CreateSwapInput(string PayInAsset, string Bolt11, long Invo
 public interface ISwapWeightBudget
 {
     void Reserve(string path);
-    void MarkRateLimited();
+    /// <summary>Throws the denial <see cref="Reserve"/> would, without using any budget.</summary>
+    void AssertAvailable(string path);
+    /// <summary>
+    /// The provider answered 429 on <paramref name="path"/>. <paramref name="retryAfterSeconds"/>
+    /// is the provider's own wait, from <c>Retry-After</c> or its response body; null when it
+    /// named none.
+    /// </summary>
+    void MarkRateLimited(string? path = null, double? retryAfterSeconds = null);
 }
 
 public sealed record SwapProviderApiRequestLog(string Provider, string Path, string? BodyJson);
@@ -81,7 +88,18 @@ public interface ISwapProvider
 {
     string Name { get; }
     void AttachSwapCache(TransientSwapCache cache);
+    /// <summary>
+    /// The provider's API limits, which size the request guard the pool attaches. Null
+    /// means the FixedFloat defaults.
+    /// </summary>
+    SwapProviderLimits? Limits => null;
     void AttachWeightBudget(ISwapWeightBudget budget);
+    /// <summary>
+    /// Throw now when the attached guard would refuse a create, so the service can refuse a
+    /// new swap before it does any other work for it. Uses no budget; the create itself
+    /// still reserves. A provider without the check is simply not asked.
+    /// </summary>
+    void AssertCreateAvailable() { }
     void AttachApiRequestLogger(System.Action<SwapProviderApiRequestLog> log);
     void AttachApiResponseLogger(System.Action<SwapProviderApiResponseLog> log);
     /// <summary>Seconds the Lightning invoice must stay payable for a swap through this provider.</summary>

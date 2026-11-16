@@ -57,6 +57,8 @@ public sealed partial class FixedFloatCompatibleProvider : ISwapProvider
 
     public string Name { get; }
     public int InvoiceExpirySeconds { get; }
+    /// <summary>The API limits of the provider behind the base URL; they size the request guard.</summary>
+    public SwapProviderLimits Limits { get; }
 
     public FixedFloatCompatibleProvider(Options options, HttpClient httpClient, Func<long>? now = null)
     {
@@ -91,6 +93,9 @@ public sealed partial class FixedFloatCompatibleProvider : ISwapProvider
             (options.BaseUrl ?? DefaultBaseUrl).TrimEnd('/'),
             Name,
             TimeSpan.FromMilliseconds(requestTimeoutMs));
+        // The host names the provider, and the provider sets the limits: the same wire
+        // contract is served at very different rates.
+        Limits = SwapProviderLimits.ForBaseUrl(_transport.BaseUrl);
 
         var depositWindowSeconds = options.DepositWindowSeconds ?? DefaultDepositWindowSeconds;
         var settlementSlaSeconds = options.SettlementSlaSeconds ?? DefaultSettlementSlaSeconds;
@@ -126,6 +131,7 @@ public sealed partial class FixedFloatCompatibleProvider : ISwapProvider
 
     public void AttachSwapCache(TransientSwapCache cache) => _cache = cache;
     public void AttachWeightBudget(ISwapWeightBudget budget) => _transport.AttachWeightBudget(budget);
+    public void AssertCreateAvailable() => _transport.AssertAvailable("create");
     public void AttachApiRequestLogger(Action<SwapProviderApiRequestLog> log) => _transport.AttachApiRequestLogger(log);
     public void AttachApiResponseLogger(Action<SwapProviderApiResponseLog> log) => _transport.AttachApiResponseLogger(log);
 

@@ -1,6 +1,8 @@
 """The injectable HTTP transport the swap provider and rates feed call:
 `http(method=, url=, headers=, body=, timeout_ms=) -> {"status": int, "body": str}`.
-The default runs on httpx with explicit timeouts; tests inject a callable."""
+The result may also carry "headers", the response headers as a mapping; the
+provider reads only `Retry-After` from it, on a 429. The default runs on httpx
+with explicit timeouts; tests inject a callable."""
 
 from __future__ import annotations
 
@@ -38,7 +40,11 @@ def default_http_request(
             headers=dict(headers),
             content=None if body is None else body.encode("utf-8"),
         )
-    return {"status": response.status_code, "body": response.text}
+    return {
+        "status": response.status_code,
+        "body": response.text,
+        "headers": dict(response.headers),
+    }
 
 
 def is_timeout_error(error: BaseException) -> bool:

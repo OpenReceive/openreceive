@@ -110,6 +110,9 @@ const PackagedCheckout: React.FC<PackagedCheckoutProps> = observer(
     // order and no storage. The same callback feeds the summary column.
     const resumePaymentHash = readSwapAttempt(reference);
     const [checkoutState, setCheckoutState] = useState<CheckoutState | undefined>(undefined);
+    // A swap screen shows one amount, the one to send, so the order total
+    // leaves the page while a swap is on it.
+    const swapOnScreen = checkoutState?.rail === "swap";
     const rememberSwap = useCallback(
       (state: CheckoutState) => {
         setCheckoutState(state);
@@ -126,7 +129,7 @@ const PackagedCheckout: React.FC<PackagedCheckoutProps> = observer(
             has got to — beside the payment column the payer acts in. */}
         <div className="or-shop-stage or-checkout">
           <Stack className="or-checkout-summary" gap="md">
-            <OrderStrip shop={shop} />
+            <OrderStrip shop={shop} hideTotal={swapOnScreen} />
             <StatusCard status={createCheckoutStatusModel(checkoutState)} />
           </Stack>
 
@@ -159,9 +162,11 @@ const PackagedCheckout: React.FC<PackagedCheckoutProps> = observer(
           <Button onClick={shop.startOver} size="sm" variant="subtle">
             Back to shop
           </Button>
-          <Text c="dimmed" size="sm">
-            {formatUsdCents(shop.orderTotalCents)}
-          </Text>
+          {swapOnScreen ? null : (
+            <Text c="dimmed" size="sm">
+              {formatUsdCents(shop.orderTotalCents)}
+            </Text>
+          )}
         </div>
       </>
     );

@@ -8,6 +8,7 @@ import {
   type SwapPayInAsset,
   type SwapProvider,
   type SwapProviderAsset,
+  swapProviderWeightBudgetDenial,
 } from "../swap/index.ts";
 import { createCheckout } from "./checkouts.ts";
 import { ServiceError, serviceError } from "./core-utils.ts";
@@ -125,12 +126,16 @@ export async function quoteSwap(
  * OpenReceive bug, and without this it reaches errorResponse as neither a
  * ServiceError nor a wallet error and reads as a generic 500.
  */
-async function throughProvider<T>(operation: () => Promise<T>): Promise<T> {
+async function throughProvider<T>(
+  context: ServiceContext,
+  operation: () => Promise<T>,
+): Promise<T> {
   try {
     return await operation();
   } catch (error) {
     const failure = classifySwapTransportFailure(error);
     if (failure === undefined) throw error;
+    if (failure === "rate_limited") logProviderRateLimit(context, error);
     if (failure === "refused") {
       throw serviceError(502, "INTERNAL", "The swap provider refused this request.");
     }
@@ -145,18 +150,69 @@ async function throughProvider<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
+const RATE_LIMIT_LOG_INTERVAL_SECONDS = 60;
+const rateLimitLogTimes = new WeakMap<ServiceContext, Map<string, number>>();
+
+/**
+ * Say in the server log why a swap call was refused for rate, and until when.
+ * The payer only sees "try again shortly"; the operator needs to know whether
+ * this library's own guard stopped the call or the provider answered 429.
+ */
+function logProviderRateLimit(context: ServiceContext, error: unknown): void {
+  const denial = swapProviderWeightBudgetDenial(error);
+  // Status polls arrive every few seconds per open checkout: one line a minute
+  // per cause says what is happening without burying the log.
+  const cause = `${denial?.provider ?? ""}:${denial?.path ?? ""}:${denial?.reason ?? "provider"}`;
+  const now = context.clock();
+  let logged = rateLimitLogTimes.get(context);
+  if (logged === undefined) {
+    logged = new Map();
+    rateLimitLogTimes.set(context, logged);
+  }
+  const last = logged.get(cause);
+  if (last !== undefined && now - last < RATE_LIMIT_LOG_INTERVAL_SECONDS) return;
+  logged.set(cause, now);
+  emitLog(
+    context.options,
+    "warn",
+    "swap.provider.rate_limited",
+    denial === undefined
+      ? "The swap provider answered 429 (rate limited); new calls stand off until its wait is over."
+      : denial.reason === "backoff"
+        ? "Swap provider call refused locally: standing off after the provider's 429."
+        : "Swap provider call refused locally: this process reached the provider's per-minute limit.",
+    denial === undefined
+      ? {}
+      : {
+          provider: denial.provider,
+          path: denial.path,
+          reason: denial.reason,
+          used: denial.used,
+          gate: denial.gate,
+          creates: denial.creates,
+          create_limit: denial.create_limit,
+          backoff_until: denial.backoff_until,
+        },
+  );
+}
+
 export async function createSwap(
   context: ServiceContext,
   input: CreateSwapRequest,
 ): Promise<SwapCheckout> {
   const payInAsset = parsePayInAsset(input.payInAsset);
   const provider = await selectProvider(context, payInAsset);
+  // Refuse before the invoice is made when the provider guard would refuse
+  // the create anyway: a refused swap then costs nothing.
+  await throughProvider(context, async () => {
+    await provider.assertCreateAvailable?.();
+  });
   const expirySeconds = provider.invoiceExpirySeconds?.({ payInAsset });
   // Strip the swap-only field: the checkout normalizer accepts exactly the
   // declared CreateCheckoutRequest fields.
   const { payInAsset: _payInAsset, ...checkoutRequest } = input;
   const checkout = await createCheckout(context, { ...checkoutRequest, expirySeconds });
-  const order = await throughProvider(() =>
+  const order = await throughProvider(context, () =>
     provider.createSwap({
       payInAsset,
       bolt11: checkout.bolt11,
@@ -179,7 +235,7 @@ export async function getSwap(context: ServiceContext, input: GetSwapRequest): P
   const paymentHash = parsePaymentHash(input.paymentHash);
   const reference = parseReference(input.reference);
   const provider = requireProvider(context, recovery.providerOrder.provider);
-  const current = await throughProvider(() => provider.getStatus(recovery.providerOrder));
+  const current = await throughProvider(context, () => provider.getStatus(recovery.providerOrder));
   return publicSwap(current, paymentHash, reference);
 }
 
@@ -195,7 +251,7 @@ export async function refundSwap(
     recovery.providerOrder.pay_in_asset,
   );
   const provider = requireProvider(context, recovery.providerOrder.provider);
-  const current = await throughProvider(() => provider.getStatus(recovery.providerOrder));
+  const current = await throughProvider(context, () => provider.getStatus(recovery.providerOrder));
   if (current.state !== "refund_required") {
     throw serviceError(
       409,
@@ -203,8 +259,8 @@ export async function refundSwap(
       `Swap cannot be refunded from provider state ${current.state}.`,
     );
   }
-  await throughProvider(() => provider.requestRefund(current, refundAddress));
-  const refreshed = await throughProvider(() => provider.getStatus(current));
+  await throughProvider(context, () => provider.requestRefund(current, refundAddress));
+  const refreshed = await throughProvider(context, () => provider.getStatus(current));
   return publicSwap(refreshed, paymentHash, reference);
 }
 

@@ -333,6 +333,138 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(noInvoiceTutorial, /part="tutorial-done"/);
 });
 
+// Price first, as markup. A coin tile only selects: it carries the picker's
+// select attribute and never the swap-start one, whatever the coin. The open
+// tile's review step is the amount line and Continue, and Continue is the one
+// control that carries an asset to start. (The click behaviour is pinned in
+// tests/element-lifecycle.test.mjs; this is the HTML it is wired to.)
+test("elements draw the review step: a tile selects, the amount shows, Continue starts", () => {
+  const coin = (pay_in_asset, label, network_label) => ({
+    pay_in_asset,
+    label,
+    network_label,
+    provider: "fixedfloat",
+    available: true,
+  });
+  const swapOptions = [
+    coin("USDT_TRON", "USDT", "Tron"),
+    coin("USDT_ETH", "USDT", "Ethereum"),
+    coin("SOL_SOL", "SOL", "Solana"),
+    coin("ETH_ETH", "ETH", "Ethereum"),
+  ];
+  const tileOf = (html, label) =>
+    html.match(
+      new RegExp(`<button\\s+part="method"[^>]*data-or-picker-select="swap:${label}"`),
+    )?.[0];
+  const estimates = (html) =>
+    [...html.matchAll(/<p part="method-estimate"[^>]*>([\s\S]*?)<\/p>/g)].map((match) =>
+      match[1].trim(),
+    );
+
+  const grid = renderPaymentWizardHtml({ swapOptions });
+  for (const label of ["USDT", "SOL", "ETH"]) {
+    assert.ok(tileOf(grid, label), `${label} is a select-only tile`);
+    assert.match(tileOf(grid, label), /aria-pressed="false"/);
+  }
+  assert.doesNotMatch(grid, /data-or-swap-start/, "nothing on the grid starts a swap");
+  assert.doesNotMatch(grid, /part="method-confirm"/, "no Continue until a coin is open");
+
+  // A one-network coin, open, before its quote has answered.
+  const solWaiting = renderPaymentWizardHtml({
+    swapOptions,
+    selectedPickerKey: "swap:SOL",
+    quotingSwapAsset: "SOL_SOL",
+  });
+  assert.match(tileOf(solWaiting, "SOL"), /aria-pressed="true"/);
+  assert.match(tileOf(solWaiting, "SOL"), /aria-expanded="true"/);
+  assert.match(tileOf(solWaiting, "SOL"), /aria-controls="network-panel-sol"/);
+  assert.match(solWaiting, /id="network-panel-sol"[^>]*part="method-review"/);
+  assert.match(tileOf(solWaiting, "ETH"), /aria-pressed="false"/);
+  // No network question for a coin with one answer.
+  assert.doesNotMatch(solWaiting, /Choose SOL network/);
+  assert.doesNotMatch(solWaiting, /data-or-swap-network/);
+  // The amount line is there already, holding its height, with a spinner.
+  assert.match(
+    solWaiting,
+    /<p part="method-estimate" aria-live="polite" aria-busy="true"[^>]*>\s*<span part="spinner"/,
+  );
+  // Continue does not wait for the amount.
+  assert.match(
+    solWaiting,
+    /part="method-confirm"[^>]*data-or-picker-continue=""\s+data-or-swap-start="SOL_SOL"/,
+  );
+  assert.doesNotMatch(solWaiting, /part="method-confirm"[^>]*disabled/);
+  // The only swap-start attributes in the picker are Continue's.
+  assert.equal(
+    solWaiting.match(/data-or-swap-start="/g).length,
+    solWaiting.match(/part="method-confirm"/g).length,
+  );
+
+  // The quote answered.
+  const solPriced = renderPaymentWizardHtml({
+    swapOptions,
+    selectedPickerKey: "swap:SOL",
+    swapQuotes: { SOL_SOL: { pay_in_asset: "SOL_SOL", available: true, pay_amount: "0.04210000" } },
+  });
+  // Drawn twice, for narrow and wide layouts; both read the same.
+  assert.deepEqual(estimates(solPriced), ["≈ 0.0421 SOL", "≈ 0.0421 SOL"]);
+  assert.doesNotMatch(solPriced, /aria-busy="true"/);
+  // One line and one action: no sentence to read.
+  assert.doesNotMatch(solPriced, /Estimated|to settle this checkout/);
+
+  // The quote failed: an empty line, no spinner, Continue as before.
+  const solUnpriced = renderPaymentWizardHtml({ swapOptions, selectedPickerKey: "swap:SOL" });
+  assert.deepEqual(estimates(solUnpriced), ["", ""]);
+  assert.match(solUnpriced, /data-or-swap-start="SOL_SOL"/);
+
+  // A coin on several networks: the chooser as before, with the amount line
+  // already in place (empty) so choosing a network moves nothing.
+  const usdtOpen = renderPaymentWizardHtml({ swapOptions, selectedPickerKey: "swap:USDT" });
+  assert.match(usdtOpen, /Choose USDT network/);
+  assert.deepEqual(estimates(usdtOpen), ["", ""]);
+  assert.match(usdtOpen, /part="method-confirm"[^>]*disabled aria-disabled="true"/);
+  assert.doesNotMatch(usdtOpen, /data-or-swap-start/);
+
+  const usdtPriced = renderPaymentWizardHtml({
+    swapOptions,
+    selectedPickerKey: "swap:USDT",
+    selectedSwapAssetByGroup: { USDT: "USDT_TRON" },
+    swapQuotes: {
+      USDT_TRON: { pay_in_asset: "USDT_TRON", available: true, pay_amount: "12.50" },
+      USDT_ETH: { pay_in_asset: "USDT_ETH", available: true, pay_amount: "12.75" },
+    },
+  });
+  assert.deepEqual(estimates(usdtPriced), ["≈ 12.50 USDT · Tron", "≈ 12.50 USDT · Tron"]);
+  // The amount comes before Continue, in reading order.
+  assert.match(
+    usdtPriced,
+    /part="method-estimate"[^>]*>≈ 12\.50 USDT · Tron<\/p>\s*<button\s+type="button"\s+part="method-confirm"/,
+  );
+  assert.match(usdtPriced, /data-or-swap-start="USDT_TRON"/);
+
+  // Out of range by the quote: Continue is disabled and says why.
+  const solTooSmall = renderPaymentWizardHtml({
+    amountMsats: 3_000_000,
+    fiat: { currency: "USD", value: "2.00" },
+    swapOptions,
+    selectedPickerKey: "swap:SOL",
+    swapQuotes: {
+      SOL_SOL: {
+        pay_in_asset: "SOL_SOL",
+        available: false,
+        unavailable_reason: "amount_too_small",
+        minimum_invoice_amount_msats: 25_425_000,
+      },
+    },
+  });
+  assert.match(
+    solTooSmall,
+    /part="method-confirm"[^>]*disabled aria-disabled="true"[^>]*>\s*Minimum amount \$16\.95<\/button>/,
+  );
+  assert.doesNotMatch(solTooSmall, /data-or-swap-start/);
+  assert.deepEqual(estimates(solTooSmall), ["", ""]);
+});
+
 test("elements render package-owned theme toggle HTML", () => {
   const html = renderThemeToggleHtml("dark mode");
   assert.match(html, /data-openreceive-theme-toggle/);

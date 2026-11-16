@@ -22,9 +22,10 @@ from openreceive.nwc import info as wallet_info  # noqa: E402
 from openreceive.nwc import requests as nwc_requests  # noqa: E402
 from openreceive.nwc.uri import NwcUriParseError, parse_uri  # noqa: E402
 from openreceive.payments import reconciliation  # noqa: E402
+from openreceive.server import client_ip  # noqa: E402
 from openreceive.server.service import Service  # noqa: E402
 from openreceive.storage.sql import repository as sql_repository  # noqa: E402
-from openreceive.swap import address, lsc_uri  # noqa: E402
+from openreceive.swap import address, budget, lsc_uri  # noqa: E402
 from openreceive.swap.fixedfloat import FixedFloatProvider  # noqa: E402
 
 
@@ -75,6 +76,52 @@ for case in rate_limit["cases"]:
     counted = stamp >= case["now"] - case["window_seconds"]
     if counted != case["expected"]["counted"]:
         fail(f"rate-limit-window parity: {case['name']}")
+
+# rate-limit-address: the per-IP limit never counts a proxy's or the host's own
+# address, on the raw value and on the bucket the limiter counts.
+for case in vector("rate-limit-address")["cases"]:
+    for form in (case["address"], client_ip.bucket(case["address"])):
+        if client_ip.is_payer_address(form) is not case["expected"]["payer"]:
+            fail(f"rate-limit-address parity: {case['name']} (as {form!r})")
+
+# swap-provider-limits: the request guard is sized by the provider's host.
+provider_limits = vector("swap-provider-limits")
+limit_profiles = {
+    "fixedfloat": budget.FIXEDFLOAT_LIMITS,
+    "lightning-swap": budget.LIGHTNING_SWAP_LIMITS,
+}
+if budget.WINDOW_SECONDS != provider_limits["window_seconds"]:
+    fail("swap-provider-limits parity: window_seconds")
+if sorted(provider_limits["profiles"]) != sorted(limit_profiles):
+    fail("swap-provider-limits parity: the profile names")
+for name, expected in provider_limits["profiles"].items():
+    for field, value in expected.items():
+        if getattr(limit_profiles[name], field) != value:
+            fail(f"swap-provider-limits parity: {name} {field}")
+for item in provider_limits["hosts"]:
+    if budget.limits_for_base_url(item["base_url"]).profile != item["profile"]:
+        fail(f"swap-provider-limits parity: host {item['base_url']}")
+guard_clock = {"now": 0}
+for scenario in provider_limits["scenarios"]:
+    guard_clock["now"] = scenario["steps"][0]["at"]
+    guard = budget.SwapProviderWeightBudget(
+        "vector", lambda: guard_clock["now"], limit_profiles[scenario["profile"]]
+    )
+    for index, step in enumerate(scenario["steps"], start=1):
+        guard_clock["now"] = step["at"]
+        for _ in range(step.get("repeat", 1)):
+            if step["op"] == "rate_limited":
+                guard.mark_rate_limited(
+                    path=step["path"], retry_after_seconds=step.get("retry_after")
+                )
+                continue
+            try:
+                (guard.assert_available if step["op"] == "check" else guard.reserve)(step["path"])
+                outcome, until = "ok", None
+            except budget.WeightBudgetError as error:
+                outcome, until = error.denial["reason"], error.denial.get("backoff_until")
+            if outcome != step["expect"] or until != step.get("backoff_until", until):
+                fail(f"swap-provider-limits parity: {scenario['name']}: step {index} ({outcome})")
 
 # swap-address: a checksum, not a shape guard.
 for case in vector("swap-address")["cases"]:
@@ -309,5 +356,6 @@ for case in attempt_vectors["vectors"]:
 
 print(
     "python storage-free conformance: ok (fiat, amounts, settlement, make-invoice, nwc-info, nwc-uri, "
-    "errors, reconciliation, rate-limit-window, swap-address, swap-state, lsc-uri, wallet-scan-truncation)"
+    "errors, reconciliation, rate-limit-window, rate-limit-address, swap-provider-limits, swap-address, "
+    "swap-state, lsc-uri, wallet-scan-truncation)"
 )

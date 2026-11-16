@@ -85,6 +85,33 @@ function markElementConfirmButtonBusy(button: HTMLButtonElement): void {
 }
 
 /**
+ * The picker's controls, most specific first: Continue, a network button, a
+ * coin tile. A rebuild of the shadow tree must not take keyboard focus from
+ * whichever of them holds it.
+ */
+const PICKER_FOCUS_ATTRIBUTES = [
+  OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerContinue,
+  OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue,
+  OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect,
+] as const;
+
+interface PickerFocus {
+  readonly attribute: string;
+  readonly value: string;
+  /**
+   * Which of the matching controls: the review step is drawn twice (under its
+   * tile for narrow layouts, under the grid otherwise) and CSS shows one.
+   */
+  readonly index: number;
+}
+
+function pickerControls(root: ShadowRoot, attribute: string, value: string): Element[] {
+  return [...root.querySelectorAll(`[${attribute}]`)].filter(
+    (control) => control.getAttribute(attribute) === value,
+  );
+}
+
+/**
  * Display-affecting snapshot fields only, so a poll that changes nothing visible skips a
  * render. Everything is keyed verbatim except `active` (already one of `invoices`),
  * `paid_at` (`status` flips whenever it appears), and each invoice's own amount/fiat
@@ -549,6 +576,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
 
     render() {
       this.captureRefundAddressDraft();
+      const pickerFocus = this.capturePickerFocus();
       const invoiceAttr = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       const deferredReady =
         this.isCreateMode() &&
@@ -628,6 +656,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           selectedSwapAssetByGroup: this.selectedSwapAssetByGroup,
           selectedPickerKey: this.selectedPickerKey,
           startingSwapAsset: this.session.startingSwapAsset,
+          swapQuotes: this.session.swapQuotes,
+          quotingSwapAsset: this.session.quotingSwapAsset,
           selectedSwapAsset: this.selectedSwapAsset,
           resumable: this.isResumable(),
           ...(this.latestCheckoutSnapshot?.amount_msats === undefined
@@ -713,7 +743,34 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       }
 
       this.bindWizard(root, invoice, options.logger);
+      this.restorePickerFocus(root, pickerFocus);
       this.renderSwapQrCodes(root);
+    }
+
+    /**
+     * The picker control that holds keyboard focus, so the rebuilt shadow tree
+     * can hand it back. The review step re-renders when its quote lands; a
+     * payer who had tabbed to Continue by then would otherwise be dropped back
+     * at the top of the page with the amount newly on screen.
+     */
+    private capturePickerFocus(): PickerFocus | undefined {
+      const root = this.shadowRoot;
+      const active = root?.activeElement;
+      if (root === null || active === null || active === undefined) return undefined;
+      for (const attribute of PICKER_FOCUS_ATTRIBUTES) {
+        const value = active.getAttribute(attribute);
+        if (value === null) continue;
+        return { attribute, value, index: pickerControls(root, attribute, value).indexOf(active) };
+      }
+      return undefined;
+    }
+
+    private restorePickerFocus(root: ShadowRoot, focus: PickerFocus | undefined): void {
+      if (focus === undefined) return;
+      const controls = pickerControls(root, focus.attribute, focus.value);
+      const control = controls[focus.index] ?? controls[0];
+      if (!(control instanceof HTMLButtonElement) || control.disabled) return;
+      control.focus({ preventScroll: true });
     }
 
     /**
@@ -966,7 +1023,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           if (key === null || key.length === 0) return;
           // One resolver decides what a tile click MEANS, so the "ask the
           // network question only when it is a real question" rule is not
-          // re-derived here: a single-network group comes back as start_swap.
+          // re-derived here: a single-network group comes back as review_swap
+          // and a multi-network one as choose_network. Neither starts a swap.
           const selection = resolveWizardSelection({
             pickerKey: key,
             previousKey: this.selectedPickerKey,
@@ -988,13 +1046,15 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             this.render();
             return;
           }
-          if (selection.kind === "start_swap") {
-            this.selectedPickerKey = null;
-            void this.session.startSwap(selection.payInAsset);
-            return;
-          }
           this.selectedPickerKey = key;
           this.selectedSwapAssetByGroup = selection.selectedAssetByGroup;
+          // Price first: the tile only opens the review step. When the asset
+          // on review is already known (a one-network coin, or a network
+          // carried over) ask what it costs, which opens no provider order.
+          // The swap itself starts on Continue.
+          if (selection.payInAsset !== undefined) {
+            void this.session.quoteSwap(selection.payInAsset);
+          }
           this.render();
         });
       });
@@ -1087,6 +1147,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
               ...this.selectedSwapAssetByGroup,
               [groupKey]: payInAsset,
             };
+            // The chosen network is now the asset on review: show its amount
+            // beside Continue. A quote, never a start.
+            void this.session.quoteSwap(payInAsset);
             this.render();
           });
         });

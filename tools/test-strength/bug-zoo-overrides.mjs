@@ -243,7 +243,7 @@ export const VARIANTS = [
     commit: "4aee6620",
     label: "total-host-amount",
     engine: "js",
-    note: "the Total row shows the provider's rounding of the payout, not the host's amount",
+    note: "the fee is measured from the provider's rounding of the payout, not the host's amount",
     files: {
       "packages/js/browser/src/internal/checkout-swap-view.ts": [
         {
@@ -252,17 +252,6 @@ export const VARIANTS = [
           replace:
             "total?.currency === fee.currency && total.value !== undefined && Date.now() < 0",
         },
-      ],
-    },
-  },
-  {
-    commit: "4aee6620",
-    label: "total-label",
-    engine: "js",
-    note: "the breakdown row reads Cart total again",
-    files: {
-      "packages/js/browser/src/internal/labels.ts": [
-        { find: 'cartTotal: "Total",', replace: 'cartTotal: "Cart total",' },
       ],
     },
   },

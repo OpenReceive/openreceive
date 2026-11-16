@@ -144,24 +144,23 @@ export interface CheckoutInvoiceSwapSnapshot {
 }
 
 /**
- * Formatted fee breakout for the deposit panel, explaining why the payer sends more
- * than the total the host asked for. All figures are display-ready strings. `cartTotal` is
- * always fiat; `youSend` and `fee` are fiat for a floating asset and token
- * amounts ("50.05 USDC") for a stablecoin pegged to the fee currency, where a
- * fiat valuation would read as the deposit amount with a typo.
+ * Formatted fee breakout for the deposit panel: what the payer sends and how
+ * much of it is the swap fee. All figures are display-ready strings. `youSend`
+ * and `fee` are fiat for a floating asset and token amounts ("50.05 USDC") for
+ * a stablecoin pegged to the fee currency, where a fiat valuation would read as
+ * the deposit amount with a typo.
+ *
+ * THE ORDER'S OWN TOTAL IS NOT HERE, ON PURPOSE. A swap screen shows one
+ * amount, the one to send. "$36.00" beside "37.04 USDC" is a second figure a
+ * payer can type into their wallet, and a deposit of 36 does not complete the
+ * order. A model that does not carry the total cannot put it on the screen.
  */
 export interface SwapFeeBreakdown {
-  /**
-   * The total the host asked for, e.g. "$10.00": the checkout's own fiat
-   * amount when it is in the provider's currency, else the provider's
-   * valuation of what the merchant receives. Shown as "Total".
-   */
-  readonly cartTotal: string;
   /** What the payer sends: its fiat value ("$10.59") or, for a pegged stablecoin, the deposit amount itself ("10.59 USDC"). */
   readonly youSend: string;
   /** The swap fee absorbed by the payer (exchange spread + network fees), e.g. "$0.59" or "0.59 USDC". */
   readonly fee: string;
-  /** The fee as a percentage of the cart total, e.g. "5.9%", when computable. */
+  /** The fee as a percentage of the amount the host asked for, e.g. "5.9%", when computable. */
   readonly feePercent?: string;
 }
 

@@ -48,6 +48,17 @@ export const checkoutLabels = {
   chooseNetwork: "Choose network",
   selectNetwork: "Select network",
   continue: "Continue",
+  /**
+   * The picker's amount line, beside Continue: what this checkout costs in the
+   * chosen coin. It is shown BEFORE anything is started, so a payer who only
+   * looks at a coin opens no order with the swap provider. "≈" because it is
+   * the rate feed's estimate until the order exists; the deposit panel then
+   * shows the order's own amount. A symbol and not a sentence: payers look,
+   * they do not read.
+   */
+  swapEstimate: "≈ {amount} {asset}",
+  /** The same line for a coin on more than one network, naming the chosen one. */
+  swapEstimateOnNetwork: "≈ {amount} {asset} · {network}",
   preparingPayment: "Preparing payment",
   networkSummary: "{asset} will be sent on {network}.",
   chooseAssetNetwork: "Choose {asset} network",
@@ -117,12 +128,6 @@ export const checkoutLabels = {
   preparingPaymentAddressDetail: "Getting your {asset} payment address…",
   createPaymentAddress: "Create {asset} ({network}) payment address",
   paymentBreakdown: "Payment breakdown",
-  /**
-   * The amount the host asked for. It reads "Total", not "Cart total": a
-   * donation or an invoice has no cart. The key keeps its old name, which
-   * hosts already read.
-   */
-  cartTotal: "Total",
   youSend: "You send",
   swapAndNetworkFees: "Swap + network fees",
   refundAddressPlaceholder: "{network} refund address",

@@ -6,6 +6,7 @@ import type {
 } from "../generated/swap-tables.ts";
 import type { SwapPayInAsset } from "./assets.ts";
 import type { TransientSwapCache } from "./limits-cache.ts";
+import type { SwapProviderLimits } from "./weight-budget.ts";
 
 // The state and reason vocabularies are kernel tables (spec/data/kernel-tables.json)
 // generated into every engine; the names below are this package's spelling of them.
@@ -154,13 +155,28 @@ export interface SwapProvider {
    */
   attachApiResponseLogger?(log: (entry: SwapProviderApiResponseLog) => void): void;
   /**
+   * The provider's API limits, which size the request guard the service
+   * attaches. Omitted means the FixedFloat defaults.
+   */
+  readonly limits?: SwapProviderLimits;
+  /**
    * Attach a process-local request weight guard for this provider.
    * Providers that do not hit a weight-budgeted API may omit this.
    */
   attachWeightBudget?(budget: {
     reserve(path: string): Promise<void>;
-    markRateLimited(): Promise<void>;
+    assertAvailable?(path: string): Promise<void>;
+    markRateLimited(notice?: {
+      readonly path?: string;
+      readonly retryAfterSeconds?: number;
+    }): Promise<void>;
   }): void;
+  /**
+   * Throw now when the attached guard would refuse a create, so the service
+   * can refuse a new swap before it does any other work for it. Uses no
+   * budget; the create itself still reserves.
+   */
+  assertCreateAvailable?(): Promise<void>;
   supportedPayInAssets(): Promise<Set<SwapPayInAsset>>;
   payInAssetCatalog?(): Promise<readonly SwapProviderAsset[]>;
   invoiceExpirySeconds?(input: { readonly payInAsset: SwapPayInAsset }): number;

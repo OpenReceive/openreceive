@@ -14,7 +14,8 @@ namespace BTCPayServer.Plugins.OpenReceive.Swaps;
 
 /// <summary>
 /// Builds and caches one provider per LSC URI (primary + optional backup) per store, with
-/// the process-local catalog/rates cache and request weight budget attached. Selection
+/// the process-local catalog/rates cache and request weight budget attached. The budget is
+/// sized by the provider's limits, which the host in the LSC URI picks. Selection
 /// rule: the primary unless it failed within the last minute, then the backup — "backup
 /// only while the primary is down". Status refreshes and refunds address a provider by
 /// the name persisted on the row.
@@ -62,7 +63,7 @@ public sealed class SwapProviderPool
             var client = _httpClientFactory.CreateClient("openreceive-swap");
             var provider = FixedFloatCompatibleProvider.FromLsc(connection, client, _clock);
             provider.AttachSwapCache(new TransientSwapCache(_clock, (message, error) => _logger.LogWarning("swap.cache.stale provider={Provider} message={Message} error={Error}", provider.Name, message, error)));
-            provider.AttachWeightBudget(new SwapProviderWeightBudget(provider.Name, _clock));
+            provider.AttachWeightBudget(new SwapProviderWeightBudget(provider.Name, _clock, provider.Limits));
             provider.AttachApiRequestLogger(entry => _logger.LogDebug("swap.provider.request provider={Provider} path={Path}", entry.Provider, entry.Path));
             provider.AttachApiResponseLogger(entry => _logger.LogDebug("swap.provider.response provider={Provider} path={Path} status={Status} ok={Ok} code={Code}", entry.Provider, entry.Path, entry.Status, entry.Ok, entry.Code));
             return new Entry(key, provider, connection);

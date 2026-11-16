@@ -55,6 +55,7 @@ const DAY_SECONDS = 86_400;
 const MINT_ACTIONS: ReadonlySet<AuthorizeAction> = new Set(["checkout.create", "swap.create"]);
 const DEFAULT_ACTIONS: readonly AuthorizeAction[] = ["checkout.create", "swap.create"];
 const DEFAULT_MESSAGE = "Too many payment attempts. Please try again later.";
+const REFUSAL_WARNING_SECONDS = 60;
 
 /**
  * Build the per-IP invoice rate limit behind the handler's `rateLimiting` option.
@@ -98,6 +99,24 @@ export function createIpRateLimit(config: IpRateLimitConfig = {}): RateLimit {
   const extractIp = config.ip ?? resolveClientIp;
   const now = config.now ?? unixSeconds;
   let warnedUnattributable = false;
+  let warnedNotAPayer = false;
+  let lastRefusalWarning: number | undefined;
+
+  // Say which address was refused, at most once a minute. When that address is
+  // the host's own proxy, every payer shares its budget and this line is the
+  // only place the operator can see why checkouts stopped.
+  const refuse = (ip: string, counted: number, limit: number, window: string, at: number) => {
+    if (lastRefusalWarning === undefined || at - lastRefusalWarning >= REFUSAL_WARNING_SECONDS) {
+      lastRefusalWarning = at;
+      console.warn(
+        `[openreceive] rateLimiting refused a new payment from ${ip}: ${counted} made in the ` +
+          `last ${window}, limit ${limit}. If ${ip} is your proxy, load balancer or CDN ` +
+          "rather than one payer, every payer is sharing this limit: pass the payer's own " +
+          "address — see https://openreceive.org/guides/rate-limiting.md",
+      );
+    }
+    return tooManyAttempts(message);
+  };
 
   return async (context) => {
     if (!actions.has(context.action)) return true;
@@ -116,12 +135,28 @@ export function createIpRateLimit(config: IpRateLimitConfig = {}): RateLimit {
       }
       return true;
     }
-    const at = now();
-    if ((await count(ip, at - HOUR_SECONDS)) >= limitPerHour) {
-      throw tooManyAttempts(message);
+    if (!isPayerAddress(ip)) {
+      // A loopback or private address is the host's own proxy or network, never
+      // a payer on the internet. Counting it would put every payer in one
+      // bucket and stop the whole site at the limit, so it is not counted.
+      if (!warnedNotAPayer) {
+        warnedNotAPayer = true;
+        console.warn(
+          `[openreceive] rateLimiting is on, but this request's client address is ${ip}, a ` +
+            "private or loopback address: your own proxy or network, not the payer. Limiting " +
+            "it would make every payer share one limit, so the request was allowed and such " +
+            "requests are not limited. Pass the payer's own address — see " +
+            "https://openreceive.org/guides/rate-limiting.md",
+        );
+      }
+      return true;
     }
-    if (limitPerDay !== undefined && (await count(ip, at - DAY_SECONDS)) >= limitPerDay) {
-      throw tooManyAttempts(message);
+    const at = now();
+    const lastHour = await count(ip, at - HOUR_SECONDS);
+    if (lastHour >= limitPerHour) throw refuse(ip, lastHour, limitPerHour, "hour", at);
+    if (limitPerDay !== undefined) {
+      const lastDay = await count(ip, at - DAY_SECONDS);
+      if (lastDay >= limitPerDay) throw refuse(ip, lastDay, limitPerDay, "24 hours", at);
     }
     return true;
   };
@@ -211,6 +246,56 @@ export function clientIpBucket(ip: string): string {
   const hextets = expandIpv6(address ?? "");
   if (hextets === undefined) return value;
   return `${hextets.slice(0, 4).join(":")}::/64`;
+}
+
+/**
+ * Whether the limiter may count this client value as one payer.
+ *
+ * False for an IP address no payer on the internet can have: loopback,
+ * private (RFC 1918), carrier-shared (100.64.0.0/10), link-local, the
+ * unspecified address, and their IPv6 counterparts (::1, fc00::/7, fe80::/10).
+ * A server sees one of those only when the request came from its own proxy or
+ * network, so the address stands for every payer at once.
+ *
+ * True for every other IP, and for a value that is not an IP at all: a host
+ * that passes its own identifier (an account id, a session key) chose it
+ * deliberately. Accepts raw addresses and the buckets {@link clientIpBucket}
+ * returns.
+ */
+export function isPayerAddress(value: string): boolean {
+  let address = value.trim().toLowerCase();
+  if (address.startsWith("::ffff:") && address.includes(".")) {
+    address = address.slice("::ffff:".length);
+  }
+  if (!address.includes(":")) {
+    const octets = parseIpv4(address);
+    if (octets === undefined) return true;
+    const [a, b] = octets as [number, number, number, number];
+    return !(
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+  const [withoutZone] = address.split("%");
+  const hextets = expandIpv6((withoutZone ?? "").replace(/\/64$/, ""));
+  if (hextets === undefined) return true;
+  const first = Number.parseInt(hextets[0] ?? "0", 16);
+  // :: and ::1 (a /64 bucket of either is all zeros in its first four groups).
+  if (hextets.slice(0, 7).every((group) => group === "0") && /^[01]$/.test(hextets[7] ?? "")) {
+    return false;
+  }
+  return !((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80);
+}
+
+function parseIpv4(value: string): readonly number[] | undefined {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return undefined;
+  const octets = value.split(".").map(Number);
+  return octets.some((octet) => octet > 255) ? undefined : octets;
 }
 
 function expandIpv6(value: string): readonly string[] | undefined {

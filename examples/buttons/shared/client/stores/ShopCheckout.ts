@@ -366,15 +366,27 @@ export class ShopCheckout extends Model({
   // The tiles, with the rule about limits already applied: a disabled tile
   // carries `limitMessage` ("Minimum amount $2.71") quoted from its group's
   // cheapest entry point, so an unavailable method says why in dollars.
+  // What a limit is quoted against: the order's own amount, in its own
+  // currency. The grid uses it for a tile's reason, the network chooser for a
+  // network's.
+  @computed
+  get swapLimitContext() {
+    const snapshot = this.snapshotValue;
+    return snapshot ? { amount_msats: snapshot.amount_msats, fiat: snapshot.fiat } : undefined;
+  }
+
   @computed
   get methodGrid() {
-    const snapshot = this.snapshotValue;
     return createMethodGridDisplay({
       entries: this.gridEntries,
       selectedPickerKey: this.pickerKey,
       selectedAssetByGroup: this.selectedAssetByGroup,
       startingAsset: this.startingSwapAsset,
-      checkout: snapshot ? { amount_msats: snapshot.amount_msats, fiat: snapshot.fiat } : undefined,
+      // The amount line beside Continue: the open coin's quote laid over its
+      // catalog entry, and which asset is still being quoted.
+      swapQuotes: this.swapQuotes,
+      quotingAsset: this.quotingSwapAsset,
+      checkout: this.swapLimitContext,
     });
   }
 
@@ -392,6 +404,18 @@ export class ShopCheckout extends Model({
   get startingSwapAsset(): string | null {
     void this.sessionTick;
     return this.session?.startingSwapAsset ?? null;
+  }
+
+  @computed
+  get swapQuotes(): Readonly<Record<string, CheckoutPaymentMethod>> {
+    void this.sessionTick;
+    return this.session?.swapQuotes ?? {};
+  }
+
+  @computed
+  get quotingSwapAsset(): string | null {
+    void this.sessionTick;
+    return this.session?.quotingSwapAsset ?? null;
   }
 
   @computed
@@ -483,9 +507,14 @@ export class ShopCheckout extends Model({
   // ----------------------------------------------------------------- actions
 
   // What a tile click MEANS is the engine's answer, not ours: a one-network
-  // coin comes back as `start_swap` and can never be asked which network it is
+  // coin comes back as `review_swap` and can never be asked which network it is
   // on, which is exactly where that question would teach a payer to click past
   // it on USDT.
+  //
+  // PRICE FIRST: a coin tile only selects. Starting a swap opens an order with
+  // the swap provider, and a payer who looks at four coins must not leave four
+  // unpaid orders behind. So the tile asks what the coin costs (`quoteSwap`
+  // opens nothing) and the swap starts in `continueWithSelection`.
   selectTile = (pickerKey: string) => {
     const selection = resolveWizardSelection({
       pickerKey,
@@ -499,13 +528,13 @@ export class ShopCheckout extends Model({
         this.setPickerKey(pickerKey);
         void this.ensureLightning();
         return;
-      case "start_swap":
-        this.setPickerKey(pickerKey);
-        void this.startSwap(selection.payInAsset);
-        return;
+      case "review_swap":
       case "choose_network":
         this.setPickerKey(pickerKey);
         this.setSelectedAssetByGroup(selection.selectedAssetByGroup);
+        // `payInAsset` is the asset on review: always there for a one-network
+        // coin, and for a multi-network one when its network is already set.
+        if (selection.payInAsset !== undefined) void this.quoteSwap(selection.payInAsset);
         return;
       default:
         this.setPickerKey(null);
@@ -515,6 +544,14 @@ export class ShopCheckout extends Model({
   // See the prop declaration: keyed by group key, valued by `pay_in_asset`.
   chooseNetwork = (groupKey: string, payInAsset: string) => {
     this.setSelectedAssetByGroup({ ...this.selectedAssetByGroup, [groupKey]: payInAsset });
+    void this.quoteSwap(payInAsset);
+  };
+
+  // The amount for one coin, and nothing else: no order is opened. A failure
+  // is the session's to log; the amount line simply stays empty and Continue
+  // still works, because `startSwap` quotes again itself.
+  quoteSwap = async (payInAsset: string) => {
+    await this.session?.quoteSwap(payInAsset);
   };
 
   continueWithSelection = () => {

@@ -1,5 +1,86 @@
 # Changelog
 
+## Unreleased
+
+- Changed (checkout): choosing a coin now shows the amount to send before a
+  swap is started. A click on SOL or ETH used to start the swap at once, so a
+  payer who looked at several coins opened several unpaid orders with the swap
+  provider, and a provider account that allows only a few open orders stopped
+  taking swaps for everyone. A coin tile now only selects the coin. The
+  checkout shows the estimate (`≈ 0.0421 SOL`, or `≈ 12.50 USDT · Tron` once a
+  network is chosen), and Continue starts the swap. That is one more tap for
+  SOL and ETH; USDT and USDC already had Continue. The estimate comes from the
+  quote route, which starts nothing at the provider. The element and the React
+  checkout behave the same.
+- Changed (headless, breaking): `resolveWizardSelection` returns `review_swap`
+  where it returned `start_swap`. A custom checkout should call the session's
+  new `quoteSwap(payInAsset)` when a coin or network is chosen, show
+  `continueTarget.amountText`, and call `startSwap` only from Continue.
+  `MethodGridGroupDisplay.startPayInAsset` is removed,
+  `MethodGridContinueDisplay` gains `amountText` and `quoting`, and in the
+  element's markup a one-network tile no longer carries `data-or-swap-start`.
+- Changed (checkout): a swap screen now shows one amount, the one to send.
+  The payment breakdown no longer has a "Total" row, and the transaction
+  details leave out the order's fiat amount until the payment has settled. A
+  $36.00 order paid in USDC showed "$36.00" next to "37.04 USDC", and a payer
+  who sends 36 has not paid. The checkout UX guide states this as the best
+  practice for a host's own page: take the order total off the page while a
+  swap is waiting to be paid (`state.rail === "swap"`).
+- Changed (headless, breaking): `SwapFeeBreakdown.cartTotal` and
+  `checkoutLabels.cartTotal` are removed. A custom checkout that drew the
+  "Total" row should delete it.
+- Changed (checkout): the estimate for a coin pegged to a currency (USDT,
+  USDC) is to the cent, `≈ 7.48 USDT · Solana`, where it was four significant
+  digits, `≈ 7.477 USDT · Solana`.
+- Fixed (demos): in the Rails and Next.js demo checkout, a network the order
+  is too small or too large for is now greyed and says why ("Minimum amount
+  $15.13"). It looked like any other network and ignored the click. Every demo
+  also hides its own order total while a swap is on screen.
+- Changed (swaps): the request guard that keeps a site inside its swap
+  provider's API limits is now sized by the provider. With Lightning Swap it
+  allows 30 new swaps and 400 API calls a minute per server process. Every
+  provider used to be held to FixedFloat's numbers, three new swaps a minute,
+  so a site on Lightning Swap refused a fourth payer in the same minute for no
+  reason. FixedFloat, and any provider the library does not know, keep the
+  three a minute. The provider is read from the host in the `LSC_URI_*` code.
+- Changed (swaps): a provider's 429 is obeyed for the wait it names
+  (`Retry-After`, or `retry_after` in the response), not always for 60
+  seconds. With Lightning Swap a refused new swap stops new swaps only, for
+  that wait and five minutes at most; swaps already started keep updating,
+  where every provider call used to stop for a minute.
+- Changed (swaps): a new swap the guard would refuse is now refused before
+  anything is made for it.
+- Added (swaps): one `swap.provider.rate_limited` warning a minute in the
+  server log says whether the library's own guard refused a swap call or the
+  provider answered 429, and until when.
+- Changed (rate limiting): the opt-in per-IP limit never counts a loopback or
+  private address. That address is the site's own proxy, not a payer: counting
+  it put every payer in one bucket and refused the whole site's 61st checkout
+  of the hour. Such a request is allowed and the server log says so once. A
+  site that relied on the limit with a private client address must pass the
+  payer's address; see the rate limiting guide.
+- Added (rate limiting): a refusal names the refused address, the count and
+  the limit in the server log, at most once a minute, so a limit that is
+  counting a load balancer or CDN can be seen for what it is.
+- Changed (PHP, WordPress): a provider's 429 wait is now remembered between
+  requests, in the cache the engine already uses for prices. PHP starts a new
+  process for each request, so the wait was forgotten at once and the next
+  payer's swap was sent to the provider and refused again. Only the wait is
+  kept, not a count, so no new limit applies. The WordPress plugin also reads
+  the provider's `Retry-After` header, which it used to drop.
+- Fixed (Rails): the default client address, used by `config.rate_limiting`
+  and stored on each payment, now follows
+  `config.action_dispatch.trusted_proxies`. It was Rack's `request.ip`, which
+  ignores that setting, so an app behind a load balancer or CDN with a public
+  address counted the proxy as every payer even after listing it. When the
+  peer that connected is a trusted proxy, the address is the one it forwarded;
+  otherwise it is the peer itself, whatever the forwarding headers say. A
+  `config.client_ip` of your own still wins.
+- Docs: the rate limiting guide says who limits what, how to check which
+  address is counted before turning the limit on, where a per-user limit
+  belongs, and what the swap provider's own limits are. It no longer says a
+  swap quote calls the provider: a quote is answered from a cached price list.
+
 ## 0.4.35 - 2026-11-12
 
 - Fixed (checkout): a checkout element that is already on the page when its

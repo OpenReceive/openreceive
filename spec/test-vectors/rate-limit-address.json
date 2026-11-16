@@ -1,0 +1,319 @@
+{
+  "schema_version": "0.1.0",
+  "decision": "never_count_a_non_payer_address",
+  "rationale": "The opt-in per-IP limit counts one client address as one payer. A server sees a loopback, private, carrier-shared or link-local address only when the request came from its own proxy or network, so that address stands for every payer at once: counting it would stop the whole site at the limit. Such an address is never counted (the request is allowed, with one warning). Every other IP is counted, and so is a value that is not an IP at all, because a host that passes its own identifier chose it deliberately.",
+  "applies_to": "The value after the engine's own normalization (trim, lower-case, IPv4-mapped IPv6 collapsed) or after /64 bucketing; both forms must classify the same.",
+  "cases": [
+    {
+      "name": "'203.0.113.9' is a payer",
+      "address": "203.0.113.9",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'198.51.100.7' is a payer",
+      "address": "198.51.100.7",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'8.8.8.8' is a payer",
+      "address": "8.8.8.8",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'11.0.0.1' is a payer",
+      "address": "11.0.0.1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'100.63.255.255' is a payer",
+      "address": "100.63.255.255",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'100.128.0.1' is a payer",
+      "address": "100.128.0.1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'169.253.1.1' is a payer",
+      "address": "169.253.1.1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'172.15.255.255' is a payer",
+      "address": "172.15.255.255",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'172.32.0.1' is a payer",
+      "address": "172.32.0.1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'192.167.1.1' is a payer",
+      "address": "192.167.1.1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'1.0.0.1' is a payer",
+      "address": "1.0.0.1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'::ffff:203.0.113.9' is a payer",
+      "address": "::ffff:203.0.113.9",
+      "expected": {
+        "payer": true
+      },
+      "note": "IPv4-mapped IPv6 classifies as its IPv4."
+    },
+    {
+      "name": "'2001:db8::1' is a payer",
+      "address": "2001:db8::1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'2001:db8:1:2::/64' is a payer",
+      "address": "2001:db8:1:2::/64",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'2607:f8b0:4005:805::200e' is a payer",
+      "address": "2607:f8b0:4005:805::200e",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'2a01:4f8::1' is a payer",
+      "address": "2a01:4f8::1",
+      "expected": {
+        "payer": true
+      }
+    },
+    {
+      "name": "'account-42' is a payer",
+      "address": "account-42",
+      "expected": {
+        "payer": true
+      },
+      "note": "Not an IP: a host-supplied identifier is counted as given."
+    },
+    {
+      "name": "'sess_9f2c1e' is a payer",
+      "address": "sess_9f2c1e",
+      "expected": {
+        "payer": true
+      },
+      "note": "Not an IP: a host-supplied identifier is counted as given."
+    },
+    {
+      "name": "'999.1.1.1' is a payer",
+      "address": "999.1.1.1",
+      "expected": {
+        "payer": true
+      },
+      "note": "Not a valid IPv4, so it is an identifier."
+    },
+    {
+      "name": "'127.0.0.1' is not a payer",
+      "address": "127.0.0.1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'127.255.255.254' is not a payer",
+      "address": "127.255.255.254",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'10.0.0.1' is not a payer",
+      "address": "10.0.0.1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'10.255.255.255' is not a payer",
+      "address": "10.255.255.255",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'172.16.0.1' is not a payer",
+      "address": "172.16.0.1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'172.31.255.255' is not a payer",
+      "address": "172.31.255.255",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'192.168.1.10' is not a payer",
+      "address": "192.168.1.10",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'169.254.169.254' is not a payer",
+      "address": "169.254.169.254",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'100.64.0.1' is not a payer",
+      "address": "100.64.0.1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'100.127.255.255' is not a payer",
+      "address": "100.127.255.255",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'0.0.0.0' is not a payer",
+      "address": "0.0.0.0",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'::ffff:127.0.0.1' is not a payer",
+      "address": "::ffff:127.0.0.1",
+      "expected": {
+        "payer": false
+      },
+      "note": "IPv4-mapped IPv6 classifies as its IPv4."
+    },
+    {
+      "name": "'::FFFF:10.1.2.3' is not a payer",
+      "address": "::FFFF:10.1.2.3",
+      "expected": {
+        "payer": false
+      },
+      "note": "Case does not matter."
+    },
+    {
+      "name": "' 192.168.0.1 ' is not a payer",
+      "address": " 192.168.0.1 ",
+      "expected": {
+        "payer": false
+      },
+      "note": "Surrounding whitespace does not matter."
+    },
+    {
+      "name": "'::1' is not a payer",
+      "address": "::1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'::' is not a payer",
+      "address": "::",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'fc00::1' is not a payer",
+      "address": "fc00::1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'fd12:3456:789a:1::5' is not a payer",
+      "address": "fd12:3456:789a:1::5",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'fdaa:0:1::3' is not a payer",
+      "address": "fdaa:0:1::3",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'fe80::1' is not a payer",
+      "address": "fe80::1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'febf::1' is not a payer",
+      "address": "febf::1",
+      "expected": {
+        "payer": false
+      }
+    },
+    {
+      "name": "'fe80::1%eth0' is not a payer",
+      "address": "fe80::1%eth0",
+      "expected": {
+        "payer": false
+      },
+      "note": "A zone id does not matter."
+    },
+    {
+      "name": "'0:0:0:0::/64' is not a payer",
+      "address": "0:0:0:0::/64",
+      "expected": {
+        "payer": false
+      },
+      "note": "The /64 bucket of ::1."
+    },
+    {
+      "name": "'fd12:3456:789a:1::/64' is not a payer",
+      "address": "fd12:3456:789a:1::/64",
+      "expected": {
+        "payer": false
+      },
+      "note": "The /64 bucket of a unique-local address."
+    }
+  ]
+}

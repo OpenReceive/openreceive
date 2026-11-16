@@ -182,6 +182,7 @@ Formatting and labels:
   | `switchPaymentMethod` | "Switch payment method" |
   | `chooseNetwork` / `selectNetwork` | the network heading and its options |
   | `continue` | the picker's confirm action |
+  | `swapEstimate` / `swapEstimateOnNetwork` | the amount line beside it, `≈ 0.0421 SOL` |
   | `transactionDetails` | the details panel's summary |
 
 The receipt:
@@ -256,16 +257,67 @@ shape you are rendering.
 ## Network selection: only ask when it is a real question
 
 `payment_methods` groups by `label`. USDT has several networks. SOL and ETH
-have one each. A group with one option has no network question, so start the
-swap straight from the tile.
+have one each. A group with one option has no network question, so its tile
+goes straight to the amount.
 
 - `resolveWizardSelection({ pickerKey, previousKey, entries, selectedAssetByGroup })`
-  returns `start_swap`, `choose_network`, `select_method`, or `none`. A
-  single-network group comes back as `start_swap`. The
+  returns `review_swap`, `choose_network`, `select_method`, or `none`. A
+  single-network group comes back as `review_swap`. No kind starts a swap. The
   `selectedAssetByGroup` map is keyed by group (`USDT`) and valued by
-  `pay_in_asset` (`USDT_TRON`).
+  `pay_in_asset` (`USDT_TRON`). Store it back for both swap kinds.
+- `review_swap` carries `payInAsset`. `choose_network` carries it when the
+  coin's network is already set, by an earlier pick or carried over from the
+  previous coin. That asset is the one on review.
 - `createMethodGridDisplay` carries the same rule per tile as
-  `needsNetworkStep` and `startPayInAsset`.
+  `needsNetworkStep`. An open one-network tile has its only network as
+  `selectedOption`, so `continueTarget` is there without a network step.
+
+## Price first: a tile never starts a swap
+
+Starting a swap opens an order with the swap provider, and a provider account
+holds only so many unpaid orders at once. A tile that starts a swap opens one
+for every coin a payer looks at. So the payer sees the amount first, and the
+swap starts on Continue.
+
+```ts
+const selection = resolveWizardSelection({ pickerKey, previousKey, entries, selectedAssetByGroup });
+if (selection.kind === "review_swap" || selection.kind === "choose_network") {
+  store.pickerKey = pickerKey;
+  store.selectedAssetByGroup = selection.selectedAssetByGroup;
+  if (selection.payInAsset !== undefined) void session.quoteSwap(selection.payInAsset);
+}
+
+// A network button: the chosen network is now the asset on review.
+store.selectedAssetByGroup = { ...store.selectedAssetByGroup, [groupKey]: payInAsset };
+void session.quoteSwap(payInAsset);
+
+// Continue, and nothing else, starts the swap.
+if (grid.continueTarget && !grid.continueTarget.disabled) {
+  void session.startSwap(grid.continueTarget.payInAsset);
+}
+```
+
+- `session.quoteSwap(payInAsset)` posts `${prefix}/swaps/quote`. The server
+  answers from its rates feed and opens no provider order. A second call for
+  an asset already being quoted joins the first request. It never rejects.
+- `session.swapQuotes` holds the answers by `pay_in_asset`.
+  `session.quotingSwapAsset` is the asset asked for last, while its request is
+  open. Pass both to `createMethodGridDisplay` as `swapQuotes` and
+  `quotingAsset`.
+- `continueTarget.amountText` is the finished line, such as `≈ 0.0421 SOL` or
+  `≈ 12.50 USDT · Tron`. It is shortened to four significant digits, or to the
+  cent for a coin pegged to a currency (USDT, USDC). The deposit panel keeps
+  every digit. `continueTarget.quoting` is true while that
+  asset's quote is open. Draw a spinner in the same place, and keep the
+  height, so Continue does not move when the amount arrives.
+- A failed quote is logged as `swap.quote.failed` and tells the payer nothing.
+  There is no `amountText`, and Continue still works, because `startSwap`
+  quotes again and reports its own errors.
+- A quote with `available: false` disables Continue. `continueTarget.label`
+  becomes the limit message, the same one an out-of-range catalog entry shows.
+
+The amount is an estimate until the order exists. `createSwapDisplayModel`
+shows the order's own amount on the deposit panel.
 
 ## The deposit values are the payer's to reproduce
 

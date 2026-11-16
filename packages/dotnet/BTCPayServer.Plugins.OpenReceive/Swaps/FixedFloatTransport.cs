@@ -97,6 +97,9 @@ public sealed class FixedFloatTransport
     public void AttachApiResponseLogger(Action<SwapProviderApiResponseLog> log) => _apiResponseLogger = log;
     public void AttachWeightBudget(ISwapWeightBudget budget) => _weightBudget = budget;
 
+    /// <summary>Refuse now when the attached guard would refuse <paramref name="path"/>; uses no budget.</summary>
+    public void AssertAvailable(string path) => _weightBudget?.AssertAvailable(path);
+
     /// <summary>POST <c>{baseUrl}/api/v2/{path}</c> and return the envelope's <c>data</c>.</summary>
     public async Task<JsonNode?> PostAsync(string path, JsonObject body, CancellationToken cancellationToken)
     {
@@ -151,7 +154,7 @@ public sealed class FixedFloatTransport
             if (!response.IsSuccessStatusCode)
             {
                 var rateLimited = response.StatusCode == HttpStatusCode.TooManyRequests;
-                if (rateLimited) _weightBudget?.MarkRateLimited();
+                if (rateLimited) _weightBudget?.MarkRateLimited(path, ReadRetryAfterSeconds(response, envelope["data"]));
                 throw new FixedFloatApiException(
                     path,
                     rateLimited ? FixedFloatApiErrorKind.RateLimited : FixedFloatApiErrorKind.Http,
@@ -233,6 +236,31 @@ public sealed class FixedFloatTransport
         if (value.TryGetValue<double>(out var d)) return d == 0;
         if (value.TryGetValue<decimal>(out var m)) return m == 0;
         return false;
+    }
+
+    /// <summary>
+    /// How long a 429 asks the caller to wait: the <c>Retry-After</c> header in whole
+    /// seconds, else a positive <c>retry_after</c> number in the response data. Null when
+    /// the provider named no wait.
+    /// </summary>
+    private static double? ReadRetryAfterSeconds(HttpResponseMessage response, JsonNode? data)
+    {
+        // The header as it was sent: an HTTP date, or anything else that is not digits
+        // only, is not a wait in seconds.
+        if (response.Headers.NonValidated.TryGetValues("Retry-After", out var values))
+        {
+            var header = values.ToString().Trim();
+            if (header.Length is >= 1 and <= 9 && header.AsSpan().IndexOfAnyExceptInRange('0', '9') < 0)
+            {
+                return int.Parse(header, NumberStyles.None, CultureInfo.InvariantCulture);
+            }
+        }
+        if (data is not JsonObject record || record["retry_after"] is not JsonValue value ||
+            value.GetValueKind() != JsonValueKind.Number)
+        {
+            return null;
+        }
+        return value.TryGetValue<double>(out var seconds) && double.IsFinite(seconds) && seconds > 0 ? seconds : null;
     }
 
     private static bool IsTimeout(Exception error) =>

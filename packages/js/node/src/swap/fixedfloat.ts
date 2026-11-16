@@ -28,6 +28,7 @@ import {
   serializeFixedFloatRatesIndex,
 } from "./fixedfloat-rates.ts";
 import { FixedFloatTransport, type FixedFloatWeightBudget } from "./fixedfloat-transport.ts";
+import { type SwapProviderLimits, swapProviderLimitsForBaseUrl } from "./weight-budget.ts";
 import {
   SWAP_LIMITS_MAX_STALE_SECONDS,
   swapLimitsMetaKey,
@@ -100,6 +101,7 @@ export function fixedFloatCompatibleSwapProvider(
 
 class FixedFloatProvider implements SwapProvider {
   readonly name: string;
+  readonly limits: SwapProviderLimits;
   private readonly lightningCcy: string | undefined;
   private readonly now: () => number;
   private readonly cacheSeconds: number;
@@ -142,6 +144,9 @@ class FixedFloatProvider implements SwapProvider {
       fetch: fetcher,
       requestTimeoutMs,
     });
+    // The host names the provider, and the provider sets the limits: the same
+    // wire contract is served at very different rates.
+    this.limits = swapProviderLimitsForBaseUrl(this.transport.baseUrl);
     const depositWindowSeconds =
       options.depositWindowSeconds ?? DEFAULT_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS;
     const settlementSlaSeconds =
@@ -188,6 +193,10 @@ class FixedFloatProvider implements SwapProvider {
 
   attachWeightBudget(budget: FixedFloatWeightBudget): void {
     this.transport.attachWeightBudget(budget);
+  }
+
+  async assertCreateAvailable(): Promise<void> {
+    await this.transport.assertAvailable("create");
   }
 
   async supportedPayInAssets(): Promise<Set<SwapPayInAsset>> {

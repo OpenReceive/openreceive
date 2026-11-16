@@ -25,7 +25,14 @@ export async function createLifecycleStack(options = {}) {
   // `noSwapProvider: true` is a shop that never configured a swap provider: no
   // provider is injected, so the service builds its list from `env` exactly as a
   // real install does. Any other stack gets the testkit fake provider.
-  const swapProvider = options.noSwapProvider ? undefined : createTestkitSwapProvider({ now });
+  // `swapPayAmounts`: what the fake provider quotes and charges per pay-in
+  // asset ({ SOL_SOL: "0.0421" }), for tests that read the amount on screen.
+  const swapProvider = options.noSwapProvider
+    ? undefined
+    : createTestkitSwapProvider({
+        now,
+        ...(options.swapPayAmounts === undefined ? {} : { payAmounts: options.swapPayAmounts }),
+      });
   const service = await createOpenReceive({
     client,
     clock: now,

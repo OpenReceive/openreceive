@@ -30,6 +30,8 @@ public sealed class SwapService
     /// <summary>Provider poll cadence once the invoice's Lightning side settled.</summary>
     public const int SettledPollSeconds = 30;
     public const int PollBatchSize = 200;
+    /// <summary>A refusal for rate is logged once in this many seconds per provider, path and reason.</summary>
+    public const int RateLimitLogIntervalSeconds = 60;
     private const int MutateAttempts = 3;
     public static readonly TimeSpan RecommendedInvoiceExpiration = TimeSpan.FromMinutes(60);
     public static readonly TimeSpan MinimumInvoiceExpiration = TimeSpan.FromMinutes(45);
@@ -40,6 +42,7 @@ public sealed class SwapService
     private readonly ISwapInvoiceSource _invoices;
     private readonly ILogger<SwapService> _logger;
     private readonly Func<long> _clock;
+    private readonly Dictionary<string, long> _rateLimitLoggedAt = new(StringComparer.Ordinal);
 
     public SwapService(
         ISwapStore store,
@@ -92,7 +95,7 @@ public sealed class SwapService
         IReadOnlyList<SwapProviderAsset> catalog;
         try
         {
-            catalog = await provider.PayInAssetCatalogAsync(cancellationToken);
+            catalog = await ThroughProviderAsync(provider, () => provider.PayInAssetCatalogAsync(cancellationToken));
             _providers.MarkHealthy(provider);
         }
         catch (Exception e) when (e is not OperationCanceledException)
@@ -254,7 +257,13 @@ public sealed class SwapService
         {
             try
             {
-                var order = await provider.CreateSwapAsync(input, cancellationToken);
+                var order = await ThroughProviderAsync(provider, () =>
+                {
+                    // Refuse before any other work for the order when the provider guard
+                    // would refuse the create anyway: a refused swap then costs nothing.
+                    provider.AssertCreateAvailable();
+                    return provider.CreateSwapAsync(input, cancellationToken);
+                });
                 _providers.MarkHealthy(provider);
                 return order;
             }
@@ -320,14 +329,18 @@ public sealed class SwapService
         var provider = await _providers.ByNameAsync(row.StoreId, row.Provider, cancellationToken)
                        ?? throw new SwapRequestException(409, "provider_unconfigured", "The swap provider for this order is no longer configured.");
         var now = _clock();
-        var fresh = await provider.GetStatusAsync(ToOrder(row), cancellationToken);
+        var fresh = await ThroughProviderAsync(provider, () => provider.GetStatusAsync(ToOrder(row), cancellationToken));
         Apply(row, fresh, now);
         if (row.State != "refund_required")
         {
             await SaveAsync(row, cancellationToken);
             throw new SwapRequestException(409, "refund_not_required", $"The provider reports this swap as {row.State}; a refund cannot be requested now.");
         }
-        await provider.RequestRefundAsync(ToOrder(row), address, cancellationToken);
+        await ThroughProviderAsync(provider, async () =>
+        {
+            await provider.RequestRefundAsync(ToOrder(row), address, cancellationToken);
+            return true;
+        });
         // The provider has the address now: this write must land whatever the poller did meanwhile.
         row = await MutateAsync(row.Id, r =>
         {
@@ -370,8 +383,10 @@ public sealed class SwapService
             }
             catch (SwapWeightBudgetException e)
             {
-                // No provider I/O happened. Keep its place ahead of recently served rows.
-                row.NextPollAt = Math.Max(now + 1, Math.Max(e.WindowStart + SwapProviderWeightBudget.WindowSeconds, e.BackoffUntil ?? 0));
+                // No provider I/O happened. Keep its place ahead of recently served rows, and
+                // come back when the guard can allow the call: the end of its stand-off, or
+                // the moment its window rolls.
+                row.NextPollAt = Math.Max(now + 1, e.RetryAt);
                 await SaveAsync(row, cancellationToken);
             }
             catch (SwapConcurrencyException) { /* A newer refund/payment stamp wins. */ }
@@ -414,7 +429,7 @@ public sealed class SwapService
             _logger.LogWarning("swap.poll.provider_missing swap={Swap} provider={Provider}", row.Id, row.Provider);
             throw new SwapRequestException(503, "provider_unconfigured", "Restore this order’s original provider configuration to continue recovery.");
         }
-        var fresh = await provider.GetStatusAsync(ToOrder(row), cancellationToken);
+        var fresh = await ThroughProviderAsync(provider, () => provider.GetStatusAsync(ToOrder(row), cancellationToken));
         var before = row.State;
         Apply(row, fresh, now);
         if (row.State == "awaiting_deposit" && row.DepositTxId is null && now > row.ProviderExpiresAt + NoDepositGraceSeconds)
@@ -475,6 +490,58 @@ public sealed class SwapService
                 Touch(r, now, stateChanged: false);
             }, cancellationToken);
         }
+    }
+
+    // ---- Provider calls ----
+
+    /// <summary>
+    /// One outbound provider call. A refusal for rate is named in the log; the failure
+    /// itself travels on unchanged to the caller's own handling.
+    /// </summary>
+    private async Task<T> ThroughProviderAsync<T>(ISwapProvider provider, Func<Task<T>> operation)
+    {
+        try
+        {
+            return await operation();
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            LogProviderRateLimit(provider, e);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Say in the server log why a swap call was refused for rate, and until when. The payer
+    /// only sees "try again"; the operator needs to know whether this plugin's own guard
+    /// stopped the call or the provider answered 429.
+    /// </summary>
+    private void LogProviderRateLimit(ISwapProvider provider, Exception error)
+    {
+        if (SwapTransportFailures.Classify(error) != SwapTransportFailure.RateLimited) return;
+        var denial = (error as SwapWeightBudgetException)?.Denial;
+        var name = denial?.Provider ?? provider.Name;
+        var path = denial?.Path ?? (error as FixedFloatApiException)?.Path ?? string.Empty;
+        // The poller and every open checkout ask again within seconds: one line a minute
+        // per cause says what is happening without burying the log.
+        var cause = $"{name}:{path}:{denial?.Reason ?? "provider"}";
+        var now = _clock();
+        lock (_rateLimitLoggedAt)
+        {
+            if (_rateLimitLoggedAt.TryGetValue(cause, out var last) && now - last < RateLimitLogIntervalSeconds) return;
+            _rateLimitLoggedAt[cause] = now;
+        }
+        if (denial is null)
+        {
+            _logger.LogWarning("swap.provider.rate_limited provider={Provider} path={Path} (the provider answered 429; new calls stand off until its wait is over)", name, path);
+            return;
+        }
+        _logger.LogWarning(
+            "swap.provider.rate_limited provider={Provider} path={Path} reason={Reason} used={Used} gate={Gate} creates={Creates} create_limit={CreateLimit} backoff_until={BackoffUntil} ({Detail})",
+            name, path, denial.Reason, denial.Used, denial.Gate, denial.Creates, denial.CreateLimit, denial.BackoffUntil,
+            denial.Reason == SwapProviderWeightBudget.ReasonBackoff
+                ? "refused locally: standing off after the provider's 429"
+                : "refused locally: this process reached the provider's per-minute limit");
     }
 
     // ---- Writes ----

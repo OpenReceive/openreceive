@@ -73,7 +73,12 @@ export interface ElementCheckoutSession {
   readonly mintingLightning: boolean;
   /** In-flight swap create; a second click must not mint a colliding attempt. */
   readonly startingSwapAsset: string | null;
-  /** Quotes observed per pay-in asset; an unavailable one drives the range pane. */
+  /** The asset whose picker quote is in flight, for the amount line's spinner. */
+  readonly quotingSwapAsset: string | null;
+  /**
+   * Quotes observed per pay-in asset: the picker's amount line reads them, and
+   * an unavailable one drives the range pane.
+   */
   readonly swapQuotes: Readonly<Record<string, CheckoutPaymentMethod>>;
   /** True while the element is writing attributes it owns. */
   readonly applyingOwnAttributes: boolean;
@@ -86,6 +91,8 @@ export interface ElementCheckoutSession {
   createCheckout(): Promise<void>;
   retryCreateCheckout(): void;
   ensureLightning(): Promise<void>;
+  /** Ask for the amount in one pay-in asset. Starts nothing; never rejects. */
+  quoteSwap(payInAsset: string): Promise<void>;
   startSwap(payInAsset: string): Promise<void>;
   clearSwapStartError(): void;
   /** Write attributes the element owns without re-entering attributeChangedCallback. */
@@ -353,6 +360,9 @@ export function createElementCheckoutSession(
     get startingSwapAsset() {
       return session.startingSwapAsset;
     },
+    get quotingSwapAsset() {
+      return session.quotingSwapAsset;
+    },
     get swapQuotes() {
       return session.swapQuotes;
     },
@@ -368,6 +378,7 @@ export function createElementCheckoutSession(
     createCheckout,
     retryCreateCheckout,
     ensureLightning: () => session.ensureLightning(),
+    quoteSwap: (payInAsset) => session.quoteSwap(payInAsset),
     startSwap: (payInAsset) => session.startSwap(payInAsset),
     clearSwapStartError: () => session.clearSwapStartError(),
     applyOwnAttributes,

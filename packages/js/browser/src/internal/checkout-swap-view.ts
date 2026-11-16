@@ -48,13 +48,16 @@ export function swapFeeInTokenUnits(fee: CheckoutInvoiceSwapFee, payInAsset: str
 }
 
 /**
- * Turn the provider's fiat equivalents into a display-ready fee breakout. The
- * total is the amount the host asked for: `total` (the attempt's own fiat
- * quote) when it is in the fee's currency, else the provider's `payout_fiat`,
- * its valuation of what the merchant receives. The provider rounds that
- * valuation on its own rate, so a $49.00 order can come back as $48.99; the
- * host's figure is the one the payer saw. The payer sends more, and the
- * difference is the swap fee (exchange spread + network fees).
+ * Turn the provider's fiat equivalents into a display-ready fee breakout: what
+ * the payer sends, and the swap fee (exchange spread + network fees) inside it.
+ * The fee is measured from the amount the host asked for: `total` (the
+ * attempt's own fiat quote) when it is in the fee's currency, else the
+ * provider's `payout_fiat`, its valuation of what the merchant receives. The
+ * provider rounds that valuation on its own rate, so a $49.00 order can come
+ * back as $48.99; the host's figure is the one the payer agreed to.
+ *
+ * That amount is the base of the sum and is NOT returned: a swap screen shows
+ * one amount, the one to send (see {@link SwapFeeBreakdown}).
  *
  * Two renderings, one rule ({@link swapFeeInTokenUnits}):
  * - Floating asset (SOL, ETH): every row is fiat. `youSend` is `pay_in_fiat`.
@@ -96,7 +99,6 @@ export function createSwapFeeBreakdown(
     const { assetLabel } = getSwapAssetDisplay(swap.pay_in_asset);
     const gap = decimalGap(deposit, payout);
     return {
-      cartTotal: fiat(gap.base, gap.scale),
       youSend: `${formatDepositAmount(swap.deposit_amount)} ${assetLabel}`,
       fee: `${formatDecimal(rescaleHalfUp(gap.fee, gap.scale, 2), 2)} ${assetLabel}`,
       feePercent: percentOf(gap.fee, gap.base),
@@ -107,7 +109,6 @@ export function createSwapFeeBreakdown(
   if (payIn === undefined) return undefined;
   const gap = decimalGap(payIn, payout);
   return {
-    cartTotal: fiat(gap.base, gap.scale),
     youSend: fiat(gap.base + gap.fee, gap.scale),
     fee: fiat(gap.fee, gap.scale),
     feePercent: percentOf(gap.fee, gap.base),

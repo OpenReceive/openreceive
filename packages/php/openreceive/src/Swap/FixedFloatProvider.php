@@ -15,7 +15,7 @@ use OpenReceive\Support\Records;
  * the same order normalization as the JS and Ruby engines. The status → state
  * mapping itself is the generated decision table, interpreted by StateTable.
  */
-final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
+final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime, GuardedSwapProvider
 {
     public const DEFAULT_BASE_URL = 'https://ff.io';
     public const DEFAULT_CCIES_CACHE_SECONDS = 24 * 60 * 60;
@@ -37,6 +37,7 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
     private readonly int $ratesCacheSeconds;
     private readonly int $requestTimeoutMs;
     private readonly int $invoiceExpirySeconds;
+    private readonly SwapProviderLimits $limits;
     private ?TransientCache $cache = null;
     private ?WeightBudget $weightBudget = null;
     /** @var (callable(array<string, mixed>): void)|null */
@@ -69,6 +70,9 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
             throw new \InvalidArgumentException('FixedFloat-compatible API secret must not be empty.');
         }
         $this->baseUrl = rtrim($baseUrl ?? self::DEFAULT_BASE_URL, '/');
+        // The host names the provider, and the provider sets the limits: the
+        // same wire contract is served at very different rates.
+        $this->limits = SwapProviderLimits::forBaseUrl($this->baseUrl);
         $this->lightningCcy = trim((string) $lightningCcy) === '' ? null : trim((string) $lightningCcy);
         $this->http = $http ?? new StreamTransport();
         $this->now = $now ?? static fn (): int => time();
@@ -121,6 +125,16 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
     public function attachWeightBudget(WeightBudget $budget): void
     {
         $this->weightBudget = $budget;
+    }
+
+    public function limits(): SwapProviderLimits
+    {
+        return $this->limits;
+    }
+
+    public function assertCreateAvailable(): void
+    {
+        $this->weightBudget?->assertAvailable('create');
     }
 
     /**
@@ -314,7 +328,7 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
         $this->logApiResponse($path, $status, $ok, $parsed['code'] ?? null, $parsed['msg'] ?? null, $parsed['data'] ?? null);
         if (!$ok) {
             if ($status === 429) {
-                $this->weightBudget?->markRateLimited();
+                $this->weightBudget?->markRateLimited($path, self::readRetryAfterSeconds($response['headers'] ?? [], $parsed['data'] ?? null));
             }
             throw new FixedFloatApiError(
                 $path,
@@ -510,6 +524,29 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
             'emergency_repeat' => $emergencyRepeat ?? $fallback['emergency_repeat'] ?? null,
             'fee' => self::readOrderFee($record) ?? $fallback['fee'] ?? null,
         ]);
+    }
+
+    /**
+     * How long a 429 asks the caller to wait: the `Retry-After` header in
+     * whole seconds, else a `retry_after` number in the response data. Null
+     * when the provider named no wait (or the transport passes no headers on).
+     *
+     * @param array<array-key, mixed> $headers the transport's response headers: names in any case, a value or a list of values
+     */
+    public static function readRetryAfterSeconds(array $headers, mixed $data): int|float|null
+    {
+        foreach ($headers as $name => $value) {
+            if (strtolower((string) $name) !== 'retry-after') {
+                continue;
+            }
+            $first = is_array($value) ? reset($value) : $value;
+            $header = is_string($first) ? trim($first) : '';
+            if (preg_match('/\A\d{1,9}\z/', $header) === 1) {
+                return (int) $header;
+            }
+        }
+        $fromBody = is_array($data) ? ($data['retry_after'] ?? null) : null;
+        return (is_int($fromBody) || is_float($fromBody)) && is_finite((float) $fromBody) && $fromBody > 0 ? $fromBody : null;
     }
 
     public static function formatApiErrorMessage(string $path, int $status, mixed $msg): string

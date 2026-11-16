@@ -18,6 +18,9 @@ public sealed class SwapServiceTests
 {
     private const string LscPrimary = "lightning+swapconnect://fake-lsc.test/?key=test-key&secret=test-secret";
     private const string ProviderName = "fake-lsc-test";
+    // The same fake provider account behind Lightning Swap's host: only the guard's sizing differs.
+    private const string LscLightningSwap = "lightning+swapconnect://lightning-swap.com/?key=test-key&secret=test-secret";
+    private const string LightningSwapProviderName = "lightning-swap-com";
     private const string StoreId = "store-1";
     private const string InvoiceId = "inv-1";
     private const long InvoiceAmountMsats = 100_000_000; // 0.001 BTC
@@ -40,12 +43,20 @@ public sealed class SwapServiceTests
             Task.FromResult(Invoices.GetValueOrDefault(invoiceId));
     }
 
-    private sealed class AccountRoutingHandler(FakeLscProviderCore primary, FakeLscProviderCore secondary) : HttpMessageHandler
+    private sealed class AccountRoutingHandler(FakeLscProviderCore primary, FakeLscProviderCore secondary, Func<string?> retryAfter) : HttpMessageHandler
     {
         private readonly HttpMessageInvoker _primary = new(new FakeLscHttpMessageHandler(primary));
         private readonly HttpMessageInvoker _secondary = new(new FakeLscHttpMessageHandler(secondary));
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            (request.RequestUri!.Host == "second-lsc.test" ? _secondary : _primary).SendAsync(request, cancellationToken);
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await (request.RequestUri!.Host == "second-lsc.test" ? _secondary : _primary).SendAsync(request, cancellationToken);
+            // The fake's 429 names no wait; a test that needs one adds the header a real provider sends.
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && retryAfter() is { } wait)
+            {
+                response.Headers.TryAddWithoutValidation("Retry-After", wait);
+            }
+            return response;
+        }
     }
 
     private sealed class Harness
@@ -53,6 +64,9 @@ public sealed class SwapServiceTests
         public long Now = 1_800_000_000;
         public readonly List<string> Paid = new();
         public readonly List<string> Log = new();
+        /// <summary>The <c>Retry-After</c> a scripted 429 carries; null for the fake's bare 429.</summary>
+        public string? RetryAfter;
+        public readonly RecordingLogger<SwapService> Logger = new();
         public readonly FakeLscProviderCore Core;
         public readonly FakeLscProviderCore SecondCore;
         public readonly InMemorySwapStore Store = new();
@@ -74,9 +88,9 @@ public sealed class SwapServiceTests
                 },
             });
             SecondCore = new FakeLscProviderCore(new FakeLscOptions { Clock = () => Now });
-            var factory = new InMemoryHttpClientFactory(new AccountRoutingHandler(Core, SecondCore));
+            var factory = new InMemoryHttpClientFactory(new AccountRoutingHandler(Core, SecondCore, () => RetryAfter));
             Pool = new SwapProviderPool(factory, Settings, NullLogger<SwapProviderPool>.Instance, () => Now);
-            Service = new SwapService(Store, Pool, Settings, Invoices, NullLogger<SwapService>.Instance, () => Now);
+            Service = new SwapService(Store, Pool, Settings, Invoices, Logger, () => Now);
             Invoices.Invoices[InvoiceId] = Invoice();
         }
 
@@ -96,6 +110,16 @@ public sealed class SwapServiceTests
 
         public Task<SwapCheckoutModel> Create(string asset = "USDT_TRON") =>
             Service.CreateAsync(InvoiceId, asset, CancellationToken.None);
+
+        /// <summary>A swap for another invoice of the same store (one live order per invoice and asset).</summary>
+        public Task<SwapCheckoutModel> CreateFor(string invoiceId, string asset = "USDT_TRON")
+        {
+            Invoices.Invoices[invoiceId] = Invoice() with { InvoiceId = invoiceId };
+            return Service.CreateAsync(invoiceId, asset, CancellationToken.None);
+        }
+
+        public int ProviderCalls(string path) =>
+            Log.Count(line => line.StartsWith($"POST /api/v2/{path}", StringComparison.Ordinal));
 
         public async Task<OpenReceiveSwap> Row(string swapId) =>
             (await Store.GetAsync(swapId, CancellationToken.None))!;
@@ -877,5 +901,171 @@ public sealed class SwapServiceTests
         Assert.Equal(409, error.Status);
         Assert.Contains(error.Code, new[] { "provider_rate_limited", "provider_unreachable" });
         Assert.Empty(h.Core.Orders);
+    }
+
+    // ---- The request guard: sized by the provider, asked before any work, named in the log ----
+
+    [Fact]
+    public async Task A_create_the_guard_would_refuse_is_refused_before_any_work_for_the_order()
+    {
+        var h = new Harness();
+        Assert.True((await h.Availability()).Offered); // catalog and rates are cached now
+        var provider = (await h.Pool.ProvidersAsync(StoreId, CancellationToken.None)).Single();
+        var guard = new SwapProviderWeightBudget(provider.Name, () => h.Now, provider.Limits);
+        var recording = new RecordingWeightBudget(guard);
+        provider.AttachWeightBudget(recording);
+        for (var n = 0; n < 3; n++) guard.Reserve("create"); // a busy minute: the create budget is spent
+        var calls = h.Log.Count;
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var error = await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON"));
+            Assert.Equal(503, error.Status);
+            Assert.Equal("provider_rate_limited", error.Code);
+            Assert.Equal("The swap provider is rate limited. Try again in a minute.", error.Message);
+        }
+
+        // The guard was asked, and that was all: nothing reserved, nothing sent, nothing stored.
+        Assert.Equal(new[] { "create", "create" }, recording.Checked);
+        Assert.Empty(recording.Reserved);
+        Assert.Equal(calls, h.Log.Count);
+        Assert.Empty(h.Core.Orders);
+        Assert.Empty(h.Store.Rows);
+        // Two refusals, one log line: repeated tries must not bury the log.
+        var line = Assert.Single(h.Logger.Event("swap.provider.rate_limited"));
+        Assert.Contains($"provider={ProviderName} path=create reason=exhausted used=150 gate=150 ", line);
+        Assert.Contains("this process reached the provider's per-minute limit", line);
+
+        // The next minute has room again, and the create itself reserves.
+        h.Now += SwapProviderWeightBudget.WindowSeconds;
+        Assert.Equal("awaiting_deposit", (await h.Create("USDT_TRON")).State);
+        Assert.Contains("create", recording.Reserved);
+    }
+
+    [Fact]
+    public async Task The_host_in_the_LSC_code_sizes_the_guard_and_Lightning_Swap_takes_thirty_creates_a_minute()
+    {
+        var h = new Harness();
+        h.Settings.Settings.LscPrimary = LscLightningSwap;
+        var provider = (await h.Pool.ProvidersAsync(StoreId, CancellationToken.None)).Single();
+        Assert.Equal(LightningSwapProviderName, provider.Name);
+        Assert.Same(SwapProviderLimits.LightningSwap, provider.Limits);
+
+        // FixedFloat's sizes would stop at three.
+        var created = new List<SwapCheckoutModel>();
+        for (var n = 0; n < 30; n++) created.Add(await h.CreateFor("busy-" + n));
+        var error = await Assert.ThrowsAsync<SwapRequestException>(() => h.CreateFor("busy-30"));
+
+        Assert.Equal(503, error.Status);
+        Assert.Equal("provider_rate_limited", error.Code);
+        Assert.Equal(30, h.Core.Orders.Count);
+        Assert.Equal(30, h.ProviderCalls("create"));
+        var line = Assert.Single(h.Logger.Event("swap.provider.rate_limited"));
+        Assert.Contains($"provider={LightningSwapProviderName} path=create reason=exhausted ", line);
+        Assert.Contains(" creates=30 create_limit=30 ", line);
+
+        // The swaps that exist are still read, and the next minute takes creates again.
+        h.Core.ForceRefundRequired(created[0].ProviderOrderId);
+        Assert.Equal("refund_required", (await h.Poll(created[0].SwapId)).State);
+        h.Now += SwapProviderWeightBudget.WindowSeconds;
+        Assert.Equal("awaiting_deposit", (await h.CreateFor("busy-30")).State);
+    }
+
+    [Fact]
+    public async Task A_Lightning_Swap_429_on_a_create_stands_creates_off_for_the_wait_it_names_while_status_calls_go_on()
+    {
+        var h = new Harness();
+        h.Settings.Settings.LscPrimary = LscLightningSwap;
+        var existing = await h.Create("USDT_TRON");
+        h.RetryAfter = "7";
+        h.Core.RateLimitNext(1);
+        var refusedAt = h.Now;
+
+        var refused = await Assert.ThrowsAsync<SwapRequestException>(() => h.CreateFor("next"));
+
+        Assert.Equal(503, refused.Status);
+        Assert.Equal("provider_rate_limited", refused.Code);
+        Assert.Equal(2, h.ProviderCalls("create"));
+
+        // Creates stand off; the swap that exists is still polled.
+        h.Core.ForceRefundRequired(existing.ProviderOrderId);
+        Assert.Equal("refund_required", (await h.Poll(existing.SwapId, advanceSeconds: 6)).State);
+        var standingOff = await Assert.ThrowsAsync<SwapRequestException>(() => h.CreateFor("next"));
+        Assert.Equal("provider_rate_limited", standingOff.Code);
+        Assert.Equal(2, h.ProviderCalls("create")); // refused locally: nothing was sent
+
+        // The seven seconds the provider named are over; a bare 429 would have meant a minute.
+        h.Now += 1;
+        Assert.Equal("awaiting_deposit", (await h.CreateFor("next")).State);
+        Assert.Equal(3, h.ProviderCalls("create"));
+
+        // One line for the provider's 429, one for the stand-off this process kept.
+        var lines = h.Logger.Event("swap.provider.rate_limited");
+        Assert.Equal(2, lines.Count);
+        Assert.StartsWith($"swap.provider.rate_limited provider={LightningSwapProviderName} path=create (the provider answered 429", lines[0]);
+        Assert.Contains($"provider={LightningSwapProviderName} path=create reason=backoff ", lines[1]);
+        Assert.Contains($" backoff_until={refusedAt + 7} ", lines[1]);
+    }
+
+    [Fact]
+    public async Task Rows_refused_during_a_stand_off_are_polled_again_when_it_ends()
+    {
+        var h = new Harness();
+        await h.Create("USDT_TRON");
+        await h.CreateFor("other");
+        h.Core.ForceRefundRequired("USDT_TRON");
+        h.Now += 6;
+        h.RetryAfter = "90"; // FixedFloat's sizes honor a wait longer than their minute
+        h.Core.RateLimitNext(1);
+        var refusedAt = h.Now;
+
+        await h.Service.PollOnceAsync(CancellationToken.None); // one row meets the 429, the other the stand-off
+
+        Assert.All(h.Store.Rows, row => Assert.Equal("awaiting_deposit", row.State));
+        Assert.Equal(1, h.ProviderCalls("order"));
+        // The row refused locally comes back when the stand-off ends, not a window later.
+        Assert.Equal(new long?[] { refusedAt + 60, refusedAt + 90 }, h.Store.Rows.Select(row => row.NextPollAt).Order());
+
+        h.Now = refusedAt + 60;
+        await h.Service.PollOnceAsync(CancellationToken.None); // still standing off: nothing is sent
+        Assert.Equal(1, h.ProviderCalls("order"));
+        Assert.All(h.Store.Rows, row => Assert.Equal(refusedAt + 90, row.NextPollAt));
+
+        h.Now = refusedAt + 90;
+        await h.Service.PollOnceAsync(CancellationToken.None);
+        Assert.All(h.Store.Rows, row => Assert.Equal("refund_required", row.State));
+        Assert.Equal(3, h.ProviderCalls("order"));
+    }
+
+    [Fact]
+    public async Task A_refusal_for_rate_is_logged_once_a_minute_per_cause()
+    {
+        var h = new Harness();
+        Assert.True((await h.Availability()).Offered); // catalog and rates are cached now
+        h.RetryAfter = "600";
+        h.Core.RateLimitNext(1);
+        var refusedAt = h.Now;
+
+        await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON")); // the provider's 429
+        for (var n = 0; n < 3; n++)
+        {
+            h.Now += 10;
+            await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON")); // this process standing off
+        }
+        Assert.Equal(1, h.ProviderCalls("create"));
+        var lines = h.Logger.Event("swap.provider.rate_limited");
+        Assert.Equal(2, lines.Count);
+        Assert.StartsWith($"swap.provider.rate_limited provider={ProviderName} path=create (the provider answered 429", lines[0]);
+        // FixedFloat's sizes honor a wait longer than their minute.
+        Assert.Contains($"provider={ProviderName} path=create reason=backoff used=0 gate=150 ", lines[1]);
+        Assert.Contains($" backoff_until={refusedAt + 600} ", lines[1]);
+        Assert.Contains("standing off after the provider's 429", lines[1]);
+
+        // A minute later the same cause is named again.
+        h.Now += SwapService.RateLimitLogIntervalSeconds;
+        await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON"));
+        Assert.Equal(3, h.Logger.Event("swap.provider.rate_limited").Count);
+        Assert.All(h.Logger.Entries.Where(entry => entry.Line.StartsWith("swap.provider.rate_limited", StringComparison.Ordinal)),
+            entry => Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, entry.Level));
     }
 }

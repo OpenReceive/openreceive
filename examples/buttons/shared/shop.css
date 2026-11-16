@@ -423,6 +423,25 @@ body {
   color: var(--or-accent);
 }
 
+/* A network the order cannot use: greyed like an unavailable tile, with the
+   reason under it. Without this the chip looked live and ignored the click. */
+.or-shop-network:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.or-shop-network-choice {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.or-shop-network-limit {
+  padding-left: 12px;
+  font-size: 0.72rem;
+  color: var(--or-muted);
+}
+
 .or-shop-qr {
   display: grid;
   place-items: center;

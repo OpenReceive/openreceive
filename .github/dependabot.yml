@@ -37,6 +37,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: mobx-react
         update-types: ["version-update:semver-major"]
+      # TypeScript 7: @angular/compiler-cli 22 peers typescript ">=6.0 <6.1", so
+      # the install itself fails (ERESOLVE) and 16 CI lanes with it. Lift this in
+      # the change that moves @openreceive/angular to an Angular that accepts it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
       # The checkout stylesheet's build tools, held because every host page
       # loads what they emit. Measured against Tailwind 4.3.2 + daisyUI 5.6.16
       # (scoped 218,787 bytes, shadow 119,453): Tailwind 4.3.5, with the

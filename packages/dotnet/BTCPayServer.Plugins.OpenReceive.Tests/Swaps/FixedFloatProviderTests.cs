@@ -248,6 +248,54 @@ public class FixedFloatProviderTests
         Assert.Equal("swap-example-v1", provider.Name);
     }
 
+    [Fact]
+    public void The_host_in_the_LSC_code_picks_the_providers_limits()
+    {
+        var client = new HttpClient(new FakeSwapProviderHandler(_ => FakeSwapProviderHandler.Json("{}")));
+        SwapProviderLimits Limits(string lscUri) => FixedFloatCompatibleProvider.FromLsc(LscUri.Parse(lscUri), client).Limits;
+
+        Assert.Same(SwapProviderLimits.LightningSwap, Limits("lightning+swapconnect://lightning-swap.com/?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.LightningSwap, Limits("lightning+swapconnect://API.Lightning-Swap.com:8443/v1?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://ff.io/?key=k&secret=s"));
+        // A look-alike host is not Lightning Swap.
+        Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://evil-lightning-swap.com/?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://lightning-swap.com.example/?key=k&secret=s"));
+        // No base URL at all is FixedFloat's own API.
+        Assert.Same(SwapProviderLimits.FixedFloat, new FixedFloatCompatibleProvider(new("ff", "k", "s"), client).Limits);
+    }
+
+    [Fact]
+    public async Task A_create_the_guard_would_refuse_is_refused_before_any_request()
+    {
+        var fixture = new Fixture();
+        var guard = new SwapProviderWeightBudget("ff-test", () => 1_700_000_000, fixture.Provider.Limits);
+        var recording = new RecordingWeightBudget(guard);
+        fixture.Provider.AttachWeightBudget(recording);
+        fixture.Provider.AssertCreateAvailable(); // room for a create: nothing thrown, nothing used
+        for (var i = 0; i < 3; i += 1) guard.Reserve("create");
+
+        var denied = Assert.Throws<SwapWeightBudgetException>(() => fixture.Provider.AssertCreateAvailable());
+
+        Assert.Equal(SwapProviderWeightBudget.ReasonExhausted, denied.Reason);
+        Assert.Equal("create", denied.Path);
+        Assert.Equal(new[] { "create", "create" }, recording.Checked);
+        Assert.Empty(recording.Reserved);
+        Assert.Empty(fixture.Handler.Requests);
+        Assert.Equal(SwapTransportFailure.RateLimited, SwapTransportFailures.Classify(denied));
+
+        // The create itself still reserves, but only after it has resolved the currencies:
+        // unasked, it does that work first and is refused only then.
+        await Assert.ThrowsAsync<SwapWeightBudgetException>(() =>
+            fixture.Provider.CreateSwapAsync(new CreateSwapInput("USDT_TRON", Bolt11, 10_000_000), CancellationToken.None));
+        Assert.Equal(new[] { "/api/v2/ccies" }, fixture.Handler.Requests.Select(request => request.Path));
+    }
+
+    [Fact]
+    public void A_provider_with_no_guard_attached_is_always_available()
+    {
+        new Fixture().Provider.AssertCreateAvailable();
+    }
+
     [Theory]
     [InlineData(10_000_000, "0.0001")]
     [InlineData(100_000_000_000, "1")]

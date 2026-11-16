@@ -1,6 +1,7 @@
 // The wizard half of `@openreceive/browser/headless`, driven the way an OUTSIDE
 // host drives it: prepare -> method grid -> tile click -> network pick ->
-// startSwap -> deposit panel, with its own store and its own fetch.
+// quoteSwap (the amount) -> Continue -> startSwap -> deposit panel, with its
+// own store and its own fetch.
 //
 // This file exists because that path had no test. The two in-repo renderers
 // (@openreceive/react, @openreceive/elements) were written alongside the
@@ -60,6 +61,8 @@ const PAY_OPTIONS = [
   },
 ];
 
+const PAY_AMOUNTS = { USDT_TRON: "5.1100", USDT_ETH: "5.4000", SOL_SOL: "0.04210000" };
+
 /** A server, as a fetch. Nothing here knows about a renderer. */
 function createStubServer() {
   const calls = [];
@@ -76,7 +79,16 @@ function createStubServer() {
       });
     }
     if (url.pathname === `${PREFIX}/swaps/quote`) {
-      return json({ quote: { pay_asset: body.pay_in_asset, label: "USDT", available: true } });
+      // What the route sends: no name and no network, only what a quote is
+      // about. The padded zeros are a provider's, as they arrive.
+      return json({
+        quote: {
+          provider: "fixedfloat",
+          pay_asset: body.pay_in_asset,
+          available: true,
+          pay_amount: PAY_AMOUNTS[body.pay_in_asset],
+        },
+      });
     }
     if (url.pathname === `${PREFIX}/swaps`) {
       return json({
@@ -151,17 +163,22 @@ function createHostSession(store, fetchStub) {
   });
 }
 
-const gridOf = (store) =>
+// `session` is optional so the grid can be read before a session exists; with
+// one, its quotes are what put the amount beside Continue.
+const gridOf = (store, session) =>
   createMethodGridDisplay({
     entries: buildMethodGridEntries(paymentMethods, store.snapshot?.payment_methods ?? []),
     selectedPickerKey: store.selectedPickerKey,
     selectedAssetByGroup: store.selectedAssetByGroup,
+    ...(session === undefined
+      ? {}
+      : { swapQuotes: session.swapQuotes, quotingAsset: session.quotingSwapAsset }),
   });
 
 const swapGroup = (grid, label) =>
   grid.entries.find((entry) => entry.kind === "swap" && entry.group.label === label)?.group;
 
-test("a headless host drives prepare -> grid -> network -> startSwap -> deposit panel", async () => {
+test("a headless host drives prepare -> grid -> network -> amount -> startSwap -> deposit panel", async () => {
   const server = createStubServer();
   const store = createHostStore();
   const session = createHostSession(store, server.fetchStub);
@@ -198,24 +215,42 @@ test("a headless host drives prepare -> grid -> network -> startSwap -> deposit 
     selectedAssetByGroup: store.selectedAssetByGroup,
   });
   assert.equal(picked.kind, "choose_network");
+  assert.equal(picked.payInAsset, undefined, "no network yet, so no asset to price");
   store.selectedPickerKey = swapPickerKey("USDT");
   store.selectedAssetByGroup = picked.selectedAssetByGroup;
 
   // 4. The payer picks Tron. The VALUE is the option's `pay_in_asset`, keyed by
   //    the group key — the one convention this whole test exists to pin.
   store.selectedAssetByGroup = { ...store.selectedAssetByGroup, USDT: "USDT_TRON" };
-  const chosen = gridOf(store);
+  const chosen = gridOf(store, session);
   assert.equal(swapGroup(chosen, "USDT").selected, true);
   assert.equal(swapGroup(chosen, "USDT").selectedOption.pay_in_asset, "USDT_TRON");
   assert.equal(chosen.canContinue, true);
   assert.equal(chosen.continueTarget.payInAsset, "USDT_TRON");
   assert.equal(chosen.continueTarget.label, checkoutLabels.continue);
   assert.equal(chosen.continueTarget.disabled, false);
+  assert.equal(chosen.continueTarget.amountText, undefined, "nothing has been asked yet");
 
-  // 5. Continue: the session starts the swap, quoting first.
-  await session.startSwap(chosen.continueTarget.payInAsset);
+  // 5. PRICE FIRST: the chosen network is the asset on review, so the host
+  //    asks what it costs. That is a quote and nothing else — no /swaps.
+  const quoting = session.quoteSwap("USDT_TRON");
+  assert.equal(session.quotingSwapAsset, "USDT_TRON");
+  assert.equal(gridOf(store, session).continueTarget.quoting, true);
+  await quoting;
+  assert.equal(session.quotingSwapAsset, null);
+  assert.deepEqual(server.pathsOf(), [`${PREFIX}/checkouts/prepare`, `${PREFIX}/swaps/quote`]);
+  const priced = gridOf(store, session);
+  assert.equal(priced.continueTarget.amountText, "≈ 5.11 USDT · Tron");
+  assert.equal(priced.continueTarget.quoting, false);
+  assert.equal(priced.continueTarget.disabled, false);
+  assert.equal(store.startedSwapInvoice, undefined, "a quote starts nothing");
+  assert.equal(store.selectedSwapAsset, null);
+
+  // 6. Continue: the session starts the swap, quoting again first.
+  await session.startSwap(priced.continueTarget.payInAsset);
   assert.deepEqual(server.pathsOf(), [
     `${PREFIX}/checkouts/prepare`,
+    `${PREFIX}/swaps/quote`,
     `${PREFIX}/swaps/quote`,
     `${PREFIX}/swaps`,
   ]);
@@ -224,7 +259,7 @@ test("a headless host drives prepare -> grid -> network -> startSwap -> deposit 
   assert.equal(store.selectedSwapAsset, "USDT_TRON");
   assert.equal(store.startedSwapInvoice.swap.pay_in_asset, "USDT_TRON");
 
-  // 6. The deposit panel, as data.
+  // 7. The deposit panel, as data.
   const display = createSwapDisplayModel(store.startedSwapInvoice, { now: NOW });
   assert.equal(display.payInAsset, "USDT_TRON");
   // A token on a chain the address format does not pin: the loud warning.
@@ -241,6 +276,128 @@ test("a headless host drives prepare -> grid -> network -> startSwap -> deposit 
   // This host declared no resume path, so the refund screen must not tell the
   // payer to bookmark a page that will not bring them back.
   assert.equal(display.refundReturnLabel, checkoutLabels.refundNoReturnWarning);
+});
+
+// The one-network half of the same walk. There is no network to ask about, so
+// the tile goes straight to the amount — and, like every tile, starts nothing.
+test("a one-network coin's tile is a review of its amount, never a swap start", async () => {
+  const server = createStubServer();
+  const store = createHostStore();
+  const session = createHostSession(store, server.fetchStub);
+  store.snapshot = await prepareCheckout({
+    prefix: PREFIX,
+    reference: REFERENCE,
+    fetch: server.fetchStub,
+  });
+
+  const picked = resolveWizardSelection({
+    pickerKey: swapPickerKey("SOL"),
+    previousKey: store.selectedPickerKey,
+    entries: buildMethodGridEntries(paymentMethods, store.snapshot.payment_methods),
+    selectedAssetByGroup: store.selectedAssetByGroup,
+  });
+  assert.equal(picked.kind, "review_swap");
+  assert.equal(picked.payInAsset, "SOL_SOL");
+  store.selectedPickerKey = swapPickerKey("SOL");
+  store.selectedAssetByGroup = picked.selectedAssetByGroup;
+  // Continue is there at once; the amount follows the quote.
+  assert.equal(gridOf(store, session).canContinue, true);
+  assert.equal(gridOf(store, session).networkRequired, false);
+
+  // A double click, or a re-render that asks again, is one request.
+  const first = session.quoteSwap(picked.payInAsset);
+  const second = session.quoteSwap(picked.payInAsset);
+  await Promise.all([first, second]);
+  assert.deepEqual(server.pathsOf(), [`${PREFIX}/checkouts/prepare`, `${PREFIX}/swaps/quote`]);
+  assert.equal(session.swapQuotes.SOL_SOL.pay_amount, PAY_AMOUNTS.SOL_SOL);
+
+  const priced = gridOf(store, session);
+  assert.equal(priced.continueTarget.payInAsset, "SOL_SOL");
+  assert.equal(priced.continueTarget.amountText, "≈ 0.0421 SOL");
+  assert.deepEqual(store.errors, []);
+  assert.deepEqual(store.published, [], "looking at a coin opens no provider order");
+  assert.equal(store.startedSwapInvoice, undefined);
+});
+
+// A quote that fails costs the payer nothing, so it tells them nothing: the
+// amount line stays empty, Continue still works because `startSwap` quotes
+// again itself, and only the log hears about it.
+test("a failed quoteSwap is logged, never raised, and leaves nothing behind", async () => {
+  const store = createHostStore();
+  store.snapshot = { reference: REFERENCE, payment_methods: PAY_OPTIONS };
+  const logs = [];
+  const session = createCheckoutSession({
+    snapshot: () => store.snapshot,
+    reference: () => REFERENCE,
+    swap: {
+      selection: {
+        started: () => undefined,
+        setStarted: () => {},
+        dismissedInvoiceId: () => null,
+        setDismissedInvoiceId: () => {},
+        setSelectedAsset: (payInAsset) => {
+          store.selectedSwapAsset = payInAsset;
+        },
+      },
+      prefix: () => PREFIX,
+      fetch: () => async () =>
+        new Response(JSON.stringify({ code: "INTERNAL", message: "Exchange rates unavailable." }), {
+          status: 503,
+          headers: { "content-type": "application/json" },
+        }),
+    },
+    logger: (entry) => logs.push(entry),
+    onError: (error) => store.errors.push(error),
+    onChange: () => {
+      store.changes += 1;
+    },
+  });
+
+  await session.quoteSwap("SOL_SOL");
+  assert.deepEqual(store.errors, [], "onError is for things the payer must be told");
+  assert.deepEqual(session.swapQuotes, {});
+  assert.equal(session.quotingSwapAsset, null);
+  assert.equal(session.swapStartError, undefined);
+  assert.equal(store.selectedSwapAsset, null);
+  assert.deepEqual(
+    logs.filter((entry) => entry.event === "swap.quote.failed"),
+    [
+      {
+        level: "warn",
+        event: "swap.quote.failed",
+        message:
+          "Could not quote the pay-in asset. The picker shows no amount; Continue still works.",
+        reference: REFERENCE,
+        pay_in_asset: "SOL_SOL",
+        status: 503,
+        error_code: "INTERNAL",
+        error_message: "Exchange rates unavailable.",
+      },
+    ],
+  );
+  // The grid the host draws from that: Continue enabled, and no amount.
+  store.selectedPickerKey = swapPickerKey("SOL");
+  const grid = gridOf(store, session);
+  assert.equal(grid.canContinue, true);
+  assert.equal(grid.continueTarget.amountText, undefined);
+});
+
+// A host that cannot quote cannot start either, and `startSwap` is where that
+// is said (the two tests below). `quoteSwap` only means "no amount".
+test("quoteSwap without swap wiring does nothing, quietly", async () => {
+  const store = createHostStore();
+  const session = createCheckoutSession({
+    snapshot: () => store.snapshot,
+    reference: () => REFERENCE,
+    onError: (error) => store.errors.push(error),
+    onChange: () => {
+      store.changes += 1;
+    },
+  });
+  await session.quoteSwap("USDT_TRON");
+  assert.deepEqual(store.errors, []);
+  assert.equal(store.changes, 0);
+  assert.equal(session.quotingSwapAsset, null);
 });
 
 // D2's regression: the name used to say "networks" and the guides used to say

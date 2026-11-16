@@ -393,6 +393,29 @@ final class EngineTest extends TestCase
         self::assertSame(201, $this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-6'])->getStatusCode());
         self::assertSame(201, $this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-8'], '198.51.100.1')->getStatusCode());
         self::assertSame(200, $this->call($engine, 'POST', '/openreceive/checkouts/prepare', ['reference' => 'order-9'])->getStatusCode());
+        // The refusal named the address it refused, for the operator.
+        $refusals = array_values(array_filter($this->logs, static fn (string $line): bool => str_contains($line, 'rateLimiting refused a new payment')));
+        self::assertCount(1, $refusals);
+        self::assertStringContainsString('refused a new payment from 203.0.113.5: 2 made in the last hour, limit 2.', $refusals[0]);
+    }
+
+    public function testTheBuiltInRateLimiterNeverCountsTheHostsOwnProxyAddress(): void
+    {
+        // Behind a reverse proxy the default REMOTE_ADDR is the proxy's address
+        // on every request: limiting it would stop the whole site at the limit.
+        $engine = $this->engine(false, true, ['limit_per_hour' => 2]);
+        foreach (['order-6', 'order-7', 'order-8', 'order-9'] as $reference) {
+            self::assertSame(201, $this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => $reference], '10.0.0.7')->getStatusCode(), $reference);
+        }
+        // The address stored on the payment row is unchanged.
+        self::assertSame(4, $this->repository->countAttemptsFromIp('10.0.0.7', 0));
+        $warnings = array_values(array_filter($this->logs, static fn (string $line): bool => str_contains($line, 'rateLimiting is on')));
+        self::assertCount(1, $warnings, 'said once, not on every request');
+        self::assertStringContainsString("this request's client address is 10.0.0.7, a private or loopback address", $warnings[0]);
+        // A payer's own address is still limited by the same engine.
+        self::assertSame(201, $this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-10'])->getStatusCode());
+        self::assertSame(201, $this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-11'])->getStatusCode());
+        self::assertSame(429, $this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-12'])->getStatusCode());
     }
 
     public function testPlaceholderHooksWarnAtBootAndInTheDoctor(): void

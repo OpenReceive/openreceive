@@ -1885,8 +1885,8 @@ OpenReceive.configure do |config|
   # config.rate_limit = ->(context) { MyLimiter.allow?(context[:request].ip) }
 
   # Client-IP extractor for rate limiting and attempt-row stamping. Default:
-  # ActionDispatch::Request#ip, which honors Rails' trusted-proxy
-  # configuration.
+  # request.remote_ip when the connecting peer is one of Rails' trusted
+  # proxies (config.action_dispatch.trusted_proxies), else the peer itself.
   # config.client_ip = ->(request) { request.headers["CF-Connecting-IP"] }
 
   # Request-path settlement pass on every engine PAYMENT route (unauthenticated

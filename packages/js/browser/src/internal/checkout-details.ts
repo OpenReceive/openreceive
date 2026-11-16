@@ -72,8 +72,13 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     push("Amount", formatMsats(input.amount_msats));
     push("Amount (msats)", String(input.amount_msats));
   }
+  // A swap that is still to be paid shows ONE amount, the one to send, in this
+  // record as on the screen above it: "Fiat $36.00" two rows from "Deposit
+  // amount 37.04" is a second figure a payer can type into their wallet. The
+  // order's own total comes back once the payment has settled.
+  const swapToBePaid = input.swap !== undefined && input.transaction_state !== "settled";
   const fiat = formatFiatAmount(input.fiat_quote?.fiat);
-  push("Fiat", fiat);
+  if (!swapToBePaid) push("Fiat", fiat);
 
   if (typeof input.invoice === "string" && input.invoice.length > 0) {
     push("Lightning invoice", formatInvoiceLabel(input.invoice), input.invoice, "invoice");
@@ -126,7 +131,6 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     push("Refund transaction", swap.refund_tx_id, undefined, "tx");
     const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap, input.fiat_quote?.fiat);
     if (feeBreakdown !== undefined) {
-      push("Total", feeBreakdown.cartTotal);
       push("You send", feeBreakdown.youSend);
       push(
         "Swap + network fees",
@@ -141,7 +145,9 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
       if (!swapFeeInTokenUnits(swap.fee, swap.pay_in_asset)) {
         push("Pay-in fiat", swap.fee.pay_in_fiat);
       }
-      push("Payout fiat", swap.fee.payout_fiat);
+      // The provider's valuation of what the merchant receives is the order
+      // total by another name, so it follows the same rule as "Fiat" above.
+      if (!swapToBePaid) push("Payout fiat", swap.fee.payout_fiat);
     }
   }
 

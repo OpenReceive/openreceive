@@ -129,6 +129,49 @@ function mount(attributes) {
   return element;
 }
 
+/**
+ * A coin tile: `swap:SOL`, `swap:USDT`. A tile only SELECTS. It opens the
+ * coin's review step (the amount, and Continue) and starts nothing.
+ */
+function coinTile(element, label) {
+  return untilLocal(
+    () => element.shadowRoot?.querySelector(`[data-or-picker-select="swap:${label}"]`),
+    { label: `${label} tile` },
+  );
+}
+
+/** A network button inside an open multi-network coin. */
+function networkButton(element, payInAsset) {
+  return untilLocal(
+    () => element.shadowRoot?.querySelector(`[data-or-swap-network-value="${payInAsset}"]`),
+    { label: `${payInAsset} network button` },
+  );
+}
+
+/** Continue, enabled for this asset: the one picker control that starts a swap. */
+function continueButton(element, payInAsset) {
+  return untilLocal(
+    () =>
+      element.shadowRoot?.querySelector(
+        `[data-or-picker-continue][data-or-swap-start="${payInAsset}"]`,
+      ),
+    { label: `Continue for ${payInAsset}` },
+  );
+}
+
+/** The payer's whole way into a one-network coin: its tile, then Continue. */
+async function payWithCoin(element, label, payInAsset) {
+  (await coinTile(element, label)).click();
+  const button = await continueButton(element, payInAsset);
+  button.click();
+  return button;
+}
+
+/** The amount line beside Continue, as the payer reads it. */
+function estimateText(element) {
+  return element.shadowRoot?.querySelector('[part="method-estimate"]')?.textContent.trim() ?? "";
+}
+
 test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => {
   const mint = deferred();
   const fetchStub = createFetchStub({
@@ -347,11 +390,9 @@ test("a refused mint and a refused swap start show the payer sentence", async ()
     element.remove();
     const again = mount({ reference: "order-refused-later", prefix: "/openreceive" });
     try {
-      (
-        await untilLocal(() => again.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'), {
-          label: "SOL swap-start button",
-        })
-      ).click();
+      // The tile's own quote is refused too, and that one is silent: Continue
+      // is still there, and pressing it is what reports the refusal.
+      await payWithCoin(again, "SOL", "SOL_SOL");
       const swapError = await untilLocal(
         () => again.shadowRoot.querySelector('[part="swap-error"]'),
         { label: "swap-start failure" },
@@ -738,7 +779,7 @@ function swapStartBody(payInAsset, paymentHash) {
 // loser's error then replaces a perfectly good deposit panel. This pins the
 // swap-start half (the Lightning half is the double-click Bitcoin test above)
 // and the prepare-once gate that has to survive the element re-rendering.
-test("double-clicking a swap asset starts exactly one swap", async () => {
+test("double-clicking Continue starts exactly one swap", async () => {
   const start = deferred();
   const paymentHash = "c".repeat(64);
   const fetchStub = createFetchStub({
@@ -751,10 +792,8 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
   const element = mount({ reference: "order-swap-1", prefix: "/openreceive" });
 
   try {
-    const asset = await untilLocal(
-      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
-      { label: "SOL swap-start button" },
-    );
+    (await coinTile(element, "SOL")).click();
+    const asset = await continueButton(element, "SOL_SOL");
     asset.click();
     // The DOM half of the guard: the clicked button marks itself busy.
     assert.equal(asset.disabled, true);
@@ -808,11 +847,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
   const element = mount({ reference: "order-swap-reselect", prefix: "/openreceive" });
 
   try {
-    const asset = await untilLocal(
-      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
-      { label: "SOL swap-start button" },
-    );
-    asset.click();
+    await payWithCoin(element, "SOL", "SOL_SOL");
     await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
       label: "deposit panel",
     });
@@ -823,11 +858,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
       { label: "swap breadcrumb" },
     );
     breadcrumb.click();
-    const again = await untilLocal(
-      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
-      { label: "asset grid again" },
-    );
-    again.click();
+    await payWithCoin(element, "SOL", "SOL_SOL");
     await flush(4);
     assert.equal(
       fetchStub.pathCount("/swaps"),
@@ -845,6 +876,309 @@ test("re-selecting a started swap asset re-opens its panel without a second star
       element.shadowRoot?.innerHTML ?? "",
       /Could not prepare the payment address/,
     );
+  } finally {
+    element.remove();
+  }
+});
+
+// PRICE FIRST. Starting a swap opens an order with the swap provider, and a
+// provider account holds only so many unpaid orders at once. A tile that
+// started the swap opened one for every coin a payer looked at. So a tile, and
+// a network button, only select: the payer sees what the order costs in that
+// coin, from a quote that opens nothing, and the swap starts on Continue.
+// React's twins are in tests/react-checkout-behavior.test.mjs under the same
+// names.
+const FOUR_COINS = [
+  ["USDT_TRON", "Tron"],
+  ["USDT_ETH", "Ethereum"],
+  ["USDC_SOL", "Solana"],
+  ["USDC_ETH", "Ethereum"],
+  ["SOL_SOL", "Solana"],
+  ["ETH_ETH", "Ethereum"],
+];
+const PAY_AMOUNTS = {
+  USDT_TRON: "12.50",
+  USDT_ETH: "12.75",
+  USDC_SOL: "12.60",
+  USDC_ETH: "12.80",
+  SOL_SOL: "0.04210000",
+  ETH_ETH: "0.0031",
+};
+const quoteRequests = (fetchStub) =>
+  fetchStub.calls.filter((call) => call.path.endsWith("/swaps/quote"));
+
+test("a one-network coin tile asks for the amount, shows it, and starts nothing until Continue", async () => {
+  const paymentHash = "a".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAssets("order-price-first", FOUR_COINS),
+    "/swaps/quote": (body) =>
+      swapQuoteBody(body.pay_in_asset, { pay_amount: PAY_AMOUNTS[body.pay_in_asset] }),
+    "/swaps": () => swapStartBody("SOL_SOL", paymentHash),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ reference: "order-price-first", prefix: "/openreceive" });
+
+  try {
+    (await coinTile(element, "SOL")).click();
+    await untilLocal(() => estimateText(element) === "≈ 0.0421 SOL", { label: "the SOL amount" });
+    assert.deepEqual(
+      quoteRequests(fetchStub).map((call) => call.body),
+      [{ reference: "order-price-first", pay_in_asset: "SOL_SOL" }],
+      "the tile sends exactly one quote, for the coin it opened",
+    );
+    assert.equal(fetchStub.pathCount("/swaps"), 0, "a tile click must not open a provider order");
+
+    // One network is not a question: the review step is the amount and
+    // Continue, with no network chooser to click past.
+    const root = element.shadowRoot;
+    assert.equal(root.querySelector("[data-or-swap-network-value]"), null);
+    assert.doesNotMatch(root.textContent, /Choose SOL network/);
+    const tile = await coinTile(element, "SOL");
+    assert.equal(tile.getAttribute("aria-pressed"), "true");
+    assert.equal(tile.getAttribute("aria-expanded"), "true");
+    assert.ok(root.getElementById(tile.getAttribute("aria-controls")), "the tile names its panel");
+    assert.equal(
+      root.querySelector('[part="method-estimate"]').getAttribute("aria-live"),
+      "polite",
+    );
+    const next = await continueButton(element, "SOL_SOL");
+    assert.equal(next.disabled, false);
+    assert.equal(next.textContent.trim(), "Continue");
+
+    next.click();
+    await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 1, "Continue starts exactly one swap");
+    assert.deepEqual(
+      fetchStub.calls.filter((call) => call.path.endsWith("/swaps")).map((call) => call.body),
+      [{ reference: "order-price-first", pay_in_asset: "SOL_SOL" }],
+    );
+  } finally {
+    element.remove();
+  }
+});
+
+test("choosing a network asks for that network's amount, and switching shows the other one", async () => {
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAssets("order-price-network", FOUR_COINS),
+    "/swaps/quote": (body) =>
+      swapQuoteBody(body.pay_in_asset, { pay_amount: PAY_AMOUNTS[body.pay_in_asset] }),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ reference: "order-price-network", prefix: "/openreceive" });
+  const quoted = () => quoteRequests(fetchStub).map((call) => call.body.pay_in_asset);
+
+  try {
+    // The tile alone: a network is still owed, so there is nothing to quote
+    // and nothing to continue with.
+    (await coinTile(element, "USDT")).click();
+    await networkButton(element, "USDT_TRON");
+    assert.deepEqual(quoted(), []);
+    assert.equal(estimateText(element), "");
+    const waiting = element.shadowRoot.querySelector("[data-or-picker-continue]");
+    assert.equal(waiting.disabled, true);
+
+    (await networkButton(element, "USDT_TRON")).click();
+    await untilLocal(() => estimateText(element) === "≈ 12.50 USDT · Tron", {
+      label: "the Tron amount",
+    });
+    assert.deepEqual(quoted(), ["USDT_TRON"]);
+    assert.equal((await continueButton(element, "USDT_TRON")).disabled, false);
+
+    (await networkButton(element, "USDT_ETH")).click();
+    await untilLocal(() => estimateText(element) === "≈ 12.75 USDT · Ethereum", {
+      label: "the Ethereum amount",
+    });
+    assert.deepEqual(quoted(), ["USDT_TRON", "USDT_ETH"]);
+    await continueButton(element, "USDT_ETH");
+
+    // A network carried over to the next coin is on review straight from the
+    // tile, so its amount is asked for without another click.
+    (await coinTile(element, "USDC")).click();
+    await untilLocal(() => estimateText(element) === "≈ 12.80 USDC · Ethereum", {
+      label: "the carried-over network's amount",
+    });
+    assert.deepEqual(quoted(), ["USDT_TRON", "USDT_ETH", "USDC_ETH"]);
+
+    assert.equal(fetchStub.pathCount("/swaps"), 0, "choosing a network must not start a swap");
+  } finally {
+    element.remove();
+  }
+});
+
+test("a failed quote is silent: no amount, no error, and Continue still starts the swap", async () => {
+  const logs = [];
+  defineElements({
+    tagName: "openreceive-checkout-quote-logged",
+    qrEncoder,
+    logger: (entry) => logs.push(entry),
+  });
+  let quotes = 0;
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-quote-fails", "SOL_SOL"),
+    // The picker's quote meets an outage; the one behind Continue is answered.
+    "/swaps/quote": (body) => {
+      quotes += 1;
+      return quotes === 1 ? PROVIDER_UNREACHABLE : swapQuoteBody(body.pay_in_asset);
+    },
+    "/swaps": () => swapStartBody("SOL_SOL", "b".repeat(64)),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = document.createElement("openreceive-checkout-quote-logged");
+  element.setAttribute("reference", "order-quote-fails");
+  element.setAttribute("prefix", "/openreceive");
+  const errors = [];
+  element.addEventListener("openreceive-error", (event) => errors.push(event.detail.error));
+  document.body.appendChild(element);
+
+  try {
+    (await coinTile(element, "SOL")).click();
+    await untilLocal(() => logs.some((entry) => entry.event === "swap.quote.failed"), {
+      label: "the quote failure in the log",
+    });
+    await flush(2);
+    const root = element.shadowRoot;
+    assert.equal(estimateText(element), "", "no amount, and nothing in its place");
+    assert.equal(root.querySelector('[part="method-estimate"] [part="spinner"]'), null);
+    assert.equal(root.querySelector('[role="alert"]'), null, "the payer is shown no error");
+    assert.doesNotMatch(root.textContent, /unreachable|Try again|Could not/);
+    assert.deepEqual(errors, [], "a failed quote is not a host error either");
+    const failed = logs.filter((entry) => entry.event === "swap.quote.failed");
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0].level, "warn");
+    assert.equal(failed[0].pay_in_asset, "SOL_SOL");
+    assert.equal(failed[0].status, 503);
+    assert.equal(failed[0].error_message, PROVIDER_UNREACHABLE.body.message);
+
+    const next = await continueButton(element, "SOL_SOL");
+    assert.equal(next.disabled, false);
+    assert.equal(next.textContent.trim(), "Continue");
+    assert.equal(fetchStub.pathCount("/swaps"), 0);
+    next.click();
+    await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 1);
+  } finally {
+    element.remove();
+  }
+});
+
+test("a quote that says out of range disables Continue with the limit message", async () => {
+  const { swapOptionLimitMessage } = await import("../packages/js/browser/src/headless.ts");
+  const outOfRange = {
+    available: false,
+    unavailable_reason: "amount_too_small",
+    unavailable_message: "This invoice is below the provider minimum.",
+    minimum_invoice_amount_msats: 9_000_000,
+  };
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-quote-range", "SOL_SOL"),
+    "/swaps/quote": (body) => swapQuoteBody(body.pay_in_asset, outOfRange),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ reference: "order-quote-range", prefix: "/openreceive" });
+
+  try {
+    (await coinTile(element, "SOL")).click();
+    const blocked = await untilLocal(
+      () => {
+        const button = element.shadowRoot?.querySelector("[data-or-picker-continue]");
+        return button?.disabled === true && button.textContent.trim() !== "Continue" && button;
+      },
+      { label: "Continue disabled by the quote" },
+    );
+    // The same words a catalog entry out of range puts on a tile.
+    const expected = swapOptionLimitMessage(
+      { label: "SOL", ...outOfRange },
+      { amount_msats: 5_000_000 },
+    );
+    assert.match(expected, /^Minimum amount /);
+    assert.equal(blocked.textContent.trim(), expected);
+    assert.equal(blocked.getAttribute("aria-disabled"), "true");
+    assert.equal(blocked.hasAttribute("data-or-swap-start"), false, "nothing to start");
+    assert.equal(estimateText(element), "");
+    blocked.click();
+    await flush(2);
+    assert.equal(fetchStub.pathCount("/swaps"), 0);
+  } finally {
+    element.remove();
+  }
+});
+
+test("looking at every coin and every network starts no swap", async () => {
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAssets("order-window-shopping", FOUR_COINS),
+    "/swaps/quote": (body) =>
+      swapQuoteBody(body.pay_in_asset, { pay_amount: PAY_AMOUNTS[body.pay_in_asset] }),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ reference: "order-window-shopping", prefix: "/openreceive" });
+
+  try {
+    await coinTile(element, "SOL");
+    const labels = [...element.shadowRoot.querySelectorAll("[data-or-picker-select]")].map((tile) =>
+      tile.getAttribute("data-or-picker-select").slice("swap:".length),
+    );
+    assert.deepEqual(labels, ["USDT", "USDC", "SOL", "ETH"]);
+    // Twice round, the way a payer comparing prices does it.
+    for (const label of [...labels, ...labels]) {
+      (await coinTile(element, label)).click();
+      const networks = [...element.shadowRoot.querySelectorAll("[data-or-swap-network-value]")]
+        // The review step is drawn twice (narrow and wide); one copy is enough.
+        .map((button) => button.getAttribute("data-or-swap-network-value"))
+        .filter((value, index, all) => all.indexOf(value) === index);
+      for (const payInAsset of networks) (await networkButton(element, payInAsset)).click();
+      await flush(2);
+    }
+    await untilLocal(() => estimateText(element) === "≈ 0.0031 ETH", { label: "the last amount" });
+    assert.deepEqual(
+      [...new Set(quoteRequests(fetchStub).map((call) => call.body.pay_in_asset))].sort(),
+      Object.keys(PAY_AMOUNTS).sort(),
+      "every coin and network was priced",
+    );
+    assert.equal(fetchStub.pathCount("/swaps"), 0, "and not one provider order was opened");
+    assert.doesNotMatch(element.shadowRoot.innerHTML, /SoLDeposit|Preparing payment address/);
+  } finally {
+    element.remove();
+  }
+});
+
+// The amount arrives a moment after the click, and the element rebuilds its
+// shadow tree to show it. A payer who had already tabbed to Continue must
+// still be on Continue, or the Enter they press next goes nowhere.
+test("the amount arriving does not take keyboard focus off Continue", async () => {
+  const quote = deferred();
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-quote-focus", "SOL_SOL"),
+    "/swaps/quote": () => quote.promise,
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ reference: "order-quote-focus", prefix: "/openreceive" });
+
+  try {
+    (await coinTile(element, "SOL")).click();
+    const before = await continueButton(element, "SOL_SOL");
+    // While the quote is out: a spinner in the amount line, Continue usable.
+    const line = element.shadowRoot.querySelector('[part="method-estimate"]');
+    assert.equal(line.getAttribute("aria-busy"), "true");
+    assert.ok(line.querySelector('[part="spinner"]'));
+    before.focus();
+    assert.equal(element.shadowRoot.activeElement, before);
+
+    quote.resolve(swapQuoteBody("SOL_SOL", { pay_amount: "0.0421" }));
+    await untilLocal(() => estimateText(element) === "≈ 0.0421 SOL", { label: "the SOL amount" });
+    const after = element.shadowRoot.activeElement;
+    assert.notEqual(after, before, "the tree was rebuilt");
+    assert.ok(after?.hasAttribute("data-or-picker-continue"), "focus is on the new Continue");
+    assert.equal(after.getAttribute("data-or-swap-start"), "SOL_SOL");
   } finally {
     element.remove();
   }
@@ -1112,11 +1446,7 @@ test("retrying a failed swap start replaces the error with the preparing spinner
   const element = mount({ reference: "order-swap-retry", prefix: "/openreceive" });
 
   try {
-    const asset = await untilLocal(
-      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
-      { label: "SOL swap-start button" },
-    );
-    asset.click();
+    await payWithCoin(element, "SOL", "SOL_SOL");
     await untilLocal(
       () => element.shadowRoot?.innerHTML.includes(PROVIDER_UNREACHABLE.body.message),
       {
@@ -1174,11 +1504,7 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
   const element = mount({ reference: "order-two-coins", prefix: "/openreceive" });
 
   try {
-    const sol = await untilLocal(
-      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
-      { label: "SOL swap-start button" },
-    );
-    sol.click();
+    await payWithCoin(element, "SOL", "SOL_SOL");
     await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
       label: "SOL deposit panel",
     });
@@ -1187,11 +1513,7 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
       { label: "switch-payment-method breadcrumb" },
     );
     back.click();
-    const eth = await untilLocal(
-      () => element.shadowRoot?.querySelector('[data-or-swap-start="ETH_ETH"]'),
-      { label: "ETH swap-start button" },
-    );
-    eth.click();
+    await payWithCoin(element, "ETH", "ETH_ETH");
     await untilLocal(
       () => element.shadowRoot?.innerHTML.includes(PROVIDER_UNREACHABLE.body.message),
       {
@@ -1648,11 +1970,13 @@ for (const delayed of ["quote", "create"])
     globalThis.fetch = fetchStub;
     const element = mount({ reference: "A", prefix: "/openreceive" });
     try {
-      (
-        await untilLocal(() => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'))
-      ).click();
-      await untilLocal(
-        () => fetchStub.pathCount(delayed === "quote" ? "/swaps/quote" : "/swaps") === 1,
+      // The tile asks for the amount and Continue's start quotes again, so the
+      // held quote is held twice: once for the picker, once for the start.
+      await payWithCoin(element, "SOL", "SOL_SOL");
+      await untilLocal(() =>
+        delayed === "quote"
+          ? fetchStub.pathCount("/swaps/quote") === 2
+          : fetchStub.pathCount("/swaps") === 1,
       );
       element.setAttribute("reference", "B");
       await untilLocal(() =>

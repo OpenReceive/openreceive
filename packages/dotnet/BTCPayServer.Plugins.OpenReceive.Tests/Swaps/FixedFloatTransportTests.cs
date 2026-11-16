@@ -86,6 +86,86 @@ public class FixedFloatTransportTests
         Assert.Equal(SwapTransportFailure.RateLimited, SwapTransportFailures.Classify(error));
     }
 
+    [Theory]
+    // Lightning Swap answers a refused call with Retry-After and a body.
+    [InlineData("17", "{\"code\":429,\"msg\":\"Rate limit\",\"data\":null}", 17d)]
+    [InlineData(null, "{\"code\":429,\"msg\":\"Rate limit\",\"data\":{\"errors\":[\"RATE_LIMIT\"],\"retry_after\":41}}", 41d)]
+    [InlineData(null, "{\"code\":1,\"msg\":\"Too many requests\"}", null)]
+    [InlineData(null, "", null)]
+    // The header wins over the body, also when it says zero (which the guard reads as no wait named).
+    [InlineData("17", "{\"code\":429,\"data\":{\"retry_after\":41}}", 17d)]
+    [InlineData("0", "{\"code\":429,\"data\":{\"retry_after\":41}}", 0d)]
+    // Whole seconds only: a date, a fraction, a sign or ten digits is not the header's wait.
+    [InlineData("Wed, 21 Oct 2026 07:28:00 GMT", "{\"code\":429,\"data\":{\"retry_after\":2.5}}", 2.5d)]
+    [InlineData("17.5", "{\"code\":429,\"data\":null}", null)]
+    [InlineData("+17", "{\"code\":429,\"data\":null}", null)]
+    [InlineData("1234567890", "{\"code\":429,\"data\":null}", null)]
+    [InlineData("soon", "{\"code\":429,\"data\":[41]}", null)]
+    // The body's wait is a positive number, not a string and not zero or less.
+    [InlineData(null, "{\"code\":429,\"data\":{\"retry_after\":\"41\"}}", null)]
+    [InlineData(null, "{\"code\":429,\"data\":{\"retry_after\":0}}", null)]
+    [InlineData(null, "{\"code\":429,\"data\":{\"retry_after\":-5}}", null)]
+    [InlineData(null, "{\"code\":429,\"data\":{\"retry_after\":true}}", null)]
+    public async Task A_429_hands_the_guard_the_path_and_the_providers_own_wait(string? retryAfter, string body, double? expected)
+    {
+        var handler = new FakeSwapProviderHandler(_ =>
+        {
+            var response = FakeSwapProviderHandler.Json(body, HttpStatusCode.TooManyRequests);
+            if (retryAfter is not null) Assert.True(response.Headers.TryAddWithoutValidation("Retry-After", retryAfter));
+            return response;
+        });
+        var transport = Transport(handler);
+        var budget = new RecordingWeightBudget();
+        transport.AttachWeightBudget(budget);
+
+        var error = await Assert.ThrowsAsync<FixedFloatApiException>(() => transport.PostAsync("order", new JsonObject(), CancellationToken.None));
+
+        Assert.Equal(FixedFloatApiErrorKind.RateLimited, error.Kind);
+        Assert.Equal(new (string?, double?)[] { ("order", expected) }, budget.RateLimited);
+    }
+
+    [Fact]
+    public async Task A_429s_own_wait_is_the_stand_off_the_guard_keeps()
+    {
+        var handler = new FakeSwapProviderHandler(_ =>
+        {
+            var response = FakeSwapProviderHandler.Json("""{"code":429,"msg":"Rate limit","data":null}""", HttpStatusCode.TooManyRequests);
+            response.Headers.Add("Retry-After", "17");
+            return response;
+        });
+        var transport = Transport(handler);
+        var clock = 1_000L;
+        transport.AttachWeightBudget(new SwapProviderWeightBudget("ls-test", () => clock, SwapProviderLimits.LightningSwap));
+
+        await Assert.ThrowsAsync<FixedFloatApiException>(() => transport.PostAsync("create", new JsonObject(), CancellationToken.None));
+
+        // Creates stand off for the 17 seconds the provider named; nothing was sent for the refused ones.
+        clock = 1_016;
+        var denied = await Assert.ThrowsAsync<SwapWeightBudgetException>(() => transport.PostAsync("create", new JsonObject(), CancellationToken.None));
+        Assert.Equal(SwapProviderWeightBudget.ReasonBackoff, denied.Reason);
+        Assert.Equal(1_017, denied.BackoffUntil);
+        Assert.Throws<SwapWeightBudgetException>(() => transport.AssertAvailable("create"));
+        Assert.Single(handler.Requests);
+        clock = 1_017;
+        transport.AssertAvailable("create");
+    }
+
+    [Fact]
+    public void Asking_whether_a_path_is_available_uses_no_budget_and_sends_nothing()
+    {
+        var handler = new FakeSwapProviderHandler(_ => FakeSwapProviderHandler.Json("""{"code":0,"data":{}}"""));
+        var transport = Transport(handler);
+        transport.AssertAvailable("create"); // no guard attached: nothing to ask
+
+        var budget = new RecordingWeightBudget();
+        transport.AttachWeightBudget(budget);
+        transport.AssertAvailable("create");
+
+        Assert.Equal(new[] { "create" }, budget.Checked);
+        Assert.Empty(budget.Reserved);
+        Assert.Empty(handler.Requests);
+    }
+
     [Fact]
     public async Task Weight_budget_denial_short_circuits_before_any_request()
     {

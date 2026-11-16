@@ -38,6 +38,53 @@ module OpenReceive
         "#{hextets.first(4).join(':')}::/64"
       end
 
+      # Whether the limiter may count this client value as one payer. Ports
+      # the JS isPayerAddress; pinned across engines by
+      # spec/test-vectors/rate-limit-address.json.
+      #
+      # False for an IP address no payer on the internet can have: loopback,
+      # private (RFC 1918), carrier-shared (100.64.0.0/10), link-local, the
+      # unspecified address, and their IPv6 counterparts (::1, fc00::/7,
+      # fe80::/10). A server sees one of those only when the request came
+      # from its own proxy or network, so the address stands for every payer
+      # at once.
+      #
+      # True for every other IP, and for a value that is not an IP at all: a
+      # host that passes its own identifier (an account id, a session key)
+      # chose it deliberately. Accepts raw addresses and the buckets `bucket`
+      # returns.
+      def payer_address?(value)
+        address = value.to_s.strip.downcase
+        address = address.delete_prefix("::ffff:") if address.start_with?("::ffff:") && address.include?(".")
+        unless address.include?(":")
+          octets = ipv4_octets(address)
+          return true if octets.nil?
+          first, second = octets
+          return !(
+            first.zero? ||
+            first == 10 ||
+            first == 127 ||
+            (first == 100 && second.between?(64, 127)) ||
+            (first == 169 && second == 254) ||
+            (first == 172 && second.between?(16, 31)) ||
+            (first == 192 && second == 168)
+          )
+        end
+        without_zone = address.split("%", -1).first || ""
+        hextets = expand_ipv6(without_zone.delete_suffix("/64"))
+        return true if hextets.nil?
+        # :: and ::1 (a /64 bucket of either is all zeros in its first four groups).
+        return false if hextets.first(7).all?("0") && /\A[01]\z/.match?(hextets[7])
+        leading = hextets.first.to_i(16)
+        !((leading & 0xfe00) == 0xfc00 || (leading & 0xffc0) == 0xfe80)
+      end
+
+      def ipv4_octets(value)
+        return nil unless /\A\d{1,3}(\.\d{1,3}){3}\z/.match?(value)
+        octets = value.split(".").map { |octet| Integer(octet, 10) }
+        octets.any? { |octet| octet > 255 } ? nil : octets
+      end
+
       def expand_ipv6(value)
         parts = value.split("::", -1)
         return nil if parts.length > 2 || value.empty?
