@@ -242,7 +242,7 @@ GEM
     protocol-url (0.18.0)
     protocol-websocket (0.21.1)
       protocol-http (~> 0.2)
-    puma (8.0.2)
+    puma (8.1.1)
       nio4r (~> 2.0)
     racc (1.8.1)
     rack (3.2.8)
