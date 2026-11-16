@@ -385,6 +385,23 @@ export function assetButtonClasses(options: {
   return `${base} ${assetActiveClassByAccent[options.accent]}`;
 }
 
+/**
+ * From this many characters on, the picker's amount line is drawn in the
+ * smaller of its two sizes. "≈ 7.48 USDT · Solana" is 20 and keeps full size;
+ * "≈ 1250.12 USDT · Ethereum" is 25.
+ */
+const LONG_ESTIMATE_CHARACTERS = 24;
+
+/**
+ * The classes for the picker's amount line, by how long the line is. Both
+ * renderers call this, so they cannot size the same line differently.
+ */
+export function methodEstimateClasses(amountText: string | undefined): string {
+  return amountText !== undefined && amountText.length >= LONG_ESTIMATE_CHARACTERS
+    ? orClasses.methodEstimateLong
+    : orClasses.methodEstimate;
+}
+
 export function networkButtonClasses(options: {
   readonly accent: PaymentAccentId;
   readonly selected: boolean;

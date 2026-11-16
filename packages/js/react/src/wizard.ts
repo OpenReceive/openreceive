@@ -22,6 +22,7 @@ import {
   getWizardEmptyMessage,
   loadPayTutorialImages,
   type MethodGridGroupDisplay,
+  methodEstimateClasses,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,
@@ -779,7 +780,7 @@ function renderCompactPaymentMethodSelector(options: {
       {
         "aria-live": "polite",
         "aria-busy": estimateWaiting ? "true" : undefined,
-        className: orClasses.methodEstimate,
+        className: methodEstimateClasses(continueTarget?.amountText),
       },
       continueTarget?.amountText ??
         (estimateWaiting

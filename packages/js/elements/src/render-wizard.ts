@@ -23,6 +23,7 @@ import {
   getWizardEmptyMessage,
   type MethodGridContinueDisplay,
   type MethodGridGroupDisplay,
+  methodEstimateClasses,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,
@@ -573,7 +574,7 @@ function renderElementSwapReviewHtml(
  */
 function renderElementMethodEstimateHtml(target: MethodGridContinueDisplay | undefined): string {
   const waiting = target?.amountText === undefined && target?.quoting === true;
-  return `<p part="method-estimate" aria-live="polite"${waiting ? ' aria-busy="true"' : ""} class="${orClasses.methodEstimate}">${
+  return `<p part="method-estimate" aria-live="polite"${waiting ? ' aria-busy="true"' : ""} class="${methodEstimateClasses(target?.amountText)}">${
     target?.amountText !== undefined
       ? escapeHtml(target.amountText)
       : waiting

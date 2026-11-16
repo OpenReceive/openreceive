@@ -10,6 +10,8 @@ import {
   buildMethodGridEntries,
   checkoutLabels,
   createMethodGridDisplay,
+  methodEstimateClasses,
+  orClasses,
   paymentMethods,
   resolveWizardSelection,
   swapPickerKey,
@@ -461,4 +463,21 @@ test("a memo rail carries the memo as a row, never as prose in a banner", () => 
     [checkoutLabels.swapCopyAddress, checkoutLabels.swapCopyMemo, checkoutLabels.swapCopyAmount],
   );
   assert.equal(display.copyRows[1].value, "1234567");
+});
+
+// The amount line holds one line of height so Continue does not move. A long
+// line in a wide system font (DejaVu Sans) needed two, so from 24 characters
+// on it is drawn in the smaller size. One helper decides, for both renderers.
+test("a long amount line is drawn in the smaller size, an ordinary one is not", () => {
+  assert.equal(methodEstimateClasses("≈ 7.48 USDT · Solana"), orClasses.methodEstimate);
+  assert.equal(methodEstimateClasses("≈ 0.04213 SOL"), orClasses.methodEstimate);
+  assert.equal(methodEstimateClasses("≈ 12.50 USDT · Ethereum"), orClasses.methodEstimate);
+  assert.equal(methodEstimateClasses("≈ 125.12 USDT · Ethereum"), orClasses.methodEstimateLong);
+  assert.equal(methodEstimateClasses("≈ 1250.12 USDT · Ethereum"), orClasses.methodEstimateLong);
+  // No amount yet: the empty line and the spinner keep the ordinary box.
+  assert.equal(methodEstimateClasses(undefined), orClasses.methodEstimate);
+  assert.notEqual(orClasses.methodEstimateLong, orClasses.methodEstimate);
+  // Both hold the same one line of height: only the type size differs.
+  const withoutSize = (classes) => classes.replace(/text-\[length:[^\]]+\]/, "");
+  assert.equal(withoutSize(orClasses.methodEstimateLong), withoutSize(orClasses.methodEstimate));
 });

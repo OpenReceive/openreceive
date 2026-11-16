@@ -39,14 +39,27 @@ const ETHEREUM_LINE = "≈ 1250.12 USDT · Ethereum";
  * its own tile when the tiles are in one column, under the whole grid
  * otherwise. 300px is a 320px phone with a little page margin, the narrowest
  * place the amount line has to stay on one line.
+ *
+ * The third is the first again in a wide system font. DejaVu Sans is the
+ * default sans-serif on many Linux desktops and on the CI runners, and in it
+ * the longest line here is a third wider than in Noto Sans or San Francisco.
+ * It wrapped, and Continue dropped a line when the payer switched network: a
+ * failure that only the CI machine's fonts showed. Naming the font makes every
+ * machine that has it run the case; one that lacks it falls back to its own
+ * sans-serif, which the first layout already covers.
  */
 const LAYOUTS = [
   { name: "one column of tiles", width: 300 },
   { name: "a grid of tiles", width: 620 },
+  {
+    name: "one column of tiles in a wide system font",
+    width: 300,
+    font: '"DejaVu Sans", sans-serif',
+  },
 ];
 
 /** A lab whose quote answers only when the test says so. */
-async function visit(browser, width) {
+async function visit(browser, { width, font }) {
   const lab = await createLab({ swapPayAmounts: PAY_AMOUNTS });
   lab.stack.addOrder(REFERENCE, 21_000);
   const tab = await openTab(browser, lab, { viewport: { width: width + 40, height: 1200 } });
@@ -57,7 +70,7 @@ async function visit(browser, width) {
   await tab.page.goto(
     lab.page(
       documentHtml({
-        body: `<div style="width: ${width}px">${checkoutTag({ reference: REFERENCE })}</div>
+        body: `${font === undefined ? "" : `<style>openreceive-checkout { font-family: ${font}; }</style>`}<div style="width: ${width}px">${checkoutTag({ reference: REFERENCE })}</div>
 <script type="module" src="${STANDALONE_SCRIPT}"></script>`,
       }),
     ),
@@ -103,7 +116,7 @@ for (const engine of requestedEngines()) {
     test(`${engine}, ${layout.name}: a coin tile prices the order, starts nothing, and Continue stays put`, async (t) => {
       const { browser, skip } = await launchEngine(engine);
       if (skip !== undefined) return t.skip(skip);
-      const page = await visit(browser, layout.width);
+      const page = await visit(browser, layout);
       const { lab, checkout, next, estimate } = page;
       try {
         await checkout.getByRole("button", { name: /^SOL/ }).click();
@@ -161,7 +174,7 @@ for (const engine of requestedEngines()) {
     test(`${engine}, ${layout.name}: choosing a network fills the amount in without moving Continue`, async (t) => {
       const { browser, skip } = await launchEngine(engine);
       if (skip !== undefined) return t.skip(skip);
-      const page = await visit(browser, layout.width);
+      const page = await visit(browser, layout);
       const { lab, checkout, next, estimate } = page;
       const network = (name) =>
         checkout

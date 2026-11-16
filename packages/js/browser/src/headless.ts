@@ -302,6 +302,7 @@ export {
   getSwapOptionIconId,
   getSwapRefundFormError,
   getWizardEmptyMessage,
+  methodEstimateClasses,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,

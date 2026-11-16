@@ -166,6 +166,7 @@
         "loadPayTutorialImages",
         "mergeAttemptIntoCheckout",
         "mergeAttemptIntoSnapshot",
+        "methodEstimateClasses",
         "networkButtonClasses",
         "networkCheckClasses",
         "networkMobileRevealClasses",

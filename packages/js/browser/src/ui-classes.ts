@@ -147,6 +147,16 @@ export const orClasses = {
    */
   methodEstimate:
     "m-0 flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-[length:clamp(0.875rem,6.5cqi,1.125rem)] leading-7 font-bold tabular-nums text-base-content",
+  /**
+   * The same line when it is long ("≈ 1250.12 USDT · Ethereum"): the type
+   * shrinks sooner, so the line still fits in a wide system font. In DejaVu
+   * Sans, the default on many Linux desktops, those 25 characters are 282px
+   * at full size and the line's box on a 320px phone is 233px; it wrapped, and
+   * Continue dropped a line when the payer switched network. Chosen by
+   * `methodEstimateClasses`; an ordinary line keeps `methodEstimate`.
+   */
+  methodEstimateLong:
+    "m-0 flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-[length:clamp(0.75rem,5.6cqi,1.125rem)] leading-7 font-bold tabular-nums text-base-content",
   /** The amount line's spinner while its quote is in flight: small and quiet. */
   methodEstimateSpinner: "loading loading-spinner loading-sm shrink-0 text-base-content/60",
   methodTile: "grid h-full min-w-0 content-start gap-0.5",

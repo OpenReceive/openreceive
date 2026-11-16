@@ -86,6 +86,14 @@ Now every coin tile only selects, and the swap starts on Continue:
 The amount is marked `≈`: it is the rate feed's figure until the order exists.
 A failed quote is silent to the payer and logged as `swap.quote.failed`.
 
+The amount line holds one line of height, so its text must fit one line. It
+has two sizes: `methodEstimateClasses(amountText)` gives a line of 24
+characters or more the smaller one. `≈ 1250.12 USDT · Ethereum` in DejaVu Sans,
+the default sans-serif on many Linux desktops and on the CI runners, did not
+fit a 320px phone at the ordinary size, and Continue dropped a line when the
+payer switched network. `tests/real-browser-price-first.test.mjs` runs that
+font by name.
+
 The element rebuilds its shadow tree when the quote lands. It hands keyboard
 focus back to the picker control that held it (`capturePickerFocus` in
 `define-elements.ts`), and the amount line keeps its height while empty, so
