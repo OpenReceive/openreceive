@@ -14,7 +14,7 @@
     "@angular/core": "^22.2.5",
     "@angular/platform-browser": "^22.2.5",
     "@mantine/core": "^9.7.3",
-    "@mantine/hooks": "^9.7.3",
+    "@mantine/hooks": "^9.8.0",
     "@openreceive/angular": "0.4.35",
     "@openreceive/browser": "0.4.35",
     "@openreceive/core": "0.4.35",

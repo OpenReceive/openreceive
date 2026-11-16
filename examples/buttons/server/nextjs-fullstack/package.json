@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@mantine/core": "^9.7.3",
-    "@mantine/hooks": "^9.7.3",
+    "@mantine/hooks": "^9.8.0",
     "@openreceive/browser": "0.4.35",
     "@openreceive/core": "0.4.35",
     "@openreceive/http": "0.4.35",
