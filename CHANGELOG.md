@@ -64,6 +64,9 @@ Python, PHP) have no breaking API change.
   who sends 36 has not paid. The checkout UX guide states this as the best
   practice for a host's own page: take the order total off the page while a
   swap is waiting to be paid (`state.rail === "swap"`).
+- Changed (WooCommerce): the pay page hides WooCommerce's own order total
+  ("Total: $12.00", above the checkout) while a swap is on screen, for the
+  same reason. It is back on the method picker and with Lightning.
 - Changed (checkout): the estimate for a coin pegged to a currency (USDT,
   USDC) is to the cent, `≈ 7.48 USDT · Solana`, where it was four significant
   digits, `≈ 7.477 USDT · Solana`.
@@ -87,7 +90,8 @@ Python, PHP) have no breaking API change.
   anything is made for it.
 - Added (swaps): one `swap.provider.rate_limited` warning a minute in the
   server log says whether the library's own guard refused a swap call or the
-  provider answered 429, and until when.
+  provider answered 429, and until when. The WordPress plugin does not write
+  it yet: it gives the engine no logger.
 - Added (rate limiting): a refusal names the refused address, the count and
   the limit in the server log, at most once a minute, so a limit that is
   counting a load balancer or CDN can be seen for what it is.

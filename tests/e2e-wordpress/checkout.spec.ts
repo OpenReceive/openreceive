@@ -79,6 +79,11 @@ for (const mode of ["blocks", "classic", "plain-permalinks", "swap-refund"] as c
     expect(abortedPrepares).toEqual([]);
     expect(orderPagePrepares).toHaveLength(1);
     if (mode === "swap-refund") {
+      // WooCommerce's own "Total" sits above the checkout. It is there on the
+      // method picker and gone on the deposit screen: a swap screen shows one
+      // amount, the one to send.
+      const orderTotal = page.locator("ul.order_details li.total");
+      await expect(orderTotal).toBeVisible();
       await checkout.getByRole("button", { name: /USDT/ }).click();
       await checkout
         .getByRole("group", { name: /Choose USDT network/ })
@@ -89,6 +94,7 @@ for (const mode of ["blocks", "classic", "plain-permalinks", "swap-refund"] as c
       const { swap } = await (await invoiceResponse).json();
       expect(swap.checkout.payment_hash).toMatch(/^[0-9a-f]{64}$/);
       await expect(checkout.getByText(/Pay [\d.]+ USDT to this address/)).toBeVisible();
+      await expect(orderTotal).toBeHidden();
       const returnUrl = page.url();
       await page.request.post("/?rest_route=/openreceive/testkit/swap-step", {
         data: { pay_in_asset: "USDT_TRON", state: "refund_required" },

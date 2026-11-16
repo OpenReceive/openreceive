@@ -875,7 +875,7 @@ const IDS = {
   words: "payer_words",
   failure: "payer_invoice_failure_has_way_forward",
   recovers: "payer_recovers_after_try_again",
-  swapTotal: "payer_swap_total_matches",
+  swapOneAmount: "payer_swap_one_amount",
   swapFailure: "payer_swap_failure_has_way_forward",
   memo: "payer_invoice_memo",
   qr: "payer_qr_matches_invoice",
@@ -1155,12 +1155,20 @@ export async function chooseSwap(page: Page): Promise<void> {
 export const continueButton = (page: Page): Locator =>
   page.getByRole("button", { name: /^Continue$/ }).filter({ visible: true });
 
-/** e: a USDT-on-Solana swap on product 2; the breakdown's total is the shop's price. */
-async function swapTotal(browser: Browser, target: PayerTarget, walk: Walk): Promise<Check> {
+/**
+ * e: a USDT-on-Solana swap on product 2; the deposit screen shows one amount.
+ *
+ * Until 0.5.0 this check was `payer_swap_total_matches` and wanted the
+ * breakdown's first row to read Total and show the shop's price. That row is
+ * gone on purpose: "$36.00" beside "37.04 USDC" is a second figure a payer can
+ * send, and 36 does not pay the order. The check now holds the checkout to the
+ * opposite: it says what to send, and the shop's price is not in it.
+ */
+async function swapOneAmount(browser: Browser, target: PayerTarget, walk: Walk): Promise<Check> {
   const outcome = new Outcome([
     {
-      id: IDS.swapTotal,
-      summary: `The ${SWAP_COIN} on ${SWAP_NETWORK} breakdown's first row reads Total and shows the shop's own price, to the cent.`,
+      id: IDS.swapOneAmount,
+      summary: `The ${SWAP_COIN} on ${SWAP_NETWORK} deposit screen says what to send in a You send row, and shows neither a Total row nor the shop's own price.`,
     },
   ]);
   let stage = "the home page";
@@ -1181,25 +1189,34 @@ async function swapTotal(browser: Browser, target: PayerTarget, walk: Walk): Pro
       stage = "the swap's deposit screen";
       const rows = await waitFor(async () => {
         const found = await page.evaluate<[string, string][]>(DETAIL_ROWS);
-        return found.some(([label]) => /total/i.test(label)) ? found : undefined;
+        return found.some(([label]) => /you send/i.test(label)) ? found : undefined;
       }, SWAP_TIMEOUT_MS);
       if (rows === undefined) {
         reason = `no breakdown ${SWAP_TIMEOUT_MS / 1000} s after Continue (${describeCall(lastCall(api, CREATE_SWAP, from))})${await walk.stuck(page, "swap-no-breakdown")}`;
         return;
       }
       await walk.capture(page, "swap-deposit");
-      const [label, value] = rows.find(([name]) => /total/i.test(name)) ?? ["", ""];
-      const shown = parsePriceCents(value);
-      const wordingOk = !/cart/i.test(label);
+      const [label, value] = rows.find(([name]) => /you send/i.test(name)) ?? ["", ""];
+      const total = rows.find(([name]) => /total/i.test(name));
+      // The shop's price in any row of the checkout, as money: "$12.00".
+      const priced =
+        placed.price === undefined
+          ? undefined
+          : rows.find(([, text]) => parsePriceCents(text) === placed.price && /[$€£]/.test(text));
       outcome.record(
-        IDS.swapTotal,
-        placed.price !== undefined && shown === placed.price && wordingOk,
+        IDS.swapOneAmount,
+        value !== "" && total === undefined && priced === undefined,
         [
           `"${label}: ${value}"`,
           placed.price === undefined
             ? `no price beside product ${SWAP_PRODUCT}'s form on the home page`
             : `shop ${formatCents(placed.price)} ("${placed.listing}")`,
-          ...(wordingOk ? [] : ["the row names a cart, which a donation or an invoice has not"]),
+          ...(total === undefined
+            ? []
+            : [`a "${total[0]}: ${total[1]}" row is on the deposit screen`]),
+          ...(priced === undefined
+            ? []
+            : [`the shop's price is on the deposit screen ("${priced[0]}: ${priced[1]}")`]),
           `rows: ${rows
             .filter(([, text]) => text !== "")
             .map(([name, text]) => `${name} ${text}`)
@@ -1363,7 +1380,7 @@ export async function payerWalkChecks(target: PayerTarget): Promise<Check[]> {
     checks.push(...(await happyPath(browser, target, walk)));
     checks.push(...(await invoiceFailure(browser, target, walk)));
     if (target.swaps !== false) {
-      checks.push(await swapTotal(browser, target, walk));
+      checks.push(await swapOneAmount(browser, target, walk));
       checks.push(await swapFailure(browser, target, walk));
     }
     checks.push(...(await journeyChecks(browser, target, walk)));

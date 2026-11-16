@@ -116,6 +116,14 @@ paid, the page shows one amount, the one to send. Where it is implemented:
 - Every demo host hides its own order total while a swap is on screen:
   `OrderStrip`'s `hideTotal`, the stage footers, and the vanilla client's
   state listener. The packaged-checkout hosts read `state.rail === "swap"`.
+- The WooCommerce pay page hides WooCommerce's own "Total" list item while a
+  swap is on screen (`packages/php/wordpress/assets/receipt.js`, checked by
+  `tests/e2e-wordpress/checkout.spec.ts`). The pages the other shop plugins
+  put the checkout on (Easy Digital Downloads, PrestaShop, FOSSBilling,
+  Paymenter, Odoo, Medusa, Vendure) have NOT been checked for an order total
+  beside the checkout. Check each before calling the rule done there.
+- The trial payer walk holds a shop to it: `payer_swap_one_amount` fails when
+  the checkout's deposit screen has a Total row or the shop's price in it.
 - The picker's estimate for a pegged coin is to the cent
   (`formatEstimateAmount(amount, { cents: true })`, chosen by
   `swapPayInAssetPeggedTo`), so "≈ 7.477 USDT" never sits beside "$7.00".

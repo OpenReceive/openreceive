@@ -431,8 +431,10 @@ is saved in the report's `payer/` folder as a screenshot and its visible text.
   with the relay silent (through the interceptor), the checkout says what
   happened in a sentence and offers Try again, which gets an invoice once the
   relay is back.
-- `payer_swap_total_matches`: the USDT-on-Solana breakdown's first row reads
-  Total and shows the shop's price to the cent.
+- `payer_swap_one_amount`: the USDT-on-Solana deposit screen says what to send
+  in a You send row, and shows neither a Total row nor the shop's price. Until
+  0.5.0 this was `payer_swap_total_matches`, which wanted the Total row that
+  release removed.
 - `payer_swap_failure_has_way_forward`: the test provider refuses the create
   (`/__testkit/force-create-error`, scoped to this shop's containers by
   Docker's DNS), and the checkout says so with Try again.
