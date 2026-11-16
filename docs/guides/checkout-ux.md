@@ -120,7 +120,9 @@ packaged checkout and every demo follow it:
 
 - While a swap is waiting to be paid, take your own order total off the page:
   the cart summary, the header, the footer. `state.rail === "swap"` on the
-  checkout state says a swap is on screen. Show the total again on the receipt.
+  checkout state says the payer's current attempt is a swap. It stays that way
+  on the method picker they go back to, until they choose Lightning. Show the
+  total again on the receipt.
 - Do not add a "Total" row to the payment breakdown. `createSwapFeeBreakdown`
   returns `youSend`, `fee` and `feePercent`, and no total.
 - The transaction details follow the same rule. They carry no `Fiat` row while

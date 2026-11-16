@@ -65,8 +65,9 @@ Python, PHP) have no breaking API change.
   practice for a host's own page: take the order total off the page while a
   swap is waiting to be paid (`state.rail === "swap"`).
 - Changed (WooCommerce): the pay page hides WooCommerce's own order total
-  ("Total: $12.00", above the checkout) while a swap is on screen, for the
-  same reason. It is back on the method picker and with Lightning.
+  ("Total: $12.00", above the checkout) while the payer's current attempt is a
+  swap, for the same reason. That includes the method picker a payer goes back
+  to from a swap. The total returns when they choose Lightning.
 - Changed (checkout): the estimate for a coin pegged to a currency (USDT,
   USDC) is to the cent, `≈ 7.48 USDT · Solana`, where it was four significant
   digits, `≈ 7.477 USDT · Solana`.

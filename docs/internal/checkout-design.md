@@ -115,7 +115,11 @@ paid, the page shows one amount, the one to send. Where it is implemented:
   while a swap attempt is unsettled.
 - Every demo host hides its own order total while a swap is on screen:
   `OrderStrip`'s `hideTotal`, the stage footers, and the vanilla client's
-  state listener. The packaged-checkout hosts read `state.rail === "swap"`.
+  state listener. The packaged-checkout hosts read `state.rail === "swap"`,
+  which stays true on the method picker a payer goes back to from a swap, so
+  there the total returns only when they choose Lightning. The keystone stage
+  (Rails, Next.js) dismisses the attempt on the way back, so its total returns
+  with the picker.
 - The WooCommerce pay page hides WooCommerce's own "Total" list item while a
   swap is on screen (`packages/php/wordpress/assets/receipt.js`, checked by
   `tests/e2e-wordpress/checkout.spec.ts`). The pages the other shop plugins
