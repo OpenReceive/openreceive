@@ -41,6 +41,6 @@
   },
   "devDependencies": {
     "@openreceive/testkit": "0.4.35",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
