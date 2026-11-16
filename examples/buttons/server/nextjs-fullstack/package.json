@@ -9,8 +9,8 @@
     "start": "node ../../../../tools/run-with-root-env.mjs next start -H 0.0.0.0 -p ${PORT:-3002}"
   },
   "dependencies": {
-    "@mantine/core": "^9.7.3",
-    "@mantine/hooks": "^9.7.3",
+    "@mantine/core": "^9.8.0",
+    "@mantine/hooks": "^9.8.0",
     "@openreceive/browser": "0.4.35",
     "@openreceive/core": "0.4.35",
     "@openreceive/http": "0.4.35",
