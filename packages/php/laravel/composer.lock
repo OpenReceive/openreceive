@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c6668ea35f31502eb533c2cb702b0745",
+    "content-hash": "a3bfa2fc2c795b40e18568b2e6b8bfd3",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2727,11 +2727,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.35",
+            "version": "0.5.0",
             "dist": {
                 "type": "path",
                 "url": "../openreceive",
-                "reference": "d91e3a2d82d70890df8b5409e12e09471cebc156"
+                "reference": "405d4f9421e82ddf2739587859c70d7dd9e79e60"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
@@ -10394,15 +10394,15 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2"
     },
-    "platform-dev": {},
+    "platform-dev": [],
     "platform-overrides": {
         "php": "8.2.0"
     },
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

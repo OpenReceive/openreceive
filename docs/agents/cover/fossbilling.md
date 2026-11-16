@@ -1,4 +1,4 @@
-# OpenReceive agent directions: FOSSBilling (0.4.35)
+# OpenReceive agent directions: FOSSBilling (0.5.0)
 
 These directions are 25 KB. Download them with your shell and follow them from Step 0:
 

@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-fastify",
-  "version": "0.4.35",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,13 +13,13 @@
     "@fastify/static": "^10.1.11",
     "@mantine/core": "^9.8.0",
     "@mantine/hooks": "^9.8.0",
-    "@openreceive/browser": "0.4.35",
-    "@openreceive/core": "0.4.35",
-    "@openreceive/fastify": "0.4.35",
-    "@openreceive/http": "0.4.35",
-    "@openreceive/node": "0.4.35",
-    "@openreceive/provider-data": "0.4.35",
-    "@openreceive/react": "0.4.35",
+    "@openreceive/browser": "0.5.0",
+    "@openreceive/core": "0.5.0",
+    "@openreceive/fastify": "0.5.0",
+    "@openreceive/http": "0.5.0",
+    "@openreceive/node": "0.5.0",
+    "@openreceive/provider-data": "0.5.0",
+    "@openreceive/react": "0.5.0",
     "@tabler/icons-react": "^3.50.0",
     "@vitejs/plugin-react": "^6.2.1",
     "fastify": "^5.12.6",
@@ -31,7 +31,7 @@
     "vite": "^8.3.8"
   },
   "devDependencies": {
-    "@openreceive/testkit": "0.4.35",
+    "@openreceive/testkit": "0.5.0",
     "typescript": "^6.0.3"
   }
 }

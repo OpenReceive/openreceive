@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.0 - 2026-11-16
+
+No breaking API change in this gem. The breaking changes of 0.5.0 are in the
+JavaScript API a custom ("headless") checkout is built from; see the root
+changelog.
+
+- Changed (swaps): the request guard that keeps a site inside its swap
+  provider's API limits is now sized by the provider, read from the host in
+  the `LSC_URI_*` code. With Lightning Swap it allows 30 new swaps and 400 API
+  calls a minute per server process. FixedFloat, and any provider the library
+  does not know, keep three new swaps a minute, which every provider used to
+  be held to.
+- Changed (swaps): a provider's 429 is obeyed for the wait it names
+  (`Retry-After`, or `retry_after` in the response), not always for 60
+  seconds. With Lightning Swap a refused new swap stops new swaps only, for
+  that wait and five minutes at most; swaps already started keep updating.
+- Changed (swaps): a new swap the guard would refuse is now refused before
+  anything is made for it.
+- Added (swaps): one `swap.provider.rate_limited` warning a minute in the
+  server log says whether the library's own guard refused a swap call or the
+  provider answered 429, and until when.
+- Changed (rate limiting): the opt-in per-IP limit never counts a loopback or
+  private address. That address is the site's own proxy, not a payer. Such a
+  request is allowed and the log says so once. A site that relied on the limit
+  with a private client address must pass the payer's address; see the rate
+  limiting guide.
+- Added (rate limiting): a refusal names the refused address, the count and
+  the limit in the server log, at most once a minute.
+
 ## 0.4.35 - 2026-11-12
 
 Release with the complete 0.4.35 package family. No runtime changes from

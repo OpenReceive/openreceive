@@ -1,6 +1,6 @@
 {
   "contract_version": 11,
-  "release_version": "0.4.35",
+  "release_version": "0.5.0",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
   "how_to_update": "docs/internal/site-build.md",
@@ -526,7 +526,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "agent-directions",
-      "bytes": 42559
+      "bytes": 42558
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -536,7 +536,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "agent-directions",
-      "bytes": 42876
+      "bytes": 42875
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -546,7 +546,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "agent-directions",
-      "bytes": 44628
+      "bytes": 44627
     },
     {
       "path": "/guides/agent-directions-django",
@@ -556,7 +556,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "agent-directions",
-      "bytes": 49502
+      "bytes": 49501
     },
     {
       "path": "/guides/agent-directions-flask",
@@ -566,7 +566,7 @@
       "slug": "agent-directions-flask",
       "title": "Agent Directions: Flask",
       "category": "agent-directions",
-      "bytes": 47115
+      "bytes": 47114
     },
     {
       "path": "/guides/agent-directions-next",
@@ -576,7 +576,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "agent-directions",
-      "bytes": 45811
+      "bytes": 45810
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -586,7 +586,7 @@
       "slug": "agent-directions-nestjs",
       "title": "Agent Directions: NestJS",
       "category": "agent-directions",
-      "bytes": 44993
+      "bytes": 44992
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -596,7 +596,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "agent-directions",
-      "bytes": 45341
+      "bytes": 45340
     },
     {
       "path": "/guides/agent-directions-php",
@@ -606,7 +606,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "agent-directions",
-      "bytes": 44652
+      "bytes": 44651
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -616,7 +616,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "agent-directions",
-      "bytes": 48245
+      "bytes": 48244
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -626,7 +626,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "agent-directions",
-      "bytes": 15965
+      "bytes": 15964
     },
     {
       "path": "/guides/agent-directions-lovable",
@@ -636,7 +636,7 @@
       "slug": "agent-directions-lovable",
       "title": "Agent Directions: Lovable",
       "category": "agent-directions",
-      "bytes": 26721
+      "bytes": 26719
     },
     {
       "path": "/guides/agent-directions-bolt",
@@ -646,7 +646,7 @@
       "slug": "agent-directions-bolt",
       "title": "Agent Directions: Bolt",
       "category": "agent-directions",
-      "bytes": 28426
+      "bytes": 28423
     },
     {
       "path": "/guides/agent-directions-sveltekit",
@@ -656,7 +656,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "category": "agent-directions",
-      "bytes": 37951
+      "bytes": 37950
     },
     {
       "path": "/guides/agent-directions-nuxt",
@@ -666,7 +666,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "category": "agent-directions",
-      "bytes": 35630
+      "bytes": 35629
     },
     {
       "path": "/guides/agent-directions-astro",
@@ -676,7 +676,7 @@
       "slug": "agent-directions-astro",
       "title": "Agent Directions: Astro",
       "category": "agent-directions",
-      "bytes": 37290
+      "bytes": 37289
     },
     {
       "path": "/guides/agent-directions-react-router",
@@ -686,7 +686,7 @@
       "slug": "agent-directions-react-router",
       "title": "Agent Directions: React Router",
       "category": "agent-directions",
-      "bytes": 36295
+      "bytes": 36294
     },
     {
       "path": "/guides/agent-directions-tanstack-start",
@@ -696,7 +696,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "category": "agent-directions",
-      "bytes": 41441
+      "bytes": 41440
     },
     {
       "path": "/guides/agent-directions-mobile",
@@ -706,7 +706,7 @@
       "slug": "agent-directions-mobile",
       "title": "Agent Directions: Mobile Apps",
       "category": "agent-directions",
-      "bytes": 25890
+      "bytes": 25889
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -716,7 +716,7 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 10608
+      "bytes": 10604
     },
     {
       "path": "/guides/quickstart-edd",
@@ -726,7 +726,7 @@
       "slug": "quickstart-edd",
       "title": "Easy Digital Downloads Quickstart",
       "category": "quickstart",
-      "bytes": 8407
+      "bytes": 8404
     },
     {
       "path": "/guides/quickstart-paymenter",
@@ -736,7 +736,7 @@
       "slug": "quickstart-paymenter",
       "title": "Paymenter Quickstart",
       "category": "quickstart",
-      "bytes": 7123
+      "bytes": 7119
     },
     {
       "path": "/guides/quickstart-medusa",
@@ -766,7 +766,7 @@
       "slug": "quickstart-fossbilling",
       "title": "FOSSBilling Quickstart",
       "category": "quickstart",
-      "bytes": 11490
+      "bytes": 11482
     },
     {
       "path": "/guides/quickstart-prestashop",
@@ -776,7 +776,7 @@
       "slug": "quickstart-prestashop",
       "title": "PrestaShop Quickstart",
       "category": "quickstart",
-      "bytes": 11666
+      "bytes": 11658
     },
     {
       "path": "/guides/quickstart-odoo",
@@ -786,7 +786,7 @@
       "slug": "quickstart-odoo",
       "title": "Odoo Quickstart",
       "category": "quickstart",
-      "bytes": 9500
+      "bytes": 9493
     },
     {
       "path": "/guides/wordpress-hosting",
@@ -806,7 +806,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agent-directions",
-      "bytes": 23963
+      "bytes": 23955
     },
     {
       "path": "/guides/agent-directions-edd",
@@ -816,7 +816,7 @@
       "slug": "agent-directions-edd",
       "title": "Agent directions (Easy Digital Downloads)",
       "category": "agent-directions",
-      "bytes": 21222
+      "bytes": 21215
     },
     {
       "path": "/guides/agent-directions-paymenter",
@@ -826,7 +826,7 @@
       "slug": "agent-directions-paymenter",
       "title": "Agent directions (Paymenter)",
       "category": "agent-directions",
-      "bytes": 19230
+      "bytes": 19221
     },
     {
       "path": "/guides/agent-directions-medusa",
@@ -836,7 +836,7 @@
       "slug": "agent-directions-medusa",
       "title": "Agent directions (Medusa)",
       "category": "agent-directions",
-      "bytes": 21803
+      "bytes": 21802
     },
     {
       "path": "/guides/agent-directions-vendure",
@@ -846,7 +846,7 @@
       "slug": "agent-directions-vendure",
       "title": "Agent directions (Vendure)",
       "category": "agent-directions",
-      "bytes": 25454
+      "bytes": 25453
     },
     {
       "path": "/guides/agent-directions-fossbilling",
@@ -856,7 +856,7 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "category": "agent-directions",
-      "bytes": 25279
+      "bytes": 25266
     },
     {
       "path": "/guides/agent-directions-prestashop",
@@ -866,7 +866,7 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "category": "agent-directions",
-      "bytes": 25568
+      "bytes": 25555
     },
     {
       "path": "/guides/agent-directions-odoo",
@@ -876,7 +876,7 @@
       "slug": "agent-directions-odoo",
       "title": "Agent directions (Odoo)",
       "category": "agent-directions",
-      "bytes": 22793
+      "bytes": 22778
     },
     {
       "path": "/api_docs",
@@ -931,7 +931,7 @@
       "kind": "agent-directions-cover",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 311,
+      "bytes": 310,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/woocommerce/full.md"
@@ -942,7 +942,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 23963,
+      "bytes": 23955,
       "copy_button": true,
       "self_contained": true
     },
@@ -952,7 +952,7 @@
       "kind": "agent-directions-cover",
       "stack": "edd",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 314,
+      "bytes": 313,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/edd/full.md"
@@ -963,7 +963,7 @@
       "kind": "agent-directions-payload",
       "stack": "edd",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 21222,
+      "bytes": 21215,
       "copy_button": true,
       "self_contained": true
     },
@@ -973,7 +973,7 @@
       "kind": "agent-directions-cover",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 288,
+      "bytes": 287,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/node/full.md"
@@ -984,7 +984,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42559,
+      "bytes": 42558,
       "copy_button": true,
       "self_contained": true
     },
@@ -994,7 +994,7 @@
       "kind": "agent-directions-cover",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 291,
+      "bytes": 290,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/fastify/full.md"
@@ -1005,7 +1005,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42876,
+      "bytes": 42875,
       "copy_button": true,
       "self_contained": true
     },
@@ -1015,7 +1015,7 @@
       "kind": "agent-directions-cover",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 288,
+      "bytes": 287,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/next/full.md"
@@ -1026,7 +1026,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45811,
+      "bytes": 45810,
       "copy_button": true,
       "self_contained": true
     },
@@ -1036,7 +1036,7 @@
       "kind": "agent-directions-cover",
       "stack": "nestjs",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 289,
+      "bytes": 288,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/nestjs/full.md"
@@ -1047,7 +1047,7 @@
       "kind": "agent-directions-payload",
       "stack": "nestjs",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44993,
+      "bytes": 44992,
       "copy_button": true,
       "self_contained": true
     },
@@ -1057,7 +1057,7 @@
       "kind": "agent-directions-cover",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 291,
+      "bytes": 290,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/fastapi/full.md"
@@ -1068,7 +1068,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44628,
+      "bytes": 44627,
       "copy_button": true,
       "self_contained": true
     },
@@ -1078,7 +1078,7 @@
       "kind": "agent-directions-cover",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 289,
+      "bytes": 288,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/django/full.md"
@@ -1089,7 +1089,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 49502,
+      "bytes": 49501,
       "copy_button": true,
       "self_contained": true
     },
@@ -1099,7 +1099,7 @@
       "kind": "agent-directions-cover",
       "stack": "flask",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 287,
+      "bytes": 286,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/flask/full.md"
@@ -1110,7 +1110,7 @@
       "kind": "agent-directions-payload",
       "stack": "flask",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 47115,
+      "bytes": 47114,
       "copy_button": true,
       "self_contained": true
     },
@@ -1120,7 +1120,7 @@
       "kind": "agent-directions-cover",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 287,
+      "bytes": 286,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/rails/full.md"
@@ -1131,7 +1131,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45341,
+      "bytes": 45340,
       "copy_button": true,
       "self_contained": true
     },
@@ -1141,7 +1141,7 @@
       "kind": "agent-directions-cover",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 283,
+      "bytes": 282,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/php/full.md"
@@ -1152,7 +1152,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44652,
+      "bytes": 44651,
       "copy_button": true,
       "self_contained": true
     },
@@ -1162,7 +1162,7 @@
       "kind": "agent-directions-cover",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 291,
+      "bytes": 290,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/laravel/full.md"
@@ -1173,7 +1173,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 48245,
+      "bytes": 48244,
       "copy_button": true,
       "self_contained": true
     },
@@ -1183,7 +1183,7 @@
       "kind": "agent-directions-cover",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 296,
+      "bytes": 295,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/btcpay/full.md"
@@ -1194,7 +1194,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 15965,
+      "bytes": 15964,
       "copy_button": true,
       "self_contained": true
     },
@@ -1204,7 +1204,7 @@
       "kind": "agent-directions-cover",
       "stack": "paymenter",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 295,
+      "bytes": 294,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/paymenter/full.md"
@@ -1215,7 +1215,7 @@
       "kind": "agent-directions-payload",
       "stack": "paymenter",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 19230,
+      "bytes": 19221,
       "copy_button": true,
       "self_contained": true
     },
@@ -1225,7 +1225,7 @@
       "kind": "agent-directions-cover",
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 299,
+      "bytes": 298,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/fossbilling/full.md"
@@ -1236,7 +1236,7 @@
       "kind": "agent-directions-payload",
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25279,
+      "bytes": 25266,
       "copy_button": true,
       "self_contained": true
     },
@@ -1246,7 +1246,7 @@
       "kind": "agent-directions-cover",
       "stack": "prestashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 297,
+      "bytes": 296,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/prestashop/full.md"
@@ -1257,7 +1257,7 @@
       "kind": "agent-directions-payload",
       "stack": "prestashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25568,
+      "bytes": 25555,
       "copy_button": true,
       "self_contained": true
     },
@@ -1267,7 +1267,7 @@
       "kind": "agent-directions-cover",
       "stack": "odoo",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 285,
+      "bytes": 284,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/odoo/full.md"
@@ -1278,7 +1278,7 @@
       "kind": "agent-directions-payload",
       "stack": "odoo",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22793,
+      "bytes": 22778,
       "copy_button": true,
       "self_contained": true
     },
@@ -1288,7 +1288,7 @@
       "kind": "agent-directions-cover",
       "stack": "medusa",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 289,
+      "bytes": 288,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/medusa/full.md"
@@ -1299,7 +1299,7 @@
       "kind": "agent-directions-payload",
       "stack": "medusa",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 21803,
+      "bytes": 21802,
       "copy_button": true,
       "self_contained": true
     },
@@ -1309,7 +1309,7 @@
       "kind": "agent-directions-cover",
       "stack": "vendure",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 291,
+      "bytes": 290,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/vendure/full.md"
@@ -1320,7 +1320,7 @@
       "kind": "agent-directions-payload",
       "stack": "vendure",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25454,
+      "bytes": 25453,
       "copy_button": true,
       "self_contained": true
     },
@@ -1330,7 +1330,7 @@
       "kind": "agent-directions-cover",
       "stack": "lovable",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 258,
+      "bytes": 257,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/lovable/full.md"
@@ -1341,7 +1341,7 @@
       "kind": "agent-directions-payload",
       "stack": "lovable",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26721,
+      "bytes": 26719,
       "copy_button": true,
       "self_contained": true
     },
@@ -1351,7 +1351,7 @@
       "kind": "agent-directions-cover",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 295,
+      "bytes": 294,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/sveltekit/full.md"
@@ -1362,7 +1362,7 @@
       "kind": "agent-directions-payload",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37951,
+      "bytes": 37950,
       "copy_button": true,
       "self_contained": true
     },
@@ -1372,7 +1372,7 @@
       "kind": "agent-directions-cover",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 285,
+      "bytes": 284,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/nuxt/full.md"
@@ -1383,7 +1383,7 @@
       "kind": "agent-directions-payload",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35630,
+      "bytes": 35629,
       "copy_button": true,
       "self_contained": true
     },
@@ -1393,7 +1393,7 @@
       "kind": "agent-directions-cover",
       "stack": "astro",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 287,
+      "bytes": 286,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/astro/full.md"
@@ -1404,7 +1404,7 @@
       "kind": "agent-directions-payload",
       "stack": "astro",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37290,
+      "bytes": 37289,
       "copy_button": true,
       "self_contained": true
     },
@@ -1414,7 +1414,7 @@
       "kind": "agent-directions-cover",
       "stack": "react-router",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 301,
+      "bytes": 300,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/react-router/full.md"
@@ -1425,7 +1425,7 @@
       "kind": "agent-directions-payload",
       "stack": "react-router",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36295,
+      "bytes": 36294,
       "copy_button": true,
       "self_contained": true
     },
@@ -1435,7 +1435,7 @@
       "kind": "agent-directions-cover",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 305,
+      "bytes": 304,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/tanstack-start/full.md"
@@ -1446,7 +1446,7 @@
       "kind": "agent-directions-payload",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41441,
+      "bytes": 41440,
       "copy_button": true,
       "self_contained": true
     },
@@ -1456,7 +1456,7 @@
       "kind": "agent-directions-cover",
       "stack": "mobile",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 294,
+      "bytes": 293,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/mobile/full.md"
@@ -1467,7 +1467,7 @@
       "kind": "agent-directions-payload",
       "stack": "mobile",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25890,
+      "bytes": 25889,
       "copy_button": true,
       "self_contained": true
     },
@@ -1477,7 +1477,7 @@
       "kind": "agent-directions-cover",
       "stack": "bolt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 252,
+      "bytes": 251,
       "copy_button": false,
       "self_contained": false,
       "full_path": "/agent-directions/bolt/full.md"
@@ -1488,7 +1488,7 @@
       "kind": "agent-directions-payload",
       "stack": "bolt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 28426,
+      "bytes": 28423,
       "copy_button": true,
       "self_contained": true
     }
@@ -2958,7 +2958,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 10085
+        "bytes": 10084
       },
       {
         "path": "/openapi.yaml",

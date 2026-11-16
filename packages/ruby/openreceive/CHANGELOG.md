@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 - 2026-11-16
+
+Release with the complete 0.5.0 package family. No Ruby runtime changes
+from 0.4.35 in this gem. The changes of 0.5.0 are in `openreceive-server`,
+`openreceive-rails` and the JavaScript checkout packages.
+
 ## 0.4.35 - 2026-11-12
 
 Release with the complete 0.4.35 package family. No Ruby runtime changes

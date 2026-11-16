@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Bolt (0.4.35)
+# OpenReceive agent directions: Bolt (0.5.0)
 
 These directions are 28 KB. Fetch the full file and follow it from Step 0:
 

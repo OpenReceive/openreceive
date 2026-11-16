@@ -1,4 +1,4 @@
-# OpenReceive agent directions: PrestaShop (0.4.35)
+# OpenReceive agent directions: PrestaShop (0.5.0)
 
 These directions are 26 KB. Download them with your shell and follow them from Step 0:
 

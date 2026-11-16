@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The swap request guard is sized by the provider: Lightning Swap is allowed
+  30 new swaps and 400 API calls a minute, FixedFloat and unknown hosts keep
+  three new swaps a minute. A provider's 429 is obeyed for the wait it names,
+  and the poller returns to a refused order when that wait ends. Parity with
+  the shared `swap-provider-limits` vectors.
 - Wallet error normalization maps `NOT_SENT_ERROR`, `TRANSPORT_ERROR` and
   `INFO_UNAVAILABLE_ERROR` to `WALLET_UNAVAILABLE`, keeping parity with the
   shared `error-normalization` vectors.

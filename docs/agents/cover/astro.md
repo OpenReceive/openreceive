@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Astro (0.4.35)
+# OpenReceive agent directions: Astro (0.5.0)
 
 These directions are 37 KB. Download them with your shell and follow them from Step 0:
 

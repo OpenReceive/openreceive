@@ -1,6 +1,51 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-11-16
+
+**This release has breaking changes.** They are in the API a custom
+("headless") checkout is built from. A site that uses the packaged checkout
+needs no code change: the `<openreceive-checkout>` element, the React, Vue,
+Svelte and Angular components, the standalone checkout, and the WordPress,
+Paymenter, FOSSBilling, PrestaShop, Odoo, Medusa and Vendure plugins all
+follow the new behaviour by themselves. The server engines (Node, Ruby,
+Python, PHP) have no breaking API change.
+
+### Breaking changes (custom headless checkouts)
+
+- **A coin tile no longer starts a swap.** `resolveWizardSelection` returns
+  `review_swap` where it returned `start_swap`. A custom checkout that started
+  the swap on `start_swap` now starts none until it is changed. Call the
+  session's new `quoteSwap(payInAsset)` when a coin or network is chosen, show
+  `continueTarget.amountText`, and call `startSwap` only from Continue. The
+  headless checkout guide has the steps.
+- **`MethodGridGroupDisplay.startPayInAsset` is removed.** Read the asset to
+  start from `continueTarget.payInAsset`. `MethodGridContinueDisplay` gains
+  `amountText` and `quoting`.
+- **`SwapFeeBreakdown.cartTotal` and `checkoutLabels.cartTotal` are removed.**
+  A custom checkout that drew the "Total" row of the payment breakdown should
+  delete the row. A swap screen shows one amount, the one to send.
+- **Element markup:** a one-network coin tile no longer carries the
+  `data-or-swap-start` attribute. This matters only to a page or test that
+  reaches inside the element's own markup.
+
+### Changes that may need a change on your side
+
+- Changed (rate limiting): the opt-in per-IP limit never counts a loopback or
+  private address. That address is the site's own proxy, not a payer: counting
+  it put every payer in one bucket and refused the whole site's 61st checkout
+  of the hour. Such a request is allowed and the server log says so once. A
+  site that relied on the limit with a private client address must pass the
+  payer's address; see the rate limiting guide.
+- Fixed (Rails): the default client address, used by `config.rate_limiting`
+  and stored on each payment, now follows
+  `config.action_dispatch.trusted_proxies`. It was Rack's `request.ip`, which
+  ignores that setting, so an app behind a load balancer or CDN with a public
+  address counted the proxy as every payer even after listing it. When the
+  peer that connected is a trusted proxy, the address is the one it forwarded;
+  otherwise it is the peer itself, whatever the forwarding headers say. A
+  `config.client_ip` of your own still wins.
+
+### Everything else
 
 - Changed (checkout): choosing a coin now shows the amount to send before a
   swap is started. A click on SOL or ETH used to start the swap at once, so a
@@ -12,13 +57,6 @@
   SOL and ETH; USDT and USDC already had Continue. The estimate comes from the
   quote route, which starts nothing at the provider. The element and the React
   checkout behave the same.
-- Changed (headless, breaking): `resolveWizardSelection` returns `review_swap`
-  where it returned `start_swap`. A custom checkout should call the session's
-  new `quoteSwap(payInAsset)` when a coin or network is chosen, show
-  `continueTarget.amountText`, and call `startSwap` only from Continue.
-  `MethodGridGroupDisplay.startPayInAsset` is removed,
-  `MethodGridContinueDisplay` gains `amountText` and `quoting`, and in the
-  element's markup a one-network tile no longer carries `data-or-swap-start`.
 - Changed (checkout): a swap screen now shows one amount, the one to send.
   The payment breakdown no longer has a "Total" row, and the transaction
   details leave out the order's fiat amount until the payment has settled. A
@@ -26,9 +64,6 @@
   who sends 36 has not paid. The checkout UX guide states this as the best
   practice for a host's own page: take the order total off the page while a
   swap is waiting to be paid (`state.rail === "swap"`).
-- Changed (headless, breaking): `SwapFeeBreakdown.cartTotal` and
-  `checkoutLabels.cartTotal` are removed. A custom checkout that drew the
-  "Total" row should delete it.
 - Changed (checkout): the estimate for a coin pegged to a currency (USDT,
   USDC) is to the cent, `≈ 7.48 USDT · Solana`, where it was four significant
   digits, `≈ 7.477 USDT · Solana`.
@@ -53,12 +88,6 @@
 - Added (swaps): one `swap.provider.rate_limited` warning a minute in the
   server log says whether the library's own guard refused a swap call or the
   provider answered 429, and until when.
-- Changed (rate limiting): the opt-in per-IP limit never counts a loopback or
-  private address. That address is the site's own proxy, not a payer: counting
-  it put every payer in one bucket and refused the whole site's 61st checkout
-  of the hour. Such a request is allowed and the server log says so once. A
-  site that relied on the limit with a private client address must pass the
-  payer's address; see the rate limiting guide.
 - Added (rate limiting): a refusal names the refused address, the count and
   the limit in the server log, at most once a minute, so a limit that is
   counting a load balancer or CDN can be seen for what it is.
@@ -68,18 +97,14 @@
   payer's swap was sent to the provider and refused again. Only the wait is
   kept, not a count, so no new limit applies. The WordPress plugin also reads
   the provider's `Retry-After` header, which it used to drop.
-- Fixed (Rails): the default client address, used by `config.rate_limiting`
-  and stored on each payment, now follows
-  `config.action_dispatch.trusted_proxies`. It was Rack's `request.ip`, which
-  ignores that setting, so an app behind a load balancer or CDN with a public
-  address counted the proxy as every payer even after listing it. When the
-  peer that connected is a trusted proxy, the address is the one it forwarded;
-  otherwise it is the peer itself, whatever the forwarding headers say. A
-  `config.client_ip` of your own still wins.
 - Docs: the rate limiting guide says who limits what, how to check which
   address is counted before turning the limit on, where a per-user limit
   belongs, and what the swap provider's own limits are. It no longer says a
   swap quote calls the provider: a quote is answered from a cached price list.
+- Dependencies: development tools, the demo applications and the trial
+  fixtures only, among them shakapacker 10 and webpack-cli 7 in the Rails demo
+  and puma 8.1.1 and laravel/framework 12.72.0 for their advisories. No
+  dependency range of a published package changed.
 
 ## 0.4.35 - 2026-11-12
 

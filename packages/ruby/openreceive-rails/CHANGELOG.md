@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0 - 2026-11-16
+
+No breaking API change in this gem. A Rails app with a custom ("headless")
+checkout built on `@openreceive/browser/headless` must read the breaking
+changes in the root changelog: a coin tile no longer starts a swap, and the
+payment breakdown has no "Total" row. A page that renders the packaged checkout
+(`@openreceive/elements`, `@openreceive/react` or the standalone checkout of
+the same version) needs no change.
+
+- Fixed: the default client address, used by `config.rate_limiting` and stored
+  on each payment, now follows `config.action_dispatch.trusted_proxies`. It was
+  Rack's `request.ip`, which ignores that setting, so an app behind a load
+  balancer or CDN with a public address counted the proxy as every payer even
+  after listing it. When the peer that connected is a trusted proxy, the
+  address is the one it forwarded; otherwise it is the peer itself, whatever
+  the forwarding headers say. A `config.client_ip` of your own still wins. An
+  app behind a proxy will see different `client_ip` values on new payments.
+- Changed: the installer's initializer explains which address the per-IP
+  limit counts and when to list a proxy in
+  `config.action_dispatch.trusted_proxies`.
+- The swap request guard and the rate limiting changes of 0.5.0 come from
+  `openreceive-server`; see its changelog.
+
 ## 0.4.35 - 2026-11-12
 
 Release with the complete 0.4.35 package family. No Ruby runtime changes

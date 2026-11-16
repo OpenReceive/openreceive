@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 - 2026-11-16
+
+- No changes to the plugin's own code. Through `@openreceive/node` it picks
+  up the swap request guard sized by the provider: with Lightning Swap, 30 new
+  swaps and 400 API calls a minute per server process, where every provider
+  was held to three new swaps a minute. A provider's 429 is obeyed for the
+  wait it names.
+- The breaking changes of 0.5.0 are in the API a custom headless checkout is
+  built from. A storefront that renders the packaged checkout needs no change.
+
 ## 0.4.35 - 2026-11-12
 
 - No changes to the plugin's own code. Released with the 0.4.35 package
