@@ -1,6 +1,6 @@
 === OpenReceive – Crypto Payments for WooCommerce & Easy Digital Downloads (Bitcoin, USDT, USDC) ===
 Contributors: openreceive
-Tags: crypto, bitcoin, usdt, woocommerce, payment gateway
+Tags: bitcoin, lightning, usdt, accept-bitcoin, crypto-payments
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
