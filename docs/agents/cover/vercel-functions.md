@@ -1,0 +1,7 @@
+# OpenReceive agent directions: Vercel Functions (0.5.0)
+
+These directions are 36 KB. Download them with your shell and follow them from Step 0:
+
+    curl -fsSL https://openreceive.org/agent-directions/vercel-functions/full.md
+
+Do this before anything else. A web-fetch summary of them drops required steps.

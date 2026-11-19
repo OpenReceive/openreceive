@@ -108,6 +108,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/tanstack-start.md",
   "/agent-directions/mobile.md",
   "/agent-directions/bolt.md",
+  "/agent-directions/vercel-functions.md",
   "/agent-directions/paymenter.md",
   "/agent-directions/fossbilling.md",
   "/agent-directions/prestashop.md",

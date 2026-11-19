@@ -120,6 +120,10 @@ const GENERATED_REFERENCES = [
     source: "docs/agents/bolt.md",
     target: "skills/integrate-openreceive/references/bolt.md",
   },
+  {
+    source: "docs/agents/vercel-functions.md",
+    target: "skills/integrate-openreceive/references/vercel-functions.md",
+  },
 ];
 
 function mirrorRoots() {

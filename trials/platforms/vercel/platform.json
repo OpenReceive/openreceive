@@ -16,6 +16,7 @@
     "DATABASE_URL_UNPOOLED": "postgresql://shop:shop@postgres:5432/shop"
   },
   "deploy": "vercel",
+  "vercel_framework": "nextjs",
   "allowed_install_paths": ["npm"],
   "forbidden": [
     "git clone .*openreceive",

@@ -64,6 +64,7 @@
     "test:js": "node --import tsx --test tests/*.test.mjs",
     "test:e2e": "playwright test --config tests/e2e",
     "test:workers": "node --test tests/workers/*.test.mjs",
+    "test:vercel-functions": "node --test tests/vercel-functions/*.test.mjs",
     "test:vendure": "node --test tests/vendure/*.test.mjs",
     "test:medusa": "node --test tests/medusa/*.test.mjs",
     "test:supabase": "node --import tsx --test --test-concurrency=1 tests/supabase/*.test.mjs",

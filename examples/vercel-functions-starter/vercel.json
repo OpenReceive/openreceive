@@ -1,0 +1,8 @@
+{
+  "framework": null,
+  "rewrites": [
+    { "source": "/openreceive/:path*", "destination": "/api/openreceive" },
+    { "source": "/checkout/:id", "destination": "/api/checkout" }
+  ],
+  "functions": { "api/openreceive.js": { "maxDuration": 30 } }
+}

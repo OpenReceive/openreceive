@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 6323
+      "bytes": 6557
     },
     {
       "path": "/guides/quickstart-node",
@@ -93,8 +93,18 @@
       "slug": "vercel",
       "title": "Bitcoin Checkout on Vercel and v0",
       "category": "guide",
-      "bytes": 10325,
+      "bytes": 10480,
       "assets_base": "/assets/"
+    },
+    {
+      "path": "/guides/vercel-functions",
+      "markdown_path": "/guides/vercel-functions.md",
+      "source": "docs/guides/vercel-functions.md",
+      "kind": "guide",
+      "slug": "vercel-functions",
+      "title": "Bitcoin Checkout on Vercel Functions",
+      "category": "guide",
+      "bytes": 8401
     },
     {
       "path": "/guides/replit",
@@ -155,7 +165,7 @@
       "slug": "serverless",
       "title": "Bitcoin Checkout on Serverless Hosts",
       "category": "guide",
-      "bytes": 9731
+      "bytes": 10543
     },
     {
       "path": "/guides/mobile-apps",
@@ -175,7 +185,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 6287
+      "bytes": 6632
     },
     {
       "path": "/guides/quickstart-rails",
@@ -509,6 +519,16 @@
       "bytes": 7594
     },
     {
+      "path": "/guides/vercel-functions-recipe",
+      "markdown_path": "/guides/vercel-functions-recipe.md",
+      "source": "docs/recipes/vercel-functions.md",
+      "kind": "guide",
+      "slug": "vercel-functions-recipe",
+      "title": "Vercel Functions Recipe",
+      "category": "recipe",
+      "bytes": 14168
+    },
+    {
       "path": "/guides/custom-checkout-route",
       "markdown_path": "/guides/custom-checkout-route.md",
       "source": "docs/guides/custom-checkout-route.md",
@@ -647,6 +667,16 @@
       "title": "Agent Directions: Bolt",
       "category": "agent-directions",
       "bytes": 28423
+    },
+    {
+      "path": "/guides/agent-directions-vercel-functions",
+      "markdown_path": "/guides/agent-directions-vercel-functions.md",
+      "source": "docs/agents/vercel-functions.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-vercel-functions",
+      "title": "Agent Directions: Vercel Functions",
+      "category": "agent-directions",
+      "bytes": 35873
     },
     {
       "path": "/guides/agent-directions-sveltekit",
@@ -897,7 +927,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 5339
+      "bytes": 5428
     },
     {
       "path": "/wordpress",
@@ -1489,6 +1519,27 @@
       "stack": "bolt",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 28423,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/vercel-functions.md",
+      "source": "docs/agents/cover/vercel-functions.md",
+      "kind": "agent-directions-cover",
+      "stack": "vercel-functions",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 308,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/vercel-functions/full.md"
+    },
+    {
+      "path": "/agent-directions/vercel-functions/full.md",
+      "source": "docs/agents/vercel-functions.md",
+      "kind": "agent-directions-payload",
+      "stack": "vercel-functions",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 35873,
       "copy_button": true,
       "self_contained": true
     }
@@ -2449,6 +2500,38 @@
       "tested": null
     },
     {
+      "id": "vercel-functions",
+      "label": "Vercel Functions",
+      "kind": "host",
+      "summary": "A site on Vercel with no framework: static pages and Node functions, with a Neon database. Paste one prompt and your coding agent adds checkout.",
+      "framework": null,
+      "framework_path": null,
+      "status": "tested",
+      "path": "/platforms/vercel-functions",
+      "markdown_path": "/platforms/vercel-functions.md",
+      "database": "Neon Postgres, through its pooled URL; your orders can stay where they are",
+      "secrets": "Vercel project environment variables",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide_slug": "vercel-functions",
+      "guide_path": "/guides/vercel-functions",
+      "guide_source": "docs/guides/vercel-functions.md",
+      "prompt": "Add Bitcoin Lightning checkout to this site with OpenReceive. Download the directions with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/vercel-functions/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this project's environment variables in Vercel, so do not ask me for them. Store payments in the Neon database: a pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create the tables. Use @openreceive packages 0.5.0 or newer.",
+      "starter": {
+        "label": "Deploy to Vercel",
+        "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fvercel-functions-starter&project-name=openreceive-functions-starter&repository-name=openreceive-functions-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
+        "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/vercel-functions-starter"
+      },
+      "eval": "vercel-functions",
+      "tested": {
+        "date": "2026-11-19",
+        "release": "0.5.0",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
+    },
+    {
       "id": "replit",
       "label": "Replit",
       "kind": "ai-builder",
@@ -2958,7 +3041,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 10084
+        "bytes": 10424
       },
       {
         "path": "/openapi.yaml",

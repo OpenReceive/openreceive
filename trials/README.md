@@ -45,7 +45,7 @@ npm run trial -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Easy Digital Downloads (`edd`, the same plugin on a stock WordPress with EDD), Express (`node`), Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start on Node (`tanstack-start`), Vercel (Next.js on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, Flask, plain PHP, Laravel, Paymenter (its official image, seeded with clients and five products), FOSSBilling (its official image, installed and seeded the same way), PrestaShop (its official image, installed by its own command-line installer and seeded with two customers and five downloadable widgets), Vendure (a server, its worker and PostgreSQL laid out as `@vendure/create` makes them, with Vendure's Next.js starter, which `sources.json` downloads at a pinned commit), Odoo (Odoo 19's official image on PostgreSQL with eCommerce installed, seeded with two portal customers and five published widgets), and Medusa (a Medusa 2 server from Medusa's default starter on PostgreSQL, with Medusa's Next.js starter as its storefront; the buyer pays at the storefront's review step). None of them include OpenReceive.
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Easy Digital Downloads (`edd`, the same plugin on a stock WordPress with EDD), Express (`node`), Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start on Node (`tanstack-start`), Vercel (Next.js on Neon), Vercel Functions (`vercel-functions`, static pages and functions in `api/` with no framework, on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, Flask, plain PHP, Laravel, Paymenter (its official image, seeded with clients and five products), FOSSBilling (its official image, installed and seeded the same way), PrestaShop (its official image, installed by its own command-line installer and seeded with two customers and five downloadable widgets), Vendure (a server, its worker and PostgreSQL laid out as `@vendure/create` makes them, with Vendure's Next.js starter, which `sources.json` downloads at a pinned commit), Odoo (Odoo 19's official image on PostgreSQL with eCommerce installed, seeded with two portal customers and five published widgets), and Medusa (a Medusa 2 server from Medusa's default starter on PostgreSQL, with Medusa's Next.js starter as its storefront; the buyer pays at the storefront's review step). None of them include OpenReceive.
 
 ```sh
 npm run trial -- --platform php --smoke
@@ -587,10 +587,36 @@ repo-root `.env`'s, since the test swap provider is local) there. Then it
 checks the live site:
 
 - the payment route is not on the Edge runtime;
+- the OpenReceive stack is built on the first request, not at import
+  (`stack_built_on_request`): `createStack` connects to the wallet as soon as
+  it is built, and on 2026-11-19 a stack built when Vercel loaded the
+  function answered the first request on a fresh instance with a 503;
 - no cron job or notifications worker was added;
 - the deploy built and `/health` answers;
 - an order gets a Lightning invoice;
 - a stranger's checkout for that order is refused.
+
+Every Vercel platform deploys to that one project, so before each deploy the
+harness sets the project's framework preset from the platform's
+`vercel_framework` (`nextjs` when omitted) and adds the `platform_env`
+variables named in `vercel_env`.
+
+### Vercel Functions, no framework
+
+`--platform vercel-functions` is a shop with no framework: static pages in
+`public/`, Node functions in `api/` written with Vercel's `(req, res)`
+helpers, rewrites in `vercel.json`, a guest cookie signed with
+`SESSION_SECRET`, and Postgres through `pg`. The opening message is the prompt
+from `docs/guides/vercel-functions.md`, and the directions are
+`docs/agents/vercel-functions.md`. Locally, `infra/vercel-local.mjs` serves
+it the way a Vercel deployment does: the filesystem before the rewrites, a
+rewritten request that keeps the browser's path, `[...name].js` matching one
+segment, `x-forwarded-for` from the connection, Web and `(req, res)` handlers,
+and `maxDuration`. It is a copy of `tests/vercel-functions/vercel-local.mjs`,
+which `tests/vercel-local.test.mjs` holds to what a real deployment did. It
+does not suspend or replace instances, so only `--deploy` (framework preset
+"Other", `SESSION_SECRET` added to the project) shows what Vercel does to a
+stack built at import; the source check above catches it before that.
 
 `--deploy` needs these in the repo-root `.env`:
 
@@ -604,6 +630,8 @@ to it. Accepting Neon's Marketplace terms needs a person in the browser.
 ```sh
 npm run trial -- --platform vercel --smoke
 npm run trial -- --platform vercel --serve-directions
+npm run trial -- --platform vercel-functions --smoke
+npm run trial -- --platform vercel-functions --serve-directions --deploy --runs 3
 ```
 
 ## Replit

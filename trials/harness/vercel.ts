@@ -6,7 +6,7 @@ import pg from "pg";
 import { parseEnv } from "./codes.ts";
 import { InfraError } from "./docker.ts";
 import { check, liveShopChecks, sourceTexts } from "./live.ts";
-import type { Check } from "./types.ts";
+import type { Check, Platform } from "./types.ts";
 
 // The Vercel trial deploys the agent's finished shop to one project in the
 // OpenReceive team, then pays nothing and checks the live site: a real
@@ -81,14 +81,35 @@ function run(
   });
 }
 
-/** What the agent left in the code, read before anything is deployed. */
+/**
+ * The Edge runtime, as each kind of Vercel project asks for it: a Next.js
+ * route's `export const runtime = "edge"`, or a plain function's
+ * `export const config = { runtime: "edge" }`.
+ */
+const EDGE_RUNTIME = [
+  /export\s+const\s+runtime\s*=\s*["']edge["']/,
+  /export\s+const\s+config\s*=\s*\{[^}]*\bruntime\s*:\s*["']edge["']/,
+];
+
+/**
+ * An OpenReceive stack built at import: a declaration at the start of a line
+ * (module scope, in formatted code) whose value is the stack. createStack
+ * connects to the wallet as soon as it is built, and Vercel can load a
+ * function well before its first request: measured on 2026-11-19, the first
+ * request to a fresh instance then answered 503 WALLET_UNAVAILABLE.
+ */
+const STACK_AT_IMPORT =
+  /^(?:export\s+)?(?:const|let|var)\s+[\w${}\s,]+=\s*(?:await\s+)?(?:createStack|openReceiveNextHandlers|createOpenReceive)\s*\(/m;
+
 /** What the agent wrote decides these, deployed or not. */
 export async function vercelCodeChecks(directory: string): Promise<Check[]> {
   const texts = await sourceTexts(directory);
   const relative = (file: string) => path.relative(directory, file);
   const edge = [...texts].find(
-    ([, text]) =>
-      /export\s+const\s+runtime\s*=\s*["']edge["']/.test(text) && /openreceive/i.test(text),
+    ([, text]) => EDGE_RUNTIME.some((pattern) => pattern.test(text)) && /openreceive/i.test(text),
+  );
+  const atImport = [...texts].find(
+    ([file, text]) => !file.includes(`${path.sep}infra${path.sep}`) && STACK_AT_IMPORT.test(text),
   );
   const vercelJson = texts.get(path.join(directory, "vercel.json"));
   const cron = vercelJson !== undefined && /"crons"/.test(vercelJson);
@@ -99,6 +120,14 @@ export async function vercelCodeChecks(directory: string): Promise<Check[]> {
       edge === undefined,
       "The payment route does not run on the Edge runtime.",
       edge === undefined ? undefined : relative(edge[0]),
+    ),
+    check(
+      "stack_built_on_request",
+      atImport === undefined,
+      "The OpenReceive stack is built on the first request, not when Vercel loads the function.",
+      atImport === undefined
+        ? undefined
+        : `${relative(atImport[0])}: ${atImport[1].match(STACK_AT_IMPORT)?.[0].trim()}`,
     ),
     check(
       "no_cron_or_worker",
@@ -167,13 +196,25 @@ export async function vercelChecks(
   config: VercelConfig,
   codes: { readonly nwc: string; readonly lsc: string },
   log: (line: string) => void,
+  platform: Pick<Platform, "vercel_framework" | "vercel_env" | "platform_env"> = {},
 ): Promise<Check[]> {
   const checks = await vercelCodeChecks(directory);
-  const project = await api<{ id: string }>(config, "GET", `/v9/projects/${PROJECT}`).catch(() => {
+  const project = await api<{ id: string; framework: string | null }>(
+    config,
+    "GET",
+    `/v9/projects/${PROJECT}`,
+  ).catch(() => {
     throw new InfraError(
       `Create the ${PROJECT} project in the Vercel team and connect a Neon database to it.`,
     );
   });
+  // Every Vercel platform deploys to this one project, so each deploy sets the
+  // preset its shop is built with: Next.js, or "Other" (null) for plain functions.
+  const framework = platform.vercel_framework === undefined ? "nextjs" : platform.vercel_framework;
+  if (project.framework !== framework) {
+    log(`vercel framework preset ${framework ?? "Other"}`);
+    await api(config, "PATCH", `/v9/projects/${project.id}`, { framework });
+  }
   // The token reaches the CLI through its environment, never its arguments.
   const env = { ...process.env, VERCEL_TOKEN: config.token, VERCEL_TELEMETRY_DISABLED: "1" };
   await mkdir(path.join(directory, ".vercel"), { recursive: true });
@@ -186,9 +227,16 @@ export async function vercelChecks(
   await wipe(await unpooledUrl(directory, env));
 
   const existing = await api<{ envs: EnvEntry[] }>(config, "GET", `/v9/projects/${project.id}/env`);
+  const extra = (platform.vercel_env ?? []).map((key) => {
+    const value = platform.platform_env?.[key];
+    if (value === undefined)
+      throw new InfraError(`vercel_env names ${key}, which platform_env lacks.`);
+    return [key, value] as const;
+  });
   for (const [key, value] of [
     ["NWC_URI", codes.nwc],
     ["LSC_URI_PRIMARY", codes.lsc],
+    ...extra,
   ] as const) {
     for (const entry of existing.envs.filter((item) => item.key === key)) {
       await api(config, "DELETE", `/v9/projects/${project.id}/env/${entry.id}`);

@@ -14,6 +14,11 @@ on Postgres, ready to deploy to Vercel with a Neon database or to build on in
 v0. Unlike the demos below, it uses only the published npm packages, so you can
 copy it as the start of your own app.
 
+[`vercel-functions-starter/`](vercel-functions-starter) is the same shop on
+Vercel with no framework: a static page, plain JavaScript functions in `api/`
+and one rewrite, on a Neon database. It deploys with one button and uses only
+the published packages.
+
 [`express-postgres-starter/`](express-postgres-starter) is the same shop on
 Express and Postgres, set up for Replit: a `.replit` for Autoscale and a
 `replit.md` that tells Replit Agent how the payment code fits together. It has

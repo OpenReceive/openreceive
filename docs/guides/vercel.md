@@ -14,6 +14,9 @@ provider.
 Use `@openreceive/*` 0.4.19 or newer. Earlier versions cannot reach the wallet
 from a Next.js 16 production build.
 
+A site on Vercel with no framework, just static pages and functions in
+`api/`, is covered in [Bitcoin checkout on Vercel Functions](vercel-functions.md).
+
 ## Before you start
 
 - A receive-only NWC code from your Lightning wallet

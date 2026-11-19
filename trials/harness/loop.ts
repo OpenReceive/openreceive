@@ -692,7 +692,13 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     if (supabase !== undefined && done) checks.push(await supabaseChecks(supabase));
     if (vercel !== undefined && done) {
       checks.push(
-        ...(await vercelChecks(directory, vercel, { nwc: shopNwc, lsc: wallet.lsc }, log)),
+        ...(await vercelChecks(
+          directory,
+          vercel,
+          { nwc: shopNwc, lsc: wallet.lsc },
+          log,
+          platform,
+        )),
       );
     }
     if (platform.deploy === "local" && done) {

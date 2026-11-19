@@ -130,6 +130,17 @@ const BOLT_BRIEF = [
   'Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".',
 ];
 
+// On Vercel with no framework the codes are project environment variables:
+// only the user can add one, and nothing in the repository may hold it.
+const VERCEL_FUNCTIONS_BRIEF = [
+  "Before installing or editing anything, ask the user to add a receive-only NWC code in Vercel.",
+  ASK_LSC_NEXT,
+  "The user adds NWC_URI and LSC_URI_PRIMARY in Vercel's Environment Variables. Never in .env, vercel.json or code.",
+  "Never run vercel env pull or vercel env ls, and never print the environment.",
+  NO_ROTATION,
+  'Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".',
+];
+
 // BTCPay checks the deployment first, and its own store page is a supported
 // place to save a code, so it gets its own list.
 const BTCPAY_BRIEF = [
@@ -298,6 +309,15 @@ const STACKS = [
     fetchOnly: true,
   },
   {
+    stack: "vercel-functions",
+    source: "docs/agents/src/vercel-functions.md",
+    quickstart: "docs/recipes/vercel-functions.md",
+    quickstartSlug: "vercel-functions-recipe",
+    brief: VERCEL_FUNCTIONS_BRIEF,
+    quickstartRole:
+      "Steps 0–6 above are the setup on Vercel and this recipe is their reference: its files are the code to write. Where the two differ, the steps win.",
+  },
+  {
     stack: "sveltekit",
     source: "docs/agents/src/sveltekit.md",
     quickstart: "docs/recipes/sveltekit.md",
@@ -388,6 +408,11 @@ const UNLISTED_GUIDES = {
   "agent-directions-lovable": "this payload's own page",
   bolt: "for people who build on Bolt; the Bolt payload links it, not the other stacks",
   "agent-directions-bolt": "this payload's own page",
+  "vercel-functions":
+    "for people on Vercel with no framework; the Vercel Functions payload links it, not the other stacks",
+  "agent-directions-vercel-functions": "this payload's own page",
+  "vercel-functions-recipe":
+    "a site on Vercel with no framework; the Vercel Functions payload inlines it and the Vercel guides link it",
   "supabase-edge-functions-recipe":
     "an Edge Function on another site than its page; the Bolt payload inlines it and the Supabase guide links it",
   "supabase-migration":
@@ -710,6 +735,13 @@ const UNLISTED_GUIDES_BY_STACK = {
     serverless: "the recipe already covers Supabase Edge Functions, Bolt's server functions",
     "mobile-apps":
       "Bolt's mobile apps are Expo apps; their payments go through the mobile directions",
+  },
+  "vercel-functions": {
+    "custom-checkout-route": "the recipe's function is the integration",
+    "payment-safety-upgrade": "a new integration has no existing attempts to upgrade",
+    "react-material-ui-recipe": "a site with no bundler and no React; the element is the checkout",
+    "mobile-apps":
+      "a site of plain HTML pages; a mobile app's payments go through the mobile directions",
   },
   rails: {
     supabase: "the Supabase guide covers Node and Python servers",

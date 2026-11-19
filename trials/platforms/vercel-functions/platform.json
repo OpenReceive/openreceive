@@ -1,0 +1,35 @@
+{
+  "slug": "vercel-functions",
+  "name": "Vercel Functions (no framework, on Neon)",
+  "directions": "docs/agents/vercel-functions.md",
+  "prompt_name": "plain JavaScript shop on Vercel Functions",
+  "opening_guide": "docs/guides/vercel-functions.md",
+  "opening_context": "This is a shop on Vercel with no framework: static pages in public/ and Node functions in api/, with a Neon Postgres database.",
+  "doctor": "npx openreceive doctor",
+  "credential_store": {
+    "kind": "platform",
+    "where": "Vercel project environment variables"
+  },
+  "platform_env": {
+    "DATABASE_URL": "postgresql://shop:shop@pgbouncer:6432/shop",
+    "DATABASE_URL_UNPOOLED": "postgresql://shop:shop@postgres:5432/shop",
+    "SESSION_SECRET": "widget-shop-trial-session-secret"
+  },
+  "deploy": "vercel",
+  "vercel_framework": null,
+  "vercel_env": ["SESSION_SECRET"],
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "vercel env pull",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false
+}

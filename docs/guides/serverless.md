@@ -95,6 +95,13 @@ Vercel runs Next.js route handlers as Node functions, and OpenReceive's
 Next.js package works there as is. [Vercel and v0](vercel.md) covers it, with
 a starter that deploys with a Neon database.
 
+A site with no framework, with static pages and functions in `api/`, uses
+one function behind a rewrite in `vercel.json`:
+[Bitcoin checkout on Vercel Functions](vercel-functions.md). Outside
+Next.js, a file named `api/openreceive/[...path].js` matches one path
+segment only, so it cannot serve the payment routes, and the stack has to be
+built on the first request rather than when Vercel loads the function.
+
 ## Netlify
 
 - **Next.js**: Netlify's Next.js adapter runs route handlers as Netlify
@@ -185,6 +192,12 @@ instead: see [Lovable](lovable.md).
 - **Vercel**: coding agents integrated a Next.js shop from our directions,
   and the shop, deployed to Vercel with Neon, issued a real invoice and
   refused a stranger on the live site. See [Vercel and v0](vercel.md).
+- **Vercel Functions with no framework**: every CI run, the
+  [recipe's](../recipes/vercel-functions.md) own function, routed and run the
+  way a Vercel deployment does, with Postgres behind PgBouncer. Coding agents
+  integrated a plain shop from our directions, and the shop, deployed to
+  Vercel with Neon, issued a real invoice and refused a stranger. See
+  [Vercel Functions](vercel-functions.md).
 - **Transaction poolers**: every CI run, for Node and Python, as above.
 - **Cloudflare Workers**: every CI run, with a wallet on a local relay and
   Postgres behind PgBouncer, and Supabase over HTTPS.

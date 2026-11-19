@@ -113,6 +113,11 @@ const AGENT_PAYLOADS = [
   },
   { path: "/agent-directions/mobile.md", source: "docs/agents/mobile.md", stack: "mobile" },
   { path: "/agent-directions/bolt.md", source: "docs/agents/bolt.md", stack: "bolt" },
+  {
+    path: "/agent-directions/vercel-functions.md",
+    source: "docs/agents/vercel-functions.md",
+    stack: "vercel-functions",
+  },
 ];
 
 // Pages served under agent-discovery paths: site-owned names whose content is

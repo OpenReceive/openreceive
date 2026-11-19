@@ -52,6 +52,7 @@ your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.
 [Vendure](https://openreceive.org/agent-directions/vendure/full.md) ·
 [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
 [Bolt](https://openreceive.org/agent-directions/bolt/full.md) ·
+[Vercel Functions](https://openreceive.org/agent-directions/vercel-functions/full.md) ·
 [SvelteKit](https://openreceive.org/agent-directions/sveltekit/full.md) ·
 [Nuxt](https://openreceive.org/agent-directions/nuxt/full.md) ·
 [Astro](https://openreceive.org/agent-directions/astro/full.md) ·

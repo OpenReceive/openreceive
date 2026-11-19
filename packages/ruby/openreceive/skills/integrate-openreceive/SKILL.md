@@ -79,6 +79,11 @@ connected wallet; asset and network availability depends on the provider.
      [references/bolt.md](references/bolt.md) — codes are Bolt secrets; one
      server function serves the payment routes, and the page sends the
      buyer's Supabase token.
+   - Vercel with no framework (static pages and Node functions in `api/`):
+     [references/vercel-functions.md](references/vercel-functions.md) — codes
+     are Vercel environment variables the user adds; one function and a
+     rewrite serve the payment routes, and the page uses the standalone
+     element.
    - A mobile app (React Native or Expo, Flutter, Swift, Kotlin):
      [references/mobile.md](references/mobile.md) — OpenReceive goes on the
      app's server, through that server's reference; the app opens its checkout

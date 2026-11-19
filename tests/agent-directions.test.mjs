@@ -28,8 +28,10 @@ const fullUrl = (stack) => `https://openreceive.org/agent-directions/${stack}/fu
 // the platform's secrets.
 const FETCH_ONLY = new Set(["lovable", "bolt"]);
 // Bolt's agent cannot store a secret: the user adds each code in Bolt's
-// Secrets tab, so a code pasted into the chat has nowhere to go.
-const SECRETS_TAB_ONLY = new Set(["bolt"]);
+// Secrets tab, so a code pasted into the chat has nowhere to go. On Vercel
+// with no framework the codes are the project's environment variables, which
+// the user adds the same way.
+const SECRETS_TAB_ONLY = new Set(["bolt", "vercel-functions"]);
 
 function stepZero(text) {
   const match = text.match(/^## Step 0\b[^\n]*\n([\s\S]*?)(?=^## )/m);
@@ -266,6 +268,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
         "btcpay",
         "lovable",
         "bolt",
+        "vercel-functions",
         "mobile",
       ].includes(stack),
   );
@@ -314,6 +317,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
         "btcpay",
         "lovable",
         "bolt",
+        "vercel-functions",
         "mobile",
       ].includes(stack),
   );
@@ -380,6 +384,7 @@ test("every library payload writes codes with the file tool, and Express, Fastif
         "btcpay",
         "lovable",
         "bolt",
+        "vercel-functions",
         "mobile",
       ].includes(stack),
   );
@@ -680,6 +685,36 @@ test("the Bolt payload keeps codes in Secrets, the buyer in a token and the pric
   for (const command of [/\bcurl\b/, /\bnpx\b/, /\bdoctor\b/, /docker compose/, /\bpkill\b/]) {
     assert.doesNotMatch(own, command, `the Bolt steps mention ${command}`);
   }
+});
+
+// What a Vercel deployment did when we measured one (2026-11-19): a file
+// named `[...path].js` matched one path segment, a stack built at import
+// answered the first request on a fresh instance with a 503, and a rewrite
+// kept the browser's path. The payload is plain JavaScript for a site with no
+// bundler.
+test("the Vercel Functions payload: one function behind a rewrite, built on the first request", () => {
+  const text = payloads.find(({ stack }) => stack === "vercel-functions").text;
+  const own = text.slice(0, text.indexOf("## The quickstart, in full"));
+  const step = stepZero(text);
+  assert.match(step, /\*\*Settings\*\* → \*\*Environment Variables\*\*/);
+  assert.match(step, /do not write it into\s+any file, code or log/);
+  assert.match(step, /Never run\s+`vercel env pull` or `vercel env ls`/);
+  assert.match(step, /add Neon from\s+the project's \*\*Storage\*\* tab/);
+  assert.match(step, /SQLite,\s+a KV store and Redis cannot hold the payment rows/);
+  assert.match(own, /`\/openreceive\/:path\*` → `\/api\/openreceive`/);
+  assert.match(own, /Never\s+`api\/openreceive\/\[\.\.\.path\]\.js`/);
+  assert.match(own, /Build the stack on the first request/);
+  assert.match(own, /Never\s+build it at import/);
+  assert.match(own, /no\s+`export const config = \{ runtime: "edge" \}`/);
+  assert.match(own, /No cron job/);
+  assert.match(own, /`"code":"FORBIDDEN"`/);
+  assert.match(own, /<openreceive-checkout reference="ORDER_ID" prefix="\/openreceive" resumable>/);
+  assert.match(text, /"source": "\/openreceive\/:path\*", "destination": "\/api\/openreceive"/);
+  assert.match(text, /stack \?\?= createStack\(\{/);
+  assert.match(text, /attachDatabasePool\(pool\)/);
+  // Plain JavaScript only: no TypeScript fences, annotations or type imports.
+  assert.doesNotMatch(text, /^```tsx?$/m);
+  assert.doesNotMatch(text, /import type|: Stack\b|: Request\b|: Promise</);
 });
 
 // The Supabase badge (0.4.24) was earned on the Node directions with an

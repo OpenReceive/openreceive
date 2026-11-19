@@ -92,6 +92,15 @@
       "directions": "9dff017be130"
     },
     {
+      "trial": "vercel-functions",
+      "date": "2026-11-19",
+      "release": "0.5.0",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "43e957f32ad6"
+    },
+    {
       "trial": "btcpay",
       "date": "2026-10-14",
       "release": "0.4.26",

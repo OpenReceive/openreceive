@@ -1,0 +1,8 @@
+{
+  "name": "openreceive-vercel-functions-test",
+  "private": true,
+  "description": "@vercel/functions for tests/vercel-functions, which runs the Vercel Functions recipe's code as Vercel does.",
+  "devDependencies": {
+    "@vercel/functions": "3.10.0"
+  }
+}

@@ -33,6 +33,7 @@ import { loadSupabaseProject } from "../trials/harness/supabase.ts";
 import { scanTrackedSecrets } from "../trials/harness/scan.ts";
 import { serveDirectory } from "../trials/harness/serve.ts";
 import { trialWalletOverride } from "../trials/harness/wallet.ts";
+import { vercelCodeChecks } from "../trials/harness/vercel.ts";
 
 const nwc =
   "nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example&secret=71a8c14c1407c113601079c4302dab36460f0ccd0ad506f1f2dc73b5100e4f3c";
@@ -1735,4 +1736,43 @@ test("the BTCPay platform shares the trial chain and checks its store instead of
     "utf8",
   );
   assert.match(fixture, /127\.0\.0\.1:8080:49392/);
+});
+
+test("vercelCodeChecks: Edge in either form, and a stack built at import", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ortrial-vercel-checks-"));
+  const write = async (relative, text) => {
+    await mkdir(path.dirname(path.join(directory, relative)), { recursive: true });
+    await writeFile(path.join(directory, relative), text);
+  };
+  const failed = async () =>
+    (await vercelCodeChecks(directory)).filter((item) => !item.pass).map((item) => item.id);
+  try {
+    // The recipe's shape: the stack is built inside the handler.
+    await write(
+      "api/openreceive.js",
+      'import { createStack } from "@openreceive/http";\nlet stack;\nfunction openReceive() {\n  stack ??= createStack({});\n  return stack;\n}\nexport const GET = (request) => openReceive().handler(request);\n',
+    );
+    assert.deepEqual(await failed(), []);
+
+    await write(
+      "api/openreceive.js",
+      'import { createStack } from "@openreceive/http";\nconst stack = createStack({});\nexport const GET = (request) => stack.handler(request);\n',
+    );
+    assert.deepEqual(await failed(), ["stack_built_on_request"]);
+
+    await write(
+      "api/openreceive.js",
+      'import { createStack } from "@openreceive/http";\nexport const config = { runtime: "edge" };\nlet stack;\nexport const GET = (request) => (stack ??= createStack({})).handler(request);\n',
+    );
+    assert.deepEqual(await failed(), ["node_runtime"]);
+
+    await write("api/openreceive.js", 'export const runtime = "edge"; // openreceive\n');
+    await write(
+      "vercel.json",
+      '{ "crons": [{ "path": "/api/openreceive", "schedule": "0 0 * * *" }] }\n',
+    );
+    assert.deepEqual(await failed(), ["node_runtime", "no_cron_or_worker"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

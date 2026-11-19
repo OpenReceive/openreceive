@@ -38,6 +38,24 @@
       "trial": null
     },
     {
+      "id": "vercel-functions",
+      "label": "Vercel Functions",
+      "kind": "host",
+      "summary": "A site on Vercel with no framework: static pages and Node functions, with a Neon database. Paste one prompt and your coding agent adds checkout.",
+      "framework": null,
+      "database": "Neon Postgres, through its pooled URL; your orders can stay where they are",
+      "secrets": "Vercel project environment variables",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide": "vercel-functions",
+      "prompt": true,
+      "starter": {
+        "label": "Deploy to Vercel",
+        "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fvercel-functions-starter&project-name=openreceive-functions-starter&repository-name=openreceive-functions-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
+        "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/vercel-functions-starter"
+      },
+      "trial": "vercel-functions"
+    },
+    {
       "id": "replit",
       "label": "Replit",
       "kind": "ai-builder",

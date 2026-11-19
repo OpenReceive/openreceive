@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Widget Shop</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Widget Shop</h1>
+      <ul>
+        <li>
+          Facet — $7.00
+          <form method="post" action="/orders">
+            <input type="hidden" name="product_id" value="1" />
+            <button type="submit">Buy</button>
+          </form>
+        </li>
+        <li>
+          Bezel — $12.00
+          <form method="post" action="/orders">
+            <input type="hidden" name="product_id" value="2" />
+            <button type="submit">Buy</button>
+          </form>
+        </li>
+        <li>
+          Hinge — $4.00
+          <form method="post" action="/orders">
+            <input type="hidden" name="product_id" value="3" />
+            <button type="submit">Buy</button>
+          </form>
+        </li>
+        <li>
+          Latch — $9.00
+          <form method="post" action="/orders">
+            <input type="hidden" name="product_id" value="4" />
+            <button type="submit">Buy</button>
+          </form>
+        </li>
+        <li>
+          Knob — $3.00
+          <form method="post" action="/orders">
+            <input type="hidden" name="product_id" value="5" />
+            <button type="submit">Buy</button>
+          </form>
+        </li>
+      </ul>
+    </main>
+  </body>
+</html>

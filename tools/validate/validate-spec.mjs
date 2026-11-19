@@ -271,6 +271,7 @@ function validateStorageFreeTree() {
     "examples/next-postgres-starter/package.json",
     "examples/express-postgres-starter/package.json",
     "examples/nestjs-starter/package.json",
+    "examples/vercel-functions-starter/package.json",
   ]);
   const manifests = ["packages", "examples"]
     .flatMap((dir) =>

@@ -159,7 +159,8 @@ jobs:
       NWC_URI: ""
       # Lovable's TanStack Start apps run on Cloudflare Workers: this lane runs a
       # Worker under workerd against a wallet on a local relay and PostgreSQL
-      # behind PgBouncer in transaction mode.
+      # behind PgBouncer in transaction mode. It also runs the Vercel Functions
+      # recipe's own code the way a Vercel deployment routes and invokes it.
       OPENRECEIVE_TEST_POOLER_URL: postgresql://openreceive:openreceive@127.0.0.1:56432/openreceive_test
       OPENRECEIVE_TEST_RELAY_URL: ws://127.0.0.1:57777
     steps:
@@ -172,8 +173,10 @@ jobs:
       - run: docker compose -f tests/workers/compose.yml up -d --wait
       - run: npm ci
       - run: npm ci --prefix tests/workers
+      - run: npm ci --prefix tests/vercel-functions
       - run: npm run build:packages
       - run: npm run test:workers
+      - run: npm run test:vercel-functions
 
   js-vendure:
     runs-on: ubuntu-latest

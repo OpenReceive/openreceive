@@ -1,0 +1,12 @@
+{
+  "name": "widget-shop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/migrate.mjs",
+    "dev": "node infra/vercel-local.mjs --host 0.0.0.0 --port 3000"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}

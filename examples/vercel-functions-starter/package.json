@@ -1,0 +1,17 @@
+{
+  "name": "openreceive-vercel-functions-starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@openreceive/elements": "^0.5.0",
+    "@openreceive/http": "^0.5.0",
+    "@vercel/functions": "^3.10.0",
+    "pg": "^8.23.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

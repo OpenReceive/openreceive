@@ -103,6 +103,18 @@ export interface Platform {
    */
   readonly deploy?: "vercel" | "local";
   /**
+   * With `deploy: "vercel"`: the framework preset the `openreceive-eval`
+   * project builds with, set on the project before each deploy, since every
+   * Vercel platform deploys to that one project. `"nextjs"` when omitted;
+   * `null` is Vercel's "Other", a site with no framework.
+   */
+  readonly vercel_framework?: string | null;
+  /**
+   * With `deploy: "vercel"`: the `platform_env` variables the deployed shop
+   * also needs as project variables, beside the ones Neon sets and the codes.
+   */
+  readonly vercel_env?: readonly string[];
+  /**
    * Compose commands run after the agent finishes and before the live checks,
    * as the platform would: Lovable applies the migrations the agent wrote when
    * the user approves them, then serves the new build.

@@ -18,7 +18,9 @@ Grok or Claude Code.
    builder whose own agent we do not drive, such as Lovable or Bolt, the shop
    is built the way that builder builds one, and runs on a local copy of its
    stack: for Bolt, a Vite React app on Supabase's own Postgres, Auth, API
-   server and Edge Functions runtime.
+   server and Edge Functions runtime. For Vercel with no framework, the shop is
+   static pages and functions in `api/`, served while the agent works by a
+   local stand-in that routes and runs them the way a Vercel deployment does.
 2. **An agent and our published directions.** A coding agent gets the same
    message a merchant would send, with a link to the directions on
    openreceive.org. It works on its own; a script plays the merchant and answers
@@ -81,6 +83,8 @@ Every check must pass:
   to the platform's public API, which every visitor's browser can reach;
 - on a hosting platform:
   - the payment route runs on Node, not an Edge runtime;
+  - on Vercel, the payment route builds OpenReceive on its first request, not
+    when Vercel loads the function, which would refuse the first payer;
   - no worker or cron job was added, because settlement runs on page requests;
   - the deploy builds;
   - a buyer's order gets a real Lightning invoice;

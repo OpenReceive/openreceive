@@ -74,6 +74,14 @@
       "public": true
     },
     {
+      "slug": "vercel-functions",
+      "title": "Bitcoin Checkout on Vercel Functions",
+      "source_path": "docs/guides/vercel-functions.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "replit",
       "title": "Bitcoin Checkout on Replit",
       "source_path": "docs/guides/replit.md",
@@ -402,6 +410,14 @@
       "public": true
     },
     {
+      "slug": "vercel-functions-recipe",
+      "title": "Vercel Functions Recipe",
+      "source_path": "docs/recipes/vercel-functions.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "internal",
       "title": "OpenReceive Internal Docs",
       "source_path": "docs/internal/README.md",
@@ -669,6 +685,14 @@
       "slug": "agent-directions-bolt",
       "title": "Agent Directions: Bolt",
       "source_path": "docs/agents/bolt.md",
+      "category": "agent-directions",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-vercel-functions",
+      "title": "Agent Directions: Vercel Functions",
+      "source_path": "docs/agents/vercel-functions.md",
       "category": "agent-directions",
       "audience": "developer",
       "public": true

@@ -56,6 +56,7 @@ markdown.
 - [Agent Directions: TanStack Start](https://openreceive.org/agent-directions/tanstack-start/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Mobile Apps](https://openreceive.org/agent-directions/mobile/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Bolt](https://openreceive.org/agent-directions/bolt/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Vercel Functions](https://openreceive.org/agent-directions/vercel-functions/full.md): self-contained agent directions, quickstart included
 - [Agent directions (Paymenter)](https://openreceive.org/agent-directions/paymenter/full.md): self-contained agent directions, quickstart included
 - [Agent directions (FOSSBilling)](https://openreceive.org/agent-directions/fossbilling/full.md): self-contained agent directions, quickstart included
 - [Agent directions (PrestaShop)](https://openreceive.org/agent-directions/prestashop/full.md): self-contained agent directions, quickstart included
@@ -68,6 +69,7 @@ markdown.
 The index is [/guides.md](https://openreceive.org/guides.md).
 
 - [Bitcoin Checkout on Vercel and v0](https://openreceive.org/guides/vercel.md)
+- [Bitcoin Checkout on Vercel Functions](https://openreceive.org/guides/vercel-functions.md)
 - [Bitcoin Checkout on Replit](https://openreceive.org/guides/replit.md)
 - [Bitcoin Checkout on Lovable](https://openreceive.org/guides/lovable.md)
 - [Bitcoin Checkout on Bolt](https://openreceive.org/guides/bolt.md)
@@ -105,6 +107,7 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Nuxt Recipe](https://openreceive.org/guides/nuxt-recipe.md)
 - [Astro Recipe](https://openreceive.org/guides/astro-recipe.md)
 - [React Router Recipe](https://openreceive.org/guides/react-router-recipe.md)
+- [Vercel Functions Recipe](https://openreceive.org/guides/vercel-functions-recipe.md)
 - [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
 - [WordPress Hosting Requirements](https://openreceive.org/guides/wordpress-hosting.md)
 
