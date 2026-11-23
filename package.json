@@ -35,6 +35,7 @@
     "check:release": "node tools/validate/check-release-readiness.mjs",
     "check:workflows": "node tools/validate/check-workflows.mjs",
     "check:public-api": "node tools/validate/check-public-api.mjs",
+    "check:directions-release": "node tools/validate/check-directions-release.mjs",
     "check:dead-exports": "knip",
     "build:packages": "node tools/package/build-workspaces.mjs",
     "release:plan": "node tools/release/npm-release.mjs plan",

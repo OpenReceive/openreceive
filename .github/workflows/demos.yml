@@ -34,6 +34,21 @@ jobs:
       - run: npm run scan:client-bundles
       - run: npm run check:standalone
 
+  # The agent directions openreceive.org serves against the packages npm
+  # serves (tools/validate/check-directions-release.mjs): every @openreceive
+  # import they show must type-check against the latest release, and every
+  # `npx openreceive` command and flag must be in that release's --help. A
+  # docs sync that ran ahead of a release fails here.
+  directions-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: node tools/validate/check-directions-release.mjs --live
+
   # Full browser E2E matrix: every Playwright spec (all four framework tabs,
   # settlement, refund/attention paths) against the node-express demo. The
   # per-push lane in ci.yml runs only the smoke spec; this weekly lane runs
