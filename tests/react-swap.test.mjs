@@ -566,8 +566,14 @@ test("a pegged stablecoin checkout shows one amount to send, in both renderers",
   assert.equal(byLabel["Swap + network fees"], "1.05 USDC (2.1%)");
   assert.equal(byLabel["Pay-in fiat"], undefined);
   assert.equal(byLabel.Total, undefined);
-  assert.ok(!JSON.stringify(rows).includes("50.03"), "details must not carry the pay-in valuation");
-  assert.ok(!JSON.stringify(rows).includes("49"), "details must not carry the order total");
+  // The expiry row is an ISO time from Date.now(): its minutes or seconds can
+  // read "49", so the order-total check skips it.
+  const amountRows = rows.filter((row) => row.label !== "Provider expires at");
+  assert.ok(
+    !JSON.stringify(amountRows).includes("50.03"),
+    "details must not carry the pay-in valuation",
+  );
+  assert.ok(!JSON.stringify(amountRows).includes("49"), "details must not carry the order total");
 
   // Control: a floating asset with the same fee object keeps today's fiat rows.
   const sol = createSwapDisplayModel({
