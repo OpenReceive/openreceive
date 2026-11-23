@@ -54,7 +54,12 @@ or process environments, and never run `printenv`. Hunting for a code burns
 the turn and can leak other secrets into the transcript.
 
 The user never edits BTCPay's settings for you. They paste each code
-into the chat; you save it (Step 1). Ask one question per message:
+into the chat; you save it (Step 1). If you will not take a code pasted in
+chat, end that same message with this in place of "Paste the code here":
+"Paste it yourself in Store → OpenReceive, save, then reply saved." On
+"saved", check the settings and go on. Ask once per code: if it is still not
+set, do not ask again; say what is missing, and stop. Ask one question per
+message:
 
 1. **First message — the NWC code, and nothing else.** Ask for it and walk them
    through getting it:

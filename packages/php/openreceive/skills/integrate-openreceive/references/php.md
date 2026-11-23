@@ -13,7 +13,7 @@ curl -fsSL https://openreceive.org/agent-directions/php/full.md
 
 - Before installing or editing anything, ask the user for a receive-only NWC code. One question per message.
 - Next ask for the LSC code. If the user wants stablecoins, USDT, USDC, ETH, SOL or crypto, do not ask yes/no first.
-- The user only pastes codes into this chat. Never ask them to edit .env or run a command to save one.
+- The user pastes codes here. If you will not take one in chat, ask once for it in .env (Step 0).
 - Write each code into .env yourself, as Step 0 says. Never echo it or put it in a shell command.
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
@@ -82,8 +82,13 @@ Two server-only URIs are needed before the quickstart:
   `lightning+swapconnect://…`. Required for USDT, USDC, ETH and SOL. Skip it
   only when the user says they want Bitcoin alone.
 
-The user never edits an environment file. They paste each code into the chat;
-you store it. Ask one question per message.
+Ask the user to paste each code into the chat, and store it yourself. Ask one
+question per message. If you will not take a code pasted in chat, end that same
+message with this in place of "Paste the code here": "Add `NWC_URI=<your code>`
+to `.env` in this project, then reply saved." (`LSC_URI_PRIMARY` for the swap
+code.) Name the real path and a placeholder, never a value. On "saved", check
+by name and go on. Ask once per code: if it is still unset, do not ask again;
+say which line in which file is missing, and stop.
 
 1. **First message — the NWC code, and nothing else.** Ask for it and walk them
    through getting it:
@@ -94,7 +99,8 @@ you store it. Ask one question per message.
    > rather run your own wallet, Alby Hub works too: Connections → Add
    > Connection → Read Only. Paste the code here and I will store it.
 
-   Do not mention `.env`, exports, or "tell me when it's set".
+   Do not mention `.env`, exports, or "tell me when it's set", except as the
+   fallback above says.
 2. **When they paste it.** If it does not start with `nostr+walletconnect://`,
    ask them to copy the receive-only code again. Otherwise write
    `NWC_URI=<paste>` into the project's `.env` with your file-editing tool,

@@ -70,7 +70,7 @@ const ASK_LSC_NEXT =
 const WOOCOMMERCE_BRIEF = [
   ASK_NWC_FIRST,
   ASK_LSC_NEXT,
-  "The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.",
+  "The user only pastes codes here: no command, no admin page. If you will not take one in chat, see Step 0.",
   "Store each code yourself as Step 2 says. Never put a code in a shell command.",
   NO_ROTATION,
   'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
@@ -81,7 +81,7 @@ const WOOCOMMERCE_BRIEF = [
 const BILLING_PANEL_BRIEF = [
   ASK_NWC_FIRST,
   ASK_LSC_NEXT,
-  "The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.",
+  "The user only pastes codes here: no command, no admin page. If you will not take one in chat, see Step 0.",
   "Store each code yourself as Step 2 says. Never put a code in a shell command.",
   NO_ROTATION,
   'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
@@ -102,7 +102,7 @@ const MOBILE_BRIEF = [
 const libraryBrief = (envFile) => [
   ASK_NWC_FIRST,
   ASK_LSC_NEXT,
-  `The user only pastes codes into this chat. Never ask them to edit ${envFile} or run a command to save one.`,
+  `The user pastes codes here. If you will not take one in chat, ask once for it in ${envFile} (Step 0).`,
   `Write each code into ${envFile} yourself, as Step 0 says. Never echo it or put it in a shell command.`,
   NO_ROTATION,
   'Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',

@@ -32,10 +32,16 @@ edit the shop or search anywhere else before asking it. Do not read deploy
 config, Docker containers or process environments looking for a code, and
 never run `printenv`: a new shop has neither code yet.
 
-The user never edits an environment file. They paste each code
-into this chat; you store it. That is the supported path: do not ask them to
-save it themselves, and do not tell them to revoke or replace a
+Ask the user to paste each code into this chat; you store it. That is the
+supported path: do not tell them to revoke or replace a
 code because it was pasted here. Ask one question per message.
+
+If you will not take a code pasted in chat, end that same message with this in
+place of "Paste the code here": "Add `NWC_URI=<your code>` to the Vendure
+server's `.env`, then reply saved." (`LSC_URI_PRIMARY` for the swap code.) Name
+the real path and a placeholder, never a value. On "saved", check by name and
+go on. Ask once per code: if it is still unset, do not ask again; say which
+line in which file is missing, and stop.
 
 1. **First message — the NWC code, and nothing else.**
 
