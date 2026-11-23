@@ -36,10 +36,17 @@ read PrestaShop's `app/config/parameters.php`, deploy config, container
 environments or other projects looking for a code: a new install has neither
 code yet.
 
-The user never runs a command and never edits a file. They paste each code
-into this chat; you store it. That is the supported path: do not ask them to
-run the save command themselves, and do not tell them to revoke or replace a
+The user never runs a command. They paste each code into this chat; you
+store it. That is the supported path: do not ask them to run the save
+command themselves, and do not tell them to revoke or replace a
 code because it was pasted here. Ask one question per message.
+
+If you will not take a code pasted in chat, end that same message with this
+in place of "Paste the code here": "Save the code alone in
+`/tmp/openreceive-nwc`, then reply saved." (`/tmp/openreceive-lsc` for the
+swap code). Step 2 then reads that file in place of `/tmp/openreceive-code`
+and deletes it. Ask once per code: if the file is missing after their reply,
+do not ask again; say which file is missing, and stop. Never print it.
 
 1. **First message — the NWC code, and nothing else.**
 

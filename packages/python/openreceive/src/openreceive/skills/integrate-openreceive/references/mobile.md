@@ -80,8 +80,15 @@ Never put either in the app: not in its code, `app.json`, `Info.plist`, a
 `BuildConfig` field, a bundled `.env`, or any `EXPO_PUBLIC_` name. Anyone who
 downloads an app can read what it ships with.
 
-The user never edits an environment file. They paste each code into this chat;
-you store it. Ask one question per message.
+Ask the user to paste each code into this chat; you store it. Ask one
+question per message.
+
+If you will not take a code pasted in chat, end that same message with this in
+place of "Paste the code here": "Add `NWC_URI=<your code>` to the server's env
+file, then reply saved." (`LSC_URI_PRIMARY` for the swap code.) Name the real
+path and a placeholder, never a value. On "saved", check by name and go on. Ask
+once per code: if it is still unset, do not ask again; say which line in which
+file is missing, and stop.
 
 1. **First message — the NWC code, and nothing else.** Ask for it and walk them
    through getting it:

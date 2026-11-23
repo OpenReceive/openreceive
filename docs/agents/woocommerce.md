@@ -13,7 +13,7 @@ curl -fsSL https://openreceive.org/agent-directions/woocommerce/full.md
 
 - Before installing or editing anything, ask the user for a receive-only NWC code. One question per message.
 - Next ask for the LSC code. If the user wants stablecoins, USDT, USDC, ETH, SOL or crypto, do not ask yes/no first.
-- The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.
+- The user only pastes codes here: no command, no admin page. If you will not take one in chat, see Step 0.
 - Store each code yourself as Step 2 says. Never put a code in a shell command.
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
@@ -56,10 +56,17 @@ extensions, Docker images and the database wait until both codes are in this
 chat, or the user said "Bitcoin only"; Step 1 covers them. Do not read wp-config.php, deploy config, container environments or other projects
 looking for a code: a new store has neither code yet.
 
-The user never runs a command and never edits a file. They paste each code
-into this chat; you store it. That is the supported path: do not ask them to
-run the save command themselves, and do not tell them to revoke or replace a
+The user never runs a command. They paste each code into this chat; you
+store it. That is the supported path: do not ask them to run the save
+command themselves, and do not tell them to revoke or replace a
 code because it was pasted here. Ask one question per message.
+
+If you will not take a code pasted in chat, end that same message with this
+in place of "Paste the code here": "Save the code alone in
+`/tmp/openreceive-nwc`, then reply saved." (`/tmp/openreceive-lsc` for the
+swap code). Step 2 then reads that file in place of `/tmp/openreceive-code`
+and deletes it. Ask once per code: if the file is missing after their reply,
+do not ask again; say which file is missing, and stop. Never print it.
 
 1. **First message — the NWC code, and nothing else.**
 
