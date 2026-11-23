@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Fastify)
 
 ```sh
-# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 45 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/fastify/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/fastify/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -691,6 +691,36 @@ JavaScript if your bundler handles CSS, or use a plain
 `<link rel="stylesheet">`. Do not `@import` it into your app's Tailwind entry.
 Its rules have low specificity, so your page's styles can override checkout
 styles. Scoping does not prevent that.
+
+**Plain HTML pages, with no React and no JS build?** Install
+`@openreceive/elements` in place of `@openreceive/react`, and serve its
+standalone build straight from the package. There is nothing to build:
+
+```ts
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import fastifyStatic from "@fastify/static";
+
+// The package exports this path; its package.json and dist/ are not exported.
+const checkoutAssets = path.dirname(
+  fileURLToPath(import.meta.resolve("@openreceive/elements/standalone/openreceive-checkout.js")),
+);
+await app.register(fastifyStatic, {
+  root: checkoutAssets,
+  prefix: "/checkout-assets/",
+  decorateReply: false, // leaves reply.sendFile to the app's own @fastify/static
+});
+```
+
+Then, on the order's own page:
+
+```html
+<link rel="stylesheet" href="/checkout-assets/openreceive-checkout.css">
+<script type="module" src="/checkout-assets/openreceive-checkout.js"></script>
+<openreceive-checkout reference="ORDER_ID" prefix="/openreceive" resumable></openreceive-checkout>
+```
+
+The script is an ES module: a plain `<script>` tag runs nothing.
 
 `<Checkout>` is complete as rendered. It already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom

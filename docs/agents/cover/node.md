@@ -1,6 +1,6 @@
 # OpenReceive agent directions: Node.js (0.5.0)
 
-These directions are 43 KB. Download them with your shell and follow them from Step 0:
+These directions are 44 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/node/full.md
 

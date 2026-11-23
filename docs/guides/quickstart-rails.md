@@ -310,6 +310,23 @@ import "@openreceive/elements/styles.css"; // or link the compiled styles.css
 defineElements();
 ```
 
+**No JavaScript bundler (importmap, or none)?** Use the standalone build that
+every GitHub release attaches, at the release that matches the gem. Unpack it
+outside the engine's `/openreceive` mount, so the mount never answers for it:
+
+```sh
+mkdir -p public/openreceive-checkout
+curl -fsSL https://github.com/OpenReceive/openreceive/releases/download/v<version>/standalone-checkout-<version>.tar.gz \
+  | tar -xz --strip-components=1 -C public/openreceive-checkout
+```
+
+```erb
+<link rel="stylesheet" href="/openreceive-checkout/openreceive-checkout.css">
+<script type="module" src="/openreceive-checkout/openreceive-checkout.js"></script>
+```
+
+The script registers the tag as it loads, so it needs no `defineElements()`.
+
 If you bundle with esbuild (jsbundling-rails), build ESM and load it as a
 module. esbuild's default IIFE output runs a dependency's Node fallback in the
 browser, which throws `ReferenceError: __filename is not defined`:
