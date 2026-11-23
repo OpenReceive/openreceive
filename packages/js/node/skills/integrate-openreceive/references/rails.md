@@ -214,8 +214,12 @@ itself, and they hold for every integration.
 - Run commands where the app runs. When a compose file builds it, run its
   package manager, generators, migrations and doctor inside that service
   (`docker compose exec` or `run`), and rebuild the image after adding a
-  package. This machine's language version and database path are not the
-  app's.
+  package. This machine's language version and database path are not the app's.
+  A generator (`openreceive:install`, `db:migrate`'s schema dump) writes its
+  files inside the container. Unless the compose file mounts the source, run it
+  with the source mounted (`docker compose run --rm -v "$PWD":/app web …`, at
+  the image's app directory), or copy the new files out with
+  `docker compose cp` before the next build, which would lose them.
 - To check that the running app sees the codes, run doctor: it reports each
   one as present or missing and never prints a value. Never print the
   environment (`printenv`, `env`, `docker compose config`), even filtered to
