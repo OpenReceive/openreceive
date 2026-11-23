@@ -63,6 +63,8 @@ tools/live-nwc-test/expected_capabilities.json
 
 # Playwright artifacts
 tests/e2e/test-results/
+# Android Chrome lab screenshots and reports
+tests/android/results/
 
 # Agent trial reports. A transcript can contain a pasted wallet code.
 trials/reports/

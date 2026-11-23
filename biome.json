@@ -33,6 +33,7 @@
       "!tests/e2e/test-results",
       "!tests/e2e-btcpay/test-results",
       "!tests/e2e-wordpress/test-results",
+      "!tests/android/results",
       "!tests/orms/generated",
       "!tests/orms/pooler/generated",
       "!tests/orms/mysql/generated",
