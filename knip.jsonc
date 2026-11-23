@@ -24,7 +24,8 @@
         "tests/e2e/playwright.config.ts",
         "tests/e2e/*.spec.ts",
         "tests/e2e-btcpay/playwright.config.ts",
-        "tests/e2e-btcpay/*.spec.ts"
+        "tests/e2e-btcpay/*.spec.ts",
+        "tests/android/run-journeys.mjs"
       ],
       "project": ["tests/**", "tools/**"]
     },
