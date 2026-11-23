@@ -3,11 +3,18 @@ import type {
   Checkout,
   CreateCheckoutAmount,
   OpenReceive,
+  PaymentCheck,
   SwapCheckout,
   SwapData,
 } from "@openreceive/node";
-import type { Host } from "./host-payments.ts";
-import { maybeReconcilePayments, type OpportunisticReconcileResult } from "./reconcile-gate.ts";
+import { type Host, warnFailure } from "./host-payments.ts";
+import {
+  maybeReconcilePayments,
+  OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
+  OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
+  type OpportunisticReconcileResult,
+} from "./reconcile-gate.ts";
+import { reconcileHostPayments } from "./reconcile-loop.ts";
 import type { Authorize, AuthorizeAction, AuthorizeResource, RateLimit } from "./authorize.ts";
 import {
   createRequestId,
@@ -16,7 +23,7 @@ import {
   jsonResponse,
   HttpError,
 } from "./errors.ts";
-import type { AttemptStatus } from "./payment-repository.ts";
+import type { AttemptStatus, ReconcilableAttempt } from "./payment-repository.ts";
 import {
   assertDeclaredFields,
   MAX_REFERENCE_LENGTH,
@@ -106,6 +113,21 @@ export interface ResolvedHostCheckout {
     readonly status: AttemptStatus;
     readonly paidAt: number | null;
   };
+  /**
+   * The attempt that paid this reference, when one did. `payments/check`
+   * answers it as `paid` on EVERY attempt of the order, so a payer looking at
+   * a swap deposit, or at a second invoice, for an order paid some other way is
+   * shown the receipt instead of being left to pay again. The built-in host
+   * sets it; a custom `resolveCheckout` may omit it.
+   */
+  readonly paidAttempt?: ResolvedHostCheckout;
+  /**
+   * On prepare, the newest attempt of this reference that is still unpaid. A
+   * page rebuilt from the reference alone opens on the method picker and polls
+   * this hash, so a payment made just before a reload still reaches the
+   * screen. The built-in host sets it; a custom `resolveCheckout` may omit it.
+   */
+  readonly pendingPaymentHash?: string;
 }
 
 export type ResolveCheckoutHook = (
@@ -448,6 +470,9 @@ async function dispatch(
         ...(resolved.description === undefined ? {} : { description: resolved.description }),
         fiat_quote: prepared.fiatQuote === null ? null : toSnakeCase(prepared.fiatQuote),
         payment_methods: toSnakeCase(swapOptions.options),
+        ...(resolved.pendingPaymentHash === undefined
+          ? {}
+          : { pending_payment_hash: resolved.pendingPaymentHash.toLowerCase() }),
       },
       requestId,
     );
@@ -469,6 +494,7 @@ async function dispatch(
       reference,
       resolved,
       native,
+      reconcilePass,
       {
         mint: () =>
           runtime.service.createCheckout({
@@ -543,6 +569,9 @@ async function dispatch(
       200,
       {
         ...checkedBody,
+        ...(resolved.paidAttempt === undefined
+          ? {}
+          : { paid: paidAttemptBody(resolved.paidAttempt) }),
         payment_methods: await warmPaymentMethods(runtime, checkout.amountMsats),
       },
       requestId,
@@ -590,6 +619,7 @@ async function dispatch(
       reference,
       resolved,
       native,
+      reconcilePass,
       {
         mint: () =>
           runtime.service.createSwap({
@@ -681,6 +711,7 @@ async function commitNewAttempt<T>(
   reference: string,
   resolved: ResolvedHostCheckout,
   native: unknown,
+  reconcilePass: OpportunisticReconcileResult | undefined,
   arms: {
     /** Mint a fresh attempt: one wallet call, one new row. */
     readonly mint: () => Promise<T>;
@@ -692,6 +723,7 @@ async function commitNewAttempt<T>(
 ): Promise<T> {
   if (resolved.paymentHash !== undefined) return arms.recover();
   await enforceRateLimit(runtime, action, request, { reference }, native);
+  await assertEarlierAttemptsUnpaid(runtime, reference, reconcilePass);
   const minted = await arms.mint();
   const clientIp = runtime.extractClientIp({ action, request, resource: { reference }, native });
   await persistCheckoutAttempt(runtime, {
@@ -700,6 +732,107 @@ async function commitNewAttempt<T>(
     ...(clientIp === undefined ? {} : { clientIp }),
   });
   return minted;
+}
+
+/**
+ * How far back an earlier attempt's invoice may have expired and still be
+ * checked before a new attempt is minted. A payment lands before its invoice
+ * expires; this only covers the scan that has not caught up with it yet.
+ */
+const EARLIER_ATTEMPT_LOOKBACK_SECONDS = 10 * 60;
+
+/**
+ * Before a new attempt is minted for an order that already has unpaid ones,
+ * those are checked against the wallet, and a paid one refuses the mint as
+ * "already paid".
+ *
+ * Without it, an order paid moments ago could be handed a swap deposit
+ * address: the payer pays the invoice, the page reloads before the shop's
+ * next wallet scan (the scan gate waits 3 to 12 s between scans), the payer
+ * sees the method picker and picks a coin, and the shop opens a provider
+ * order for an order that is already paid. A payer who sends that coin pays
+ * twice. The gated scan that runs at the top of every request is skipped while
+ * the gate is closed, so it cannot be relied on here.
+ *
+ * Only a request that mints pays for this: one wallet history walk over the
+ * order's own pending attempts, the ones this request's gated scan did not
+ * already cover. Re-serving an attempt, status polls and prepare never do. A
+ * scan that cannot finish refuses the mint as retryable rather than minting
+ * blind: a payer told to try again in a moment is better off than one handed a
+ * second address to pay.
+ */
+async function assertEarlierAttemptsUnpaid(
+  runtime: Runtime,
+  reference: string,
+  reconcilePass: OpportunisticReconcileResult | undefined,
+): Promise<void> {
+  const now = (runtime.clock ?? unixSeconds)();
+  const checked = new Set(
+    reconcilePass?.reason === "ran"
+      ? reconcilePass.checks.map((check) => check.paymentHash.toLowerCase())
+      : [],
+  );
+  const earlier = (await runtime.host.payments.listForReference(reference))
+    .filter(
+      (payment) =>
+        payment.status === "pending" &&
+        payment.checkout.expiresAt + EARLIER_ATTEMPT_LOOKBACK_SECONDS > now &&
+        !checked.has(payment.paymentHash.toLowerCase()),
+    )
+    .map(
+      (payment): ReconcilableAttempt => ({
+        paymentHash: payment.paymentHash,
+        createdAt: payment.createdAt,
+        createdAtSource: payment.checkout.createdAtSource ?? "host",
+        expiresAt: payment.checkout.expiresAt,
+      }),
+    );
+  if (earlier.length === 0) return;
+  let checks: readonly PaymentCheck[];
+  try {
+    checks = await withinMs(
+      reconcileHostPayments({
+        service: runtime.service,
+        host: runtime.host,
+        attempts: earlier,
+        maxPages: OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
+        ...(runtime.clock === undefined ? {} : { clock: runtime.clock }),
+      }),
+      OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
+    );
+  } catch (error) {
+    warnFailure(
+      "payment.reconcile.before_mint.failed",
+      "could not check an order's earlier attempts before a new one (refused as retryable)",
+      error,
+    );
+    throw new HttpError(
+      503,
+      "INTERNAL",
+      "Could not confirm this order's earlier payment attempt. Please try again in a moment.",
+      { retryable: true },
+    );
+  }
+  if (checks.some((check) => check.status === "settled")) {
+    throw new HttpError(409, "CONFLICT", "This reference is already paid.");
+  }
+}
+
+/** `work`, or a rejection after `ms`. The work itself runs on; its outcome is recorded either way. */
+function withinMs<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms`)), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**
@@ -712,19 +845,25 @@ function paidPrepareBody(
   resolved: ResolvedHostCheckout,
 ): Readonly<Record<string, unknown>> {
   const checkout = requireResolvedCheckout(resolved);
-  const swap = resolved.swapData !== undefined && resolved.swapData !== null;
-  const paidAt = resolved.attemptStatus?.paidAt;
   return {
     reference,
     amount_msats: checkout.amountMsats,
     fiat_quote: checkout.fiatQuote == null ? null : toSnakeCase(checkout.fiatQuote),
     payment_methods: [],
-    paid: {
-      payment_hash: checkout.paymentHash,
-      rail: swap ? "swap" : "lightning",
-      ...(swap ? {} : { bolt11: checkout.bolt11 }),
-      ...(paidAt == null ? {} : { paid_at: paidAt }),
-    },
+    paid: paidAttemptBody(resolved),
+  };
+}
+
+/** The `paid` object (OpenAPI `PaidAttempt`) for the attempt that paid a reference. */
+function paidAttemptBody(resolved: ResolvedHostCheckout): Readonly<Record<string, unknown>> {
+  const checkout = requireResolvedCheckout(resolved);
+  const swap = resolved.swapData !== undefined && resolved.swapData !== null;
+  const paidAt = resolved.attemptStatus?.paidAt;
+  return {
+    payment_hash: checkout.paymentHash.toLowerCase(),
+    rail: swap ? "swap" : "lightning",
+    ...(swap ? {} : { bolt11: checkout.bolt11 }),
+    ...(paidAt == null ? {} : { paid_at: paidAt }),
   };
 }
 

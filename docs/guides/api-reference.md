@@ -1097,9 +1097,9 @@ authority. `…` is the mount prefix (default `/openreceive`).
 
 | Route | Status | Response body |
 | --- | --- | --- |
-| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, description?, fiat_quote?, payment_methods, paid? }` |
+| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, description?, fiat_quote?, payment_methods, paid?: PaidAttempt, pending_payment_hash? }` |
 | `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout, description?, payment_methods }` |
-| `POST …/payments/check` | 200 | `PaymentCheck` `{ payment_hash, status: PaymentStatus, paid_at?, details?: PaymentDetails, payment_methods }` |
+| `POST …/payments/check` | 200 | `PaymentCheck` `{ payment_hash, status: PaymentStatus, paid_at?, details?: PaymentDetails, paid?: PaidAttempt, payment_methods }` |
 | `POST …/swaps/quote` | 200 | `SwapQuote` `{ provider, pay_asset: SwapPayInAsset, available, pay_amount?, minimum_pay_amount?, maximum_pay_amount?, minimum_invoice_amount_msats?, maximum_invoice_amount_msats?, unavailable_reason?, unavailable_message? }` |
 | `POST …/swaps` | 201 | `CreateSwapResponse` `{ swap: SwapCheckout }` |
 | `POST …/swaps/status` | 200 | `Swap` `{ payment_hash, reference, provider, pay_in_asset: SwapPayInAsset, deposit_address, deposit_memo?, deposit_amount, provider_state: SwapProviderState, provider_expires_at, deposit_tx_id?, payout_tx_id?, refund_tx_id?, refund_reason?, refund_amount?, attention?, attention_reason?, deposit_received_amount?, emergency_repeat?, provider_order_id?, fee?: SwapFee }` |
