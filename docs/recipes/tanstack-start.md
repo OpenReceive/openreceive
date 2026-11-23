@@ -227,7 +227,38 @@ function OrderCheckout() {
 ```
 
 It renders on the server and starts the checkout in the browser. The payer
-picks Bitcoin and gets the invoice.
+picks Bitcoin and gets the invoice. Check in the route's `loader` that the
+order belongs to this visitor, as `authorize` does, before it renders.
+
+With swaps on, a swap deposit that arrives short or late is refunded on a later
+visit to this page, sometimes hours later or from another browser. So the page
+is `resumable`, and `onState` keeps the swap's payment hash on the order row:
+
+```tsx
+const saved = useRef(order.swapPaymentHash); // the order row's swap_payment_hash, from the loader
+
+<Checkout
+  reference={order.id}
+  prefix="/openreceive"
+  resumable
+  resumePaymentHash={order.swapPaymentHash || undefined}
+  onState={(state) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved.current) return;
+    saved.current = state.payment_hash;
+    void fetch(`/orders/${order.id}/swap-hash`, {
+      method: "POST",
+      body: new URLSearchParams({ payment_hash: state.payment_hash }),
+    });
+  }}
+/>;
+```
+
+`/orders/$id/swap-hash` is a server route of your own. It checks that the order
+belongs to this payer, as `authorize` does, and that the hash is 64 hex
+characters, then saves it in a `swap_payment_hash` column, empty until a swap
+starts. Not in browser storage: another browser has none, and a payer who
+returns after the swap's half hour would land on the payment methods with the
+refund off-screen ([Swap refunds](../guides/swap-refunds.md)).
 
 ## Settings
 

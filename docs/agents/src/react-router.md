@@ -227,28 +227,15 @@ itself, and they hold for every integration.
   `refund_required` provider state. Do not build, promise, or imply a Lightning
   refund path.
 - IF YOU TURN SWAPS ON, BUILD THE ROUTE BACK. A deposit that arrives short or
-  late becomes `refund_required`, and the payer claims it on a SECOND VISIT,
-  after leaving your page to fetch an address from another wallet. Three things
-  must exist or that money is unreachable through your UI: a per-order URL your
-  server serves (`/checkout/:reference` — `syncUrl` on `<Checkout>`, `sync-url`
-  or `resumable` on `<openreceive-checkout>`), your own order-summary route to
-  restore the order from, and the ATTEMPT.
-  `/checkouts/prepare` returns no attempts, so a checkout rebuilt from the
-  reference alone opens on the method grid. Re-picking the same coin
-  (`POST /swaps`) re-serves the committed attempt — but only while it is live,
-  and the shadow invoice behind a swap lasts about half an hour, after which the
-  same click mints a NEW deposit address and the refund is off-screen. Keep the
-  `payment_hash` on your order row, not in browser storage, and reopen the
-  attempt with `POST /swaps/status`, which has no such window. On the
-  drop-ins: `resumePaymentHash`, fed from `onState`, on `<Checkout>`; the
-  `resume-payment-hash` attribute, fed from the
-  `openreceive-state` event (`event.detail.state.payment_hash`), on
-  `<openreceive-checkout>`.
-  That visit can come hours later, and `authorize` must still know the payer:
-  a session that expired in between answers 403 and strands the deposit. On a
-  guest shop, tie the order to a long-lived cookie signed with the app's own
-  secret (such as `SESSION_SECRET`, never a wallet or swap code), or put a
-  secret per-order token in its URL that your page trades for that cookie.
+  late becomes `refund_required`, and the payer claims it on a later visit,
+  often hours later, after fetching an address from another wallet. The
+  quickstart below has the code: the checkout on the order's own page with
+  `resumable`, and the swap's `payment_hash` saved on your order row (never
+  browser storage) and handed back as `resumePaymentHash`
+  (`resume-payment-hash` on the element). Re-picking the coin is no substitute:
+  after about half an hour it mints a NEW deposit address. `authorize` must
+  still know the payer on that visit: on a guest shop, a long-lived cookie
+  signed with the app's own secret (Step 0), never a wallet or swap code.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amountFor` and both drop-ins render it above the amount.
@@ -382,25 +369,12 @@ components.
   App cancels an invoice opened from a link and pays the same invoice scanned
   or pasted. Show the QR code and a Copy invoice button.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Logos are data URIs; tutorial
-  images load from a JavaScript chunk. For a custom headless UI, load it when
-  a tutorial opens and look up the returned table by the tutorial's `path`:
-
-  ```js
-  import { loadPayTutorialImages } from "@openreceive/browser/headless";
-
-  const images = await loadPayTutorialImages();
-  const src = images[tutorial.path]; // data URI for the selected tutorial
-  ```
-
-  Render `src` as the image source and update your UI after loading. Existing
-  display objects do not update: their `tutorial.image` stays `undefined` if
-  created before loading. Alternatively, await the loader, recreate the displays
-  with `createWizardRouteDisplays`, and render the new `tutorial.image`.
-  Show the caption while loading or if loading fails; never use an empty image
-  source. Deploy all JavaScript chunks and allow `data:` in CSP `img-src`.
-  For missing images, check CSP errors, failed chunks, and stale displays.
-  Registry paths are lookup keys; there is no asset option or image route.
+  `createWizardRouteDisplays`. Lightning only. Logos are data URIs. Tutorial
+  images come from `loadPayTutorialImages()` when a tutorial opens (show the
+  caption until then), never from an image route or a registry path
+  (https://openreceive.org/guides/headless-checkout.md). Pass
+  `providerPreviewLimit` and build "show all" from `display.providerCount`,
+  or ~37 wallets push the QR off the screen.
 
 ## More documentation
 

@@ -196,29 +196,64 @@ Naming boundary: the Python API is snake_case (`payment_hash`,
 `amount_msats`), and so is everything on the wire. The mounted HTTP routes and
 the browser snapshots use the same names.
 
-<!-- shared:begin render -->
 ## 5. Render checkout
 
-```tsx
-import { Checkout } from "@openreceive/react";
-import "@openreceive/react/styles.css";
+The `openreceive` package carries the checkout's script and stylesheet, so a
+Jinja template needs no npm. Serve them from the installed copy:
 
-<Checkout reference={order.id} prefix="/openreceive" />;
+```python
+from importlib.resources import files
+from fastapi.staticfiles import StaticFiles
+
+CHECKOUT_ASSETS = files("openreceive") / "django" / "static" / "openreceive"
+app.mount("/checkout-assets", StaticFiles(directory=str(CHECKOUT_ASSETS)), name="checkout-assets")
 ```
 
-The checkout renders, polls, and settles itself.
+Then render the checkout on the order's own page:
 
-`@openreceive/react` and `@openreceive/elements` each ship a compiled
-`styles.css`. Each sheet is self-contained, so a plain
-`<link rel="stylesheet">` works with no build step. Each is also scoped: every
-rule applies only inside what OpenReceive renders.
+```html
+<link rel="stylesheet" href="/checkout-assets/openreceive-checkout.css">
+<script type="module" src="/checkout-assets/openreceive-checkout.js"></script>
+<openreceive-checkout id="checkout" reference="{{ order.id }}" prefix="/openreceive" resumable
+  resume-payment-hash="{{ order.swap_payment_hash or '' }}"></openreceive-checkout>
+```
 
-Serve the compiled `styles.css` without Tailwind processing. Import it from
-JavaScript if your bundler handles CSS, or use a plain
-`<link rel="stylesheet">`. Do not `@import` it into your app's Tailwind entry.
-Its rules have low specificity, so your page's styles can override checkout
-styles. Scoping does not prevent that.
-<!-- shared:end render -->
+The checkout renders, polls, and settles itself. The script is an ES module:
+a plain `<script>` tag runs nothing. A frontend built with React, Vue, Svelte
+or Angular uses `@openreceive/react` (or `/vue`, `/svelte`, `/angular`) from
+npm instead, with `<Checkout reference={order.id} prefix="/openreceive" />`
+and the package's `styles.css`.
+
+The stylesheet is self-contained and scoped: every rule applies only inside
+what OpenReceive renders. Serve it without Tailwind processing, and do not
+`@import` it into your app's Tailwind entry. Its rules have low specificity,
+so your page's styles can override checkout styles.
+
+**With swaps on**, a swap deposit that arrives short or late is refunded on a
+later visit, sometimes hours later or from another browser. Keep the swap's
+payment hash on the order row, and hand it back as `resume-payment-hash`:
+
+```html
+<script type="module">
+  const checkout = document.getElementById("checkout");
+  let saved = checkout.getAttribute("resume-payment-hash");
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+      method: "POST",
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
+  });
+</script>
+```
+
+`/orders/:id/swap-hash` is a route of your own. It checks that the order
+belongs to this payer, as your order page does, and that the hash is 64 hex
+characters, then saves it in a `swap_payment_hash` column, empty until a swap
+starts. Not in browser storage: another browser has none, and a payer who
+returns after the swap's half hour would land on the payment methods with the
+refund off-screen ([Swap refunds](swap-refunds.md)).
 
 <!-- shared:begin render-notes -->
 `<Checkout>` is complete as rendered. It already shows the `description` from
@@ -248,18 +283,6 @@ transaction rolls back, the callback may run again. For delivery to outside
 systems, use an outbox in your app: record the message in the transaction and
 send it after commit.
 <!-- shared:end render-notes -->
-
-A page without a bundler renders the same checkout as a custom element:
-`<openreceive-checkout reference="…" prefix="/openreceive">` from
-`@openreceive/elements`. For Jinja templates without a JavaScript build, serve
-its standalone build from your static directory: copy
-`openreceive-checkout.js` and `openreceive-checkout.css` from
-`node_modules/@openreceive/elements/dist/standalone/` to `static/openreceive/`,
-and load both on the checkout page: the JS with `<script type="module">`, because
-it is an ES module and a plain `<script>` tag runs nothing, and the CSS with
-`<link rel="stylesheet">`. The `openreceive` package from PyPI carries
-the same two files in `openreceive/django/static/openreceive/`, so you can copy
-them from there without npm.
 
 Buy a Button is a runnable illustration of the boundary
 ([`examples/buttons/server/fastapi`](../../examples/buttons/server/fastapi)).

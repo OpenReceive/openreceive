@@ -269,9 +269,10 @@ itself.
   never converted — are the only refund OpenReceive performs. Do not build,
   promise, or imply a Lightning refund path.
 - IF YOU TURN SWAPS ON, BUILD THE ROUTE BACK. A deposit that arrives short or
-  late is refunded on a SECOND visit, so the order needs its own URL, with
-  `syncUrl` on `<Checkout>`, and the attempt must come back with it: keep the
-  `payment_hash` from `onState` and pass it as `resumePaymentHash`.
+  late is refunded on a SECOND visit, so the order needs its own page, with
+  `resumable` on `<Checkout>`, and the attempt must come back with it: keep the
+  `payment_hash` from `onState` on the order row, not in browser storage, and
+  pass it back as `resumePaymentHash`.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer what they are buying: return a `description` beside the
   price from `amountFor`.
@@ -288,7 +289,7 @@ enough.
 - https://openreceive.org/guides/supabase-migration.md — the migration for Step 2
 - https://openreceive.org/guides/authorization.md — before you write `authorize`, and how cross-site requests are checked
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
-- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, including `syncUrl` and `resumePaymentHash`
+- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, including `resumable` and `resumePaymentHash`
 - https://openreceive.org/guides/checkout-ux.md — the rules the drop-in already follows
 - https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay tutorials come from: inside the JavaScript, nothing to serve
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set

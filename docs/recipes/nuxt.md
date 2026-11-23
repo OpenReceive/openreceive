@@ -124,7 +124,7 @@ export default defineEventHandler(async (event) => {
   if (!order || order.visitor !== getCookie(event, "visitor")) {
     throw createError({ statusCode: 404, statusMessage: "Not found" });
   }
-  return { reference: order.id };
+  return { reference: order.id, swapPaymentHash: order.swapPaymentHash ?? undefined };
 });
 ```
 
@@ -140,17 +140,42 @@ const { data, error } = await useFetch(`/api/checkout/${route.params.reference}`
 if (error.value) {
   throw createError({ statusCode: 404, statusMessage: "Not found", fatal: true });
 }
+let saved = data.value?.swapPaymentHash; // the order row's swap_payment_hash
+
+// With swaps on: keep a new swap's payment hash on the order row.
+function onState(event: Event) {
+  const { state } = (event as CustomEvent).detail;
+  if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+  saved = state.payment_hash;
+  $fetch(`/api/orders/${data.value?.reference}/swap-hash`, {
+    method: "POST",
+    body: { payment_hash: saved },
+  });
+}
 </script>
 
 <template>
-  <Checkout v-if="data" :reference="data.reference" prefix="/openreceive" />
+  <Checkout v-if="data" :reference="data.reference" prefix="/openreceive" resumable
+    :resume-payment-hash="data.swapPaymentHash" :on-state="onState" />
 </template>
 ```
 
 The page renders on the server and starts the checkout in the browser. The
-payer picks Bitcoin and gets the invoice. Keep it at the order's own URL: a
-payer with a swap deposit in flight comes back to it
-([Swap refunds](../guides/swap-refunds.md)).
+payer picks Bitcoin and gets the invoice.
+
+With swaps on, a swap deposit that arrives short or late is refunded on a later
+visit to this page, sometimes hours later or from another browser. So the page
+is `resumable`, and the `onState` prop keeps the swap's payment hash on the
+order row. It receives the element's event, with the state at
+`event.detail.state`.
+
+`server/api/orders/[reference]/swap-hash.post.ts` is a route of your own. It
+checks that the order belongs to this payer, as the page's API route does, and
+that the hash is 64 hex characters, then saves it in a `swap_payment_hash`
+column, empty until a swap starts. Not in browser storage: another browser has
+none, and a payer who returns after the swap's half hour would land on the
+payment methods with the refund off-screen ([Swap
+refunds](../guides/swap-refunds.md)).
 
 ## Settings
 

@@ -336,8 +336,9 @@ Then render the checkout on the order's own page:
   <script type="module" src="/checkout-assets/openreceive-checkout.js"></script>
 </head>
 
-<openreceive-checkout reference="{{ order.id }}" prefix="/openreceive"
-                      csrf-header="X-CSRFToken"></openreceive-checkout>
+<openreceive-checkout id="checkout" reference="{{ order.id }}" prefix="/openreceive"
+                      resumable csrf-header="X-CSRFToken"
+                      resume-payment-hash="{{ order.swap_payment_hash or '' }}"></openreceive-checkout>
 ```
 
 The checkout renders, polls, and settles itself. `csrf-header` sends the
@@ -348,14 +349,43 @@ transaction-details panel; do not build a custom UI to show them
 ([Checkout UX](checkout-ux.md)).
 
 The order page is the payer's way back: a payer can reload or bookmark it to
-return to a pending payment or a swap refund. Set the `theme` attribute
-(`dark` or `light`) when the page always uses one theme. The stylesheet is
-scoped to the checkout and needs no Tailwind processing; your page's styles
-can still override it ([Frontend checkout](frontend-checkout.md)).
-Everything the checkout draws ships inside the script, so there is no image to
-serve. If your Content-Security-Policy has a strict `img-src`, allow `data:`.
-An app with a JavaScript build can use `@openreceive/react`, `/vue`,
-`/svelte` or `/angular` from npm instead, with `csrfHeader="X-CSRFToken"`.
+return to a pending payment or a swap refund, so it is `resumable`.
+
+**With swaps on**, a swap deposit that arrives short or late is refunded on a
+later visit, sometimes hours later or from another browser. Keep the swap's
+payment hash on the order row, and hand it back as `resume-payment-hash`:
+
+```html
+<script type="module">
+  const checkout = document.getElementById("checkout");
+  let saved = checkout.getAttribute("resume-payment-hash");
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+      method: "POST",
+      headers: { "X-CSRFToken": "{{ csrf_token() }}" },
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
+  });
+</script>
+```
+
+`/orders/:id/swap-hash` is a view of your own. It checks that the order belongs
+to this payer, as your order page does, and that the hash is 64 hex characters,
+then saves it in a `swap_payment_hash` column, empty until a swap starts. Not
+in browser storage: another browser has none, and a payer who returns after the
+swap's half hour would land on the payment methods with the refund off-screen
+([Swap refunds](swap-refunds.md)).
+
+Set the `theme` attribute (`dark` or `light`) when the page always uses one
+theme. The stylesheet is scoped to the checkout and needs no Tailwind
+processing; your page's styles can still override it ([Frontend
+checkout](frontend-checkout.md)). Everything the checkout draws ships inside
+the script, so there is no image to serve. If your Content-Security-Policy has
+a strict `img-src`, allow `data:`. An app with a JavaScript build can use
+`@openreceive/react`, `/vue`, `/svelte` or `/angular` from npm instead, with
+`csrfHeader="X-CSRFToken"`.
 
 That is the whole loop. Your server owns the price and the order. The payer
 gets an invoice. `on_paid` runs inside the settlement transaction. If that

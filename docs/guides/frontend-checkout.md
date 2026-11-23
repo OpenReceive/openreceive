@@ -55,10 +55,14 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
   call. The custom element always uses the page's own fetch.
 - `onSettled`, `onError`, `onState`: settlement, failures, and every attempt
   the checkout watches. If you want the payer to come back to a refund later,
-  store the swap `payment_hash` from `onState`.
+  save the swap `payment_hash` from `onState` on your order row.
+- `syncUrl` (boolean, off by default): push `{resumePathPrefix}/{reference}`
+  (default `/checkout/:reference`) into the address bar. Your server must then
+  serve the checkout at that path. `routeReference` says your router already
+  put the order in the URL, and skips the push.
 - `resumable`: whether a closed tab has a URL that brings the payer back. The
   checkout infers it from `syncUrl` / `routeReference`. Set it yourself when
-  your router owns a per-order path the component cannot see. It decides which
+  the checkout sits on the order's own page, which the component cannot see. It decides which
   warning the refund screen shows. See [Checkout UX → The refund screens](checkout-ux.md#the-refund-screens).
 - `resumePaymentHash`: after prepare, reopen that attempt instead of showing
   the method grid. `/checkouts/prepare` returns no attempts. If the server will
@@ -145,34 +149,42 @@ React's `<Checkout>`, as attributes and one event:
 | `resumePaymentRail` | `resume-payment-rail` |
 | `onState` | the `openreceive-state` event, with the snapshot at `event.detail.state` |
 
-A server-rendered app usually serves the checkout at a per-order URL already,
-such as `/checkout/ord_123`. Say so with `resumable`. Then keep the swap's
-payment hash, and hand it back on the next visit:
+A server-rendered app usually serves the checkout on the order's own page
+already, such as `/orders/ord_123`. Say so with `resumable`. Then keep the
+swap's payment hash on the order row, and render it back on the next visit:
 
 ```html
-<openreceive-checkout id="checkout" reference="ord_123" prefix="/openreceive" resumable>
-</openreceive-checkout>
-<script>
+<openreceive-checkout id="checkout" reference="ord_123" prefix="/openreceive" resumable
+  resume-payment-hash="SAVED_HASH"></openreceive-checkout>
+<script type="module">
   const checkout = document.getElementById("checkout");
-  const key = `openreceive.swap.${checkout.getAttribute("reference")}`;
-  // Reopen the swap this order already has, instead of the method grid.
-  const saved = localStorage.getItem(key);
-  if (saved) checkout.setAttribute("resume-payment-hash", saved);
-  checkout.addEventListener("openreceive-state", (event) => {
-    const { state } = event.detail;
-    if (state.rail === "swap" && state.payment_hash) localStorage.setItem(key, state.payment_hash);
+  let saved = checkout.getAttribute("resume-payment-hash");
+  // A new swap's hash goes to the order row, through a route of your own.
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch("/orders/ord_123/swap-hash", {
+      method: "POST",
+      headers: { "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content ?? "" },
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
   });
 </script>
 ```
 
-`localStorage` brings back only the payer's own browser. To survive a change of
-device, post the hash to your own order route and render it into
-`resume-payment-hash` from the server. The checkout ignores a hash the server
-will not serve, so a stale one does no harm.
+`SAVED_HASH` is the order row's `swap_payment_hash`, empty until the order has
+one. `/orders/:id/swap-hash` is your own route: it checks that the order
+belongs to this payer, as your order page does, and that the hash is 64 hex
+characters, then saves it. Send the CSRF header your framework reads, or none.
+Do not keep the hash in `localStorage`: a payer who comes back in another
+browser, or after clearing site data, would land on the payment methods with
+the refund off-screen. The checkout ignores a hash the server will not serve,
+so a stale one does no harm.
 
-If the page has no per-order URL, add `sync-url`. The element then pushes
-`{resume-path-prefix}/{reference}` (default `/checkout/ord_123`) into the
-address bar, and your server has to serve the checkout at that path.
+If the page has no per-order URL, add `sync-url`, a boolean like React's
+`syncUrl`. The element then pushes `{resume-path-prefix}/{reference}` (default
+`/checkout/ord_123`) into the address bar, and your server has to serve the
+checkout at that path.
 
 ## Theme
 

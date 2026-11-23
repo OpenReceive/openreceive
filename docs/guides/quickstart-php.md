@@ -268,6 +268,7 @@ and the element:
 <openreceive-checkout
   reference="<?= htmlspecialchars($order->id) ?>"
   prefix="/openreceive"
+  resumable
 ></openreceive-checkout>
 ```
 
@@ -359,11 +360,35 @@ at most one provider order, in its server-only `swap_data`. The repository
 never selects it into public arrays. Do not log it or return it from your own
 API.
 
-**Setting either connection string commits you to refunds.** A deposit that
-arrives short or late is claimed on a second visit. That needs a per-order URL
-your app serves, and the attempt's `payment_hash` kept.
-[Swap refunds](swap-refunds.md) covers all of it. Read it before you set
-`LSC_URI_PRIMARY`.
+**Setting either connection string commits you to refunds.** A swap deposit
+that arrives short or late is refunded on a later visit to the order's page,
+sometimes hours later or from another browser. Keep the swap's payment hash on
+the order row, and hand it back as `resume-payment-hash`:
+
+```php
+<openreceive-checkout id="checkout" reference="<?= htmlspecialchars($order->id) ?>"
+  prefix="/openreceive" resumable
+  resume-payment-hash="<?= htmlspecialchars($order->swap_payment_hash ?? '') ?>"></openreceive-checkout>
+<script type="module">
+  const checkout = document.getElementById("checkout");
+  let saved = checkout.getAttribute("resume-payment-hash");
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+      method: "POST",
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
+  });
+</script>
+```
+
+`/orders/:id/swap-hash` is a route of your own. It checks that the order
+belongs to this payer, as your order page does, and that the hash is 64 hex
+characters, then saves it in a `swap_payment_hash` column, empty until a swap
+starts. Not in browser storage: another browser has none, and a payer who
+returns after the swap's half hour would land on the payment methods with the
+refund off-screen ([Swap refunds](swap-refunds.md)).
 
 <!-- shared:begin next -->
 ## Next

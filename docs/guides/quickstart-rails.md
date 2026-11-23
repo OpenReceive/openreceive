@@ -295,7 +295,7 @@ stylesheet link can serve, scoped to what OpenReceive renders.
 
 ```erb
 <%# app/views/orders/pay.html.erb %>
-<openreceive-checkout reference="<%= @order.id %>"></openreceive-checkout>
+<openreceive-checkout reference="<%= @order.id %>" resumable></openreceive-checkout>
 ```
 
 ```js
@@ -379,16 +379,32 @@ server-only `swap_data`. The engine hides `swap_data` from Active Record
 inspection and ordinary serialization. Do not serialize it explicitly, log it,
 or return it from your own API. It may contain a provider credential.
 
-<!-- shared:begin swap-refund-commitment -->
-**Setting either connection string commits you to refunds.** A swap deposit can
-arrive short or late. The provider then marks it `refund_required`, and only
-your UI can claim it. The payer claims it on a second visit, after leaving your
-page to get an address in another wallet. That needs three things:
+**Setting either connection string commits you to refunds.** A swap deposit
+that arrives short or late is refunded on a later visit to the order's page,
+sometimes hours later or from another browser. Keep the swap's payment hash on
+the order row, and hand it back as `resume-payment-hash`:
 
-- a per-order URL your app serves,
-- a route that restores the order behind it,
-- something that restores the ATTEMPT, since `/checkouts/prepare` returns none.
+```erb
+<openreceive-checkout id="checkout" reference="<%= @order.id %>" resumable
+  resume-payment-hash="<%= @order.swap_payment_hash %>"></openreceive-checkout>
+<script type="module">
+  const checkout = document.getElementById("checkout");
+  let saved = checkout.getAttribute("resume-payment-hash");
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+      method: "POST",
+      headers: { "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content },
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
+  });
+</script>
+```
 
-[Swap refunds](swap-refunds.md) covers all of it. Read it before you set
-`LSC_URI_PRIMARY`.
-<!-- shared:end swap-refund-commitment -->
+`/orders/:id/swap-hash` is a route of your own. It checks that the order
+belongs to this payer, as your order page does, and that the hash is 64 hex
+characters, then saves it in a `swap_payment_hash` column, empty until a swap
+starts. Not in browser storage: another browser has none, and a payer who
+returns after the swap's half hour would land on the payment methods with the
+refund off-screen ([Swap refunds](swap-refunds.md)).

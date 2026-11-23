@@ -84,12 +84,17 @@ There are three layers. Each one is useless without the one above it.
 
 A checkout with no per-order path loses the order id when the tab closes.
 
-Give the order its own URL. The drop-ins take `syncUrl`, `resumePathPrefix`,
-and `routeReference`. On `<openreceive-checkout>` these are the `sync-url`,
+Give the order its own URL. The order's own page (`/orders/:id`) is the usual
+one: put the checkout there and pass `resumable`. A checkout that has no such
+page can make one with `syncUrl`, a boolean: it pushes
+`{resumePathPrefix}/{reference}` (default `/checkout/:reference`) into the
+address bar, and your server must then serve the checkout at that path.
+`routeReference` says your router already put the order in the URL. On
+`<openreceive-checkout>` these are the `resumable`, `sync-url`,
 `resume-path-prefix` and `route-reference` attributes. If you own routing, push
 it with `enterCheckoutResumePath` from `@openreceive/browser/headless`.
 
-Then tell the display model what you built:
+A custom UI then tells the display model what you built:
 
 ```ts
 createSwapDisplayModel(invoice, { resumable: true });
@@ -133,19 +138,37 @@ address, and the refund is no longer on screen.
 another browser does not have. `POST …/swaps/status` with
 `{ reference, payment_hash }` finds one specific attempt, even a day later.
 
-On a drop-in, that is one prop:
+On a drop-in, the hash goes back in through one prop, and comes out through
+`onState` to a route of your own that saves it on the order row:
 
 ```tsx
-<Checkout reference={order.id} resumable resumePaymentHash={order.swapPaymentHash} />
+const saved = useRef(order.swapPaymentHash); // the order row's swap_payment_hash
+
+<Checkout
+  reference={order.id}
+  resumable
+  resumePaymentHash={order.swapPaymentHash || undefined}
+  onState={(state) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved.current) return;
+    saved.current = state.payment_hash;
+    void fetch(`/orders/${order.id}/swap-hash`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payment_hash: state.payment_hash }),
+    });
+  }}
+/>;
 ```
 
-This works in create mode only. If the server will not serve the hash, the
-checkout ignores it. Get the hash from `onState`.
+That route checks that the order belongs to this payer, as `authorize` does,
+and that the hash is 64 hex characters, then saves it. This works in create
+mode only. If the server will not serve the hash, the checkout ignores it.
 
 On the plain-HTML element, it is the `resume-payment-hash` attribute, plus
 `resumable` when your server already serves a per-order page. The hash comes
 from the `openreceive-state` event, at `event.detail.state.payment_hash` when
-`event.detail.state.rail` is `"swap"`. A full example is in
+`event.detail.state.rail` is `"swap"`. The Vue, Svelte and Angular wrappers
+take an `onState` prop that receives that same event. A full example is in
 [Frontend checkout → The way back to a refund](frontend-checkout.md#the-way-back-to-a-refund).
 
 On a custom UI:

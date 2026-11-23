@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Django)
 
 ```sh
-# READ THIS FIRST: this file is 50 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 49 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/django/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/django/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -255,26 +255,15 @@ itself, and they hold for every integration.
   `refund_required` provider state. Do not build, promise, or imply a Lightning
   refund path.
 - IF YOU TURN SWAPS ON, BUILD THE ROUTE BACK. A deposit that arrives short or
-  late becomes `refund_required`, and the payer claims it on a SECOND VISIT,
-  after leaving your page to fetch an address from another wallet. Three things
-  must exist or that money is unreachable through your UI: a per-order URL your
-  server serves (`/checkout/:reference` — `syncUrl` on `<Checkout>`, `sync-url`
-  or `resumable` on `<openreceive-checkout>`), your own order-summary route to
-  restore the order from, and the ATTEMPT.
-  `/checkouts/prepare` returns no attempts, so a checkout rebuilt from the
-  reference alone opens on the method grid. Re-picking the same coin
-  (`POST /swaps`) re-serves the committed attempt — but only while it is live,
-  and the shadow invoice behind a swap lasts about half an hour, after which the
-  same click mints a NEW deposit address and the refund is off-screen. Keep the
-  `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
-  such window. On the drop-ins: `resumePaymentHash`, fed from `onState`, on
-  `<Checkout>`; the `resume-payment-hash` attribute, fed from the
-  `openreceive-state` event (`event.detail.state.payment_hash`), on
-  `<openreceive-checkout>`.
-  That visit can come hours later, and `authorize` must still know the payer:
-  a session that expired in between answers 403 and strands the deposit. On a
-  guest shop, tie the order to a long-lived signed cookie, or put a secret
-  per-order token in its URL that your page trades for that cookie.
+  late becomes `refund_required`, and the payer claims it on a later visit,
+  often hours later, after fetching an address from another wallet. The
+  quickstart below has the code: the checkout on the order's own page with
+  `resumable`, and the swap's `payment_hash` saved on your order row (never
+  browser storage) and handed back as `resumePaymentHash`
+  (`resume-payment-hash` on the element). Re-picking the coin is no substitute:
+  after about half an hour it mints a NEW deposit address. `authorize` must
+  still know the payer on that visit: on a guest shop, a long-lived cookie
+  signed with the app's own secret (Step 0), never a wallet or swap code.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amount_for` and both drop-ins render it above the
@@ -418,28 +407,12 @@ built on `@openreceive/browser/headless`. Read that before writing components.
   App cancels an invoice opened from a link and pays the same invoice scanned
   or pasted. Show the QR code and a Copy invoice button.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Logos are data URIs; tutorial
-  images load from a JavaScript chunk. For a custom headless UI, load it when
-  a tutorial opens and look up the returned table by the tutorial's `path`:
-
-  ```js
-  import { loadPayTutorialImages } from "@openreceive/browser/headless";
-
-  const images = await loadPayTutorialImages();
-  const src = images[tutorial.path]; // data URI for the selected tutorial
-  ```
-
-  Render `src` as the image source and update your UI after loading. Existing
-  display objects do not update: their `tutorial.image` stays `undefined` if
-  created before loading. Alternatively, await the loader, recreate the displays
-  with `createWizardRouteDisplays`, and render the new `tutorial.image`.
-  Show the caption while loading or if loading fails; never use an empty image
-  source. Deploy all JavaScript chunks and allow `data:` in CSP `img-src`.
-  For missing images, check CSP errors, failed chunks, and stale displays.
-  Registry paths are lookup keys; there is no asset option or image route.
-  The registry answers ~37 wallets: pass
+  `createWizardRouteDisplays`. Lightning only. Logos are data URIs. Tutorial
+  images come from `loadPayTutorialImages()` when a tutorial opens (show the
+  caption until then), never from an image route or a registry path
+  (https://openreceive.org/guides/headless-checkout.md). Pass
   `providerPreviewLimit` and build "show all" from `display.providerCount`,
-  or they push the QR off the screen.
+  or ~37 wallets push the QR off the screen.
 
 ## More documentation
 
@@ -804,8 +777,7 @@ build as static files, so a Django template needs no JavaScript bundler at all:
 <link rel="stylesheet" href="{% static 'openreceive/openreceive-checkout.css' %}">
 <script type="module" src="{% static 'openreceive/openreceive-checkout.js' %}"></script>
 
-<openreceive-checkout
-  reference="{{ order.pk }}"
+<openreceive-checkout id="checkout" reference="{{ order.pk }}" resumable
   csrf-header="X-CSRFToken"></openreceive-checkout>
 ```
 
@@ -878,14 +850,33 @@ model's `repr`, out of the read-only admin it registers, and out of every
 public dict. Do not serialize it, log it, or return it from your own API. It
 may contain a provider credential.
 
-**Setting either connection string commits you to refunds.** A swap deposit can
-arrive short or late. The provider then marks it `refund_required`, and only
-your UI can claim it. The payer claims it on a second visit, after leaving your
-page to get an address in another wallet. That needs three things:
+**Setting either connection string commits you to refunds.** A swap deposit
+that arrives short or late is refunded on a later visit to the order's page,
+sometimes hours later or from another browser. Keep the swap's payment hash on
+the order row, and hand it back as `resume-payment-hash`:
 
-- a per-order URL your app serves,
-- a route that restores the order behind it,
-- something that restores the ATTEMPT, since `/checkouts/prepare` returns none.
+```django
+<openreceive-checkout id="checkout" reference="{{ order.pk }}" resumable
+  resume-payment-hash="{{ order.swap_payment_hash|default:'' }}"
+  csrf-header="X-CSRFToken"></openreceive-checkout>
+<script type="module">
+  const checkout = document.getElementById("checkout");
+  let saved = checkout.getAttribute("resume-payment-hash");
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+      method: "POST",
+      headers: { "X-CSRFToken": "{{ csrf_token }}" },
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
+  });
+</script>
+```
 
-[Swap refunds](https://openreceive.org/guides/swap-refunds.md) covers all of it. Read it before you set
-`LSC_URI_PRIMARY`.
+`/orders/:id/swap-hash` is a view of your own. It checks that the order belongs
+to this payer, as your order page does, and that the hash is 64 hex characters,
+then saves it in a `swap_payment_hash` column, empty until a swap starts. Not
+in browser storage: another browser has none, and a payer who returns after the
+swap's half hour would land on the payment methods with the refund off-screen
+([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).

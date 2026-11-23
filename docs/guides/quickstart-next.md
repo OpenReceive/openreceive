@@ -242,16 +242,38 @@ same module. The page that renders it can stay a server component.
 // app/checkout/[reference]/order-checkout.tsx
 "use client";
 
+import { useRef } from "react";
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
-export function OrderCheckout({ reference }: { reference: string }) {
-  return <Checkout reference={reference} prefix="/openreceive" />;
+type Order = { id: string; swapPaymentHash?: string };
+
+export function OrderCheckout({ order }: { order: Order }) {
+  const saved = useRef(order.swapPaymentHash); // the order row's swap_payment_hash
+  return (
+    <Checkout
+      reference={order.id}
+      prefix="/openreceive"
+      routeReference={order.id} // the order is in this page's URL
+      resumePaymentHash={order.swapPaymentHash || undefined}
+      onState={(state) => {
+        if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved.current) return;
+        saved.current = state.payment_hash;
+        void fetch(`/orders/${order.id}/swap-hash`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ payment_hash: state.payment_hash }),
+        });
+      }}
+    />
+  );
 }
 ```
 
 ```tsx
 // app/checkout/[reference]/page.tsx — the order's own, resumable URL
+import { notFound } from "next/navigation";
+import { orders } from "@/lib/app"; // your existing models
 import { OrderCheckout } from "./order-checkout";
 
 export default async function CheckoutPage({
@@ -260,9 +282,22 @@ export default async function CheckoutPage({
   params: Promise<{ reference: string }>;
 }) {
   const { reference } = await params;
-  return <OrderCheckout reference={reference} />;
+  const order = await orders.findForViewer(reference); // your own lookup, scoped to the session
+  if (!order) notFound();
+  return <OrderCheckout order={{ id: order.id, swapPaymentHash: order.swapPaymentHash ?? undefined }} />;
 }
 ```
+
+`routeReference` tells the checkout the order is already in the URL, so a payer
+can bookmark the page. With swaps on, `onState` keeps the swap's payment hash
+on the order row, through a route handler of your own
+(`app/orders/[id]/swap-hash/route.ts`), and `resumePaymentHash` hands it back.
+The handler checks that the order belongs to this payer, as your order page
+does, and that the hash is 64 hex characters, then saves it in a
+`swap_payment_hash` column, empty until a swap starts. Not in browser storage:
+another browser has none, and a payer who returns after the swap's half hour
+would land on the payment methods with the refund off-screen ([Swap
+refunds](swap-refunds.md)).
 
 `/checkout/[reference]` is deliberately a page of its own rather than a modal
 on the cart. A payer with a swap deposit in flight has no account and no email
