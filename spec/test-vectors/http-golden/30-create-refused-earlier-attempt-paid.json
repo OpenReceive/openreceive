@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "name": "a create on a reference whose earlier invoice was paid but not yet scanned answers already paid and mints nothing",
+  "handler": "repository_unseen_payment",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": {
+      "reference": "order-golden-settled"
+    }
+  },
+  "expected": {
+    "status": 409,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "CONFLICT",
+      "message": "This reference is already paid.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "Exercise the real repository and request handler. Commit 7f..7f for order-golden-settled with a checkout expiring at 1030 (not reusable at clock 1000, so the create would mint a replacement), do NOT settle it, then preclaim the gate so the request's own gated scan is skipped. The wallet's history reports 7f..7f settled at 950 and its make_invoice fails the test if called. Before minting, the handler checks the reference's pending attempts against the wallet, records the settlement, and refuses. Without that check a paid order could be handed a new invoice or a swap deposit address."
+}

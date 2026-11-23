@@ -842,6 +842,72 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     authorize: () => true,
     clock: () => 1000,
   });
+  // 28: the order was paid by 7f..7f; the screen polling 6e..6e (an older
+  // invoice it superseded, still pending) is told so through `paid`.
+  const OLDER_HASH = "6e".repeat(32);
+  const elsewhereDb = memoryPaymentsDb();
+  databases.push(elsewhereDb);
+  const elsewhere = createHost({
+    db: elsewhereDb,
+    clock: () => 1000,
+    amountFor: () => ({ sats: 1 }),
+    onPaid: () => {},
+  });
+  await elsewhere.payments.commitAttempt({
+    reference: SETTLED_GOLDEN_CHECKOUT.reference,
+    paymentHash: OLDER_HASH,
+    checkout: {
+      ...SETTLED_GOLDEN_CHECKOUT,
+      paymentHash: OLDER_HASH,
+      bolt11: "lnbcgoldenolder",
+      createdAt: 870,
+      expiresAt: 1030,
+    },
+  });
+  await elsewhere.payments.commitAttempt({
+    reference: SETTLED_GOLDEN_CHECKOUT.reference,
+    paymentHash: SETTLED_GOLDEN_HASH,
+    checkout: SETTLED_GOLDEN_CHECKOUT,
+  });
+  await elsewhere.onPaid({ paymentHash: SETTLED_GOLDEN_HASH, paidAt: 950 });
+  await elsewhere.payments.claimReconcileGate({ now: 1000, intervalSeconds: 2 });
+  handlers.repository_paid_elsewhere = createHttpHandler({
+    service: settledService,
+    host: elsewhere,
+    authorize: () => true,
+    clock: () => 1000,
+  });
+  // 29: unpaid, one pending attempt, gate closed: prepare names the attempt.
+  const pending = await persistedHost();
+  await pending.host.payments.claimReconcileGate({ now: 1000, intervalSeconds: 2 });
+  handlers.repository_pending_gate_busy = createHttpHandler({
+    service: settledService,
+    host: pending.host,
+    authorize: () => true,
+    clock: () => 1000,
+  });
+  // 30: the wallet holds the payment of 7f..7f, which no scan has recorded;
+  // its invoice is too close to expiry to re-serve, so a create would mint.
+  const unseenDb = memoryPaymentsDb();
+  databases.push(unseenDb);
+  const unseen = createHost({
+    db: unseenDb,
+    clock: () => 1000,
+    amountFor: () => ({ sats: 1 }),
+    onPaid: () => {},
+  });
+  await unseen.payments.commitAttempt({
+    reference: SETTLED_GOLDEN_CHECKOUT.reference,
+    paymentHash: SETTLED_GOLDEN_HASH,
+    checkout: { ...SETTLED_GOLDEN_CHECKOUT, expiresAt: 1030 },
+  });
+  await unseen.payments.claimReconcileGate({ now: 1000, intervalSeconds: 2 });
+  handlers.repository_unseen_payment = createHttpHandler({
+    service: settledService,
+    host: unseen,
+    authorize: () => true,
+    clock: () => 1000,
+  });
   const failing = await persistedHost(async ({ query }) => {
     await query("INSERT INTO entitlements (reference) VALUES ('order-golden-settled')");
     throw new Error("simulated fulfillment failure");

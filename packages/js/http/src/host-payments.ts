@@ -260,9 +260,12 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
     // tell the payer who paid it.
     const paid = attempts.find((payment) => payment.status === "settled");
     if (context.action === "checkout.prepare") {
-      return paid === undefined
-        ? resolvedPrice(await priceFor(context))
-        : resolvedPayment(undefined, paid);
+      if (paid !== undefined) return resolvedPayment(undefined, paid);
+      const pending = newestPending(attempts);
+      return {
+        ...resolvedPrice(await priceFor(context)),
+        ...(pending === undefined ? {} : { pendingPaymentHash: pending.paymentHash }),
+      };
     }
     const isCreate = context.action === "checkout.create" || context.action === "swap.create";
     if (isCreate && paid !== undefined) {
@@ -299,7 +302,10 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
           );
         }
       }
-      return resolvedPayment(amount, selected);
+      return {
+        ...resolvedPayment(amount, selected),
+        ...(paid === undefined ? {} : { paidAttempt: resolvedPayment(undefined, paid) }),
+      };
     }
 
     if (isCreate) {
@@ -398,6 +404,21 @@ function resolvedPayment(
       ? {}
       : { swapData: payment.swapData }),
   };
+}
+
+/**
+ * The attempt a picker opened on this reference watches: the newest one still
+ * pending, superseded or not, since a superseded invoice can still be paid.
+ * Any pending attempt would do (`paid` answers for the whole order); the
+ * newest is the one most likely still on the payer's wallet screen.
+ */
+function newestPending(payments: readonly PaymentRecord[]): PaymentRecord | undefined {
+  let newest: PaymentRecord | undefined;
+  for (const payment of payments) {
+    if (payment.status !== "pending") continue;
+    if (newest === undefined || payment.createdAt > newest.createdAt) newest = payment;
+  }
+  return newest;
 }
 
 /** The Ruby `live_at` model: pending, not superseded, and not yet expired. */

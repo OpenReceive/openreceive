@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "name": "prepare on an unpaid reference with an attempt names that attempt",
+  "handler": "repository_pending_gate_busy",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts/prepare",
+    "body": {
+      "reference": "order-golden-settled"
+    }
+  },
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "reference": "order-golden-settled",
+      "amount_msats": 1000,
+      "fiat_quote": null,
+      "payment_methods": [],
+      "pending_payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+    }
+  },
+  "note": "Exercise the real repository and request handler. Commit the settled-golden checkout 7f..7f (created_at 900, expires_at 1500) and do NOT settle it, then preclaim the gate; wallet I/O must not occur. The host prices the reference at 1 sat. A page reloaded after the payer paid opens on the picker and polls this hash, so the receipt still comes."
+}

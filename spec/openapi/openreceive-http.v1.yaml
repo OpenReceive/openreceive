@@ -272,14 +272,27 @@ components:
           items: { $ref: '#/components/schemas/PaymentMethod' }
         paid:
           description: Present when the reference is already paid. The client shows the receipt.
-          type: object
-          additionalProperties: false
-          required: [payment_hash, rail]
-          properties:
-            payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
-            rail: { type: string, enum: [lightning, swap] }
-            bolt11: { type: string, minLength: 1 }
-            paid_at: { type: integer, minimum: 0 }
+          $ref: '#/components/schemas/PaidAttempt'
+        pending_payment_hash:
+          description: >
+            The newest attempt of this reference that is still unpaid, when it
+            has one. A page rebuilt from the reference alone (a reload, a phone
+            reopening a tab) opens on the method picker; it polls
+            payments/check with this hash, and that answer's `paid` brings up
+            the receipt if the payer paid before the page came back. Absent
+            when the reference is paid or has no attempt yet.
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+    PaidAttempt:
+      description: The attempt that paid the reference. Every attempt of a paid reference answers with it.
+      type: object
+      additionalProperties: false
+      required: [payment_hash, rail]
+      properties:
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        rail: { type: string, enum: [lightning, swap] }
+        bolt11: { type: string, minLength: 1 }
+        paid_at: { type: integer, minimum: 0 }
     CreateCheckoutRequest:
       type: object
       additionalProperties: false
@@ -402,6 +415,12 @@ components:
         status: { $ref: '#/components/schemas/PaymentStatus' }
         paid_at: { type: integer, minimum: 0 }
         details: { $ref: '#/components/schemas/PaymentDetails' }
+        paid:
+          description: >
+            Present when the reference is paid, by this attempt or another one:
+            a payer looking at a swap deposit or a second invoice for an order
+            paid some other way must see the receipt, not keep paying.
+          $ref: '#/components/schemas/PaidAttempt'
         payment_methods:
           type: array
           description: >
