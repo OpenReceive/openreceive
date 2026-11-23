@@ -16,7 +16,7 @@ dependencies = [
 dev = [
   "pytest>=8",
   "pytest-django>=4.9",
-  "pip-audit>=2.7",
+  "pip-audit>=2.7; python_full_version >= '3.11'",
 ]
 
 [tool.uv]

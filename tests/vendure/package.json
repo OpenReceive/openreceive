@@ -4,7 +4,16 @@
   "type": "module",
   "description": "Vendure for tests/vendure, kept out of the root install so other jobs skip it.",
   "dependencies": {
-    "@vendure/core": "3.8.0",
+    "@vendure/core": "3.8.2",
     "pg": "8.16.3"
+  },
+  "overrides": {
+    "@graphql-tools/utils": "^12.1.0",
+    "graphql-scalars": "^2.0.1",
+    "csv-parse": "^7.0.2",
+    "re2": "^1.27.2",
+    "typeorm": {
+      "glob": "^14.0.2"
+    }
   }
 }

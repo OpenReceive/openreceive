@@ -1,5 +1,5 @@
 # A plain Medusa store, on purpose: no OpenReceive, no wallet codes. The
-# Medusa server (Medusa's default starter, 2.21.2) on PostgreSQL, and Medusa's
+# Medusa server (Medusa's default starter, 2.23.0) on PostgreSQL, and Medusa's
 # Next.js starter as its storefront. The server's start script migrates,
 # seeds Widget Shop once (medusa/src/scripts/seed.ts) and serves. The
 # Compose project name is the directory name; the harness swaps 8080 for a
