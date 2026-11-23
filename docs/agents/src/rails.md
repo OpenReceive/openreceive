@@ -102,9 +102,11 @@ say which line in which file is missing, and stop.
 4. **When they paste it.** If it does not start with
    `lightning+swapconnect://`, ask them to copy it again. Otherwise add
    `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing tool,
-   never a shell command. Swaps are now on, so build the refund route back
-   (the swap non-negotiable below) as part of this integration. If they chose
-   Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
+   never a shell command. Swaps are now on, so build the refund route back (the
+   swap non-negotiable below) as part of this integration. A guest's long-lived
+   cookie is `cookies.signed.permanent`, signed with the app's
+   `secret_key_base`; add no other secret. If they chose Bitcoin only, leave
+   `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** Rails does not read
    `.env` on its own. When the app is started with `bin/rails` or `bin/dev`,
    add `dotenv-rails` to the Gemfile. When it is started with Docker Compose,

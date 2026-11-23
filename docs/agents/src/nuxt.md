@@ -111,10 +111,15 @@ say which line in which file is missing, and stop.
    Mention FixedFloat only if they already use it.
 4. **When they paste it.** If it does not start with
    `lightning+swapconnect://`, ask them to copy it again. Otherwise add
-   `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing
-   tool, never a shell command. Swaps are now on, so build the refund route
-   back (the swap non-negotiable below) as part of this integration. If they
-   chose Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
+   `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing tool,
+   never a shell command. Swaps are now on, so build the refund route back (the
+   swap non-negotiable below) as part of this integration. A guest shop also
+   needs a secret to sign the payer's long-lived cookie: if `.env` sets no
+   `SESSION_SECRET` (check by name), add one with
+   `printf '\nSESSION_SECRET=%s\n' "$(openssl rand -hex 32)" >> .env`, which
+   makes it in the shell and never shows it. An app that already signs its
+   cookies keeps its own secret. If they chose Bitcoin only, leave
+   `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** OpenReceive reads
    `process.env`. `nuxt dev` loads `.env` into it, but the built server does
    not: start it with `node --env-file=.env .output/server/index.mjs`. When

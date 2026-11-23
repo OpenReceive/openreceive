@@ -124,9 +124,11 @@ say which line in which file is missing, and stop.
 4. **When they paste it.** If it does not start with
    `lightning+swapconnect://`, ask them to copy it again. Otherwise add
    `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing tool,
-   never a shell command. Swaps are now on, so build the refund route back
-   (the swap non-negotiable below) as part of this integration. If they chose
-   Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
+   never a shell command. Swaps are now on, so build the refund route back (the
+   swap non-negotiable below) as part of this integration. A guest's cookie is
+   encrypted with `APP_KEY`; give it a lifetime of weeks
+   (`cookie('visitor', $id, 60 * 24 * 30)`) and add no other secret. If they
+   chose Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** Laravel loads
    `.env` itself. If the app runs `php artisan config:cache`, run
    `php artisan config:clear` (or re-cache) after writing the file: a cached

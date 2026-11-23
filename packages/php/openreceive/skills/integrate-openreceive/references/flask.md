@@ -128,9 +128,13 @@ say which line in which file is missing, and stop.
 4. **When they paste it.** If it does not start with
    `lightning+swapconnect://`, ask them to copy it again. Otherwise add
    `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing tool,
-   never a shell command. Swaps are now on, so build the refund route back
-   (the swap non-negotiable below) as part of this integration. If they chose
-   Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
+   never a shell command. Swaps are now on, so build the refund route back (the
+   swap non-negotiable below) as part of this integration. Flask signs its
+   session with `SECRET_KEY`: if `.env` sets none (check by name), add one with
+   `printf '\nSECRET_KEY=%s\n' "$(openssl rand -hex 32)" >> .env`, which makes
+   it in the shell and never shows it. Then mark a guest's session permanent
+   (`session.permanent = True`), or it ends when the browser closes. If they
+   chose Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** OpenReceive reads
    `os.environ`, and a `.env` file on disk is not in it. When the app is
    started with Docker Compose, give the service `env_file: .env`. `flask run`
