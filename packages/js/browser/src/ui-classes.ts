@@ -256,7 +256,8 @@ export const orClasses = {
   /** Section titles inside a card: the breakdown, the refund form, the keep-this note. */
   swapSectionTitle: "m-0 text-base-content/60 text-xs font-bold uppercase tracking-wide",
   swapRefundReason: "m-0 text-base-content/60 text-sm",
-  swapRefundInstruction: "m-0 text-sm",
+  /** Holds a refund address, which has no break opportunity: wrap it anywhere. */
+  swapRefundInstruction: "m-0 text-sm wrap-anywhere",
   /**
    * What the provider says about the money — sent, expected, coming back — as a
    * quiet fact table. Not copy rows: nobody pastes "0.04 SOL" anywhere, and a
