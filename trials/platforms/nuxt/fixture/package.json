@@ -14,5 +14,8 @@
     "pg": "^8.23.1",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0"
+  },
+  "overrides": {
+    "readdir-glob": "^4.0.0"
   }
 }

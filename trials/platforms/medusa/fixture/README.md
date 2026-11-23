@@ -4,7 +4,7 @@ A small Medusa store. Five products in one US region, priced in dollars, with
 free shipping.
 
 - `medusa/` is the Medusa server, from Medusa's default starter (Medusa
-  2.21.2), on PostgreSQL. Its container migrates the database, seeds the
+  2.23.0), on PostgreSQL. Its container migrates the database, seeds the
   store once (`src/scripts/seed.ts`) and starts the server.
 - `storefront/` is Medusa's Next.js starter. It reaches the server at
   `http://medusa:9000` with the store's publishable key.

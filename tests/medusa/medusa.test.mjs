@@ -17,7 +17,7 @@ import pg from "pg";
 import { freePort, startTlsWallet } from "../workers/harness.mjs";
 
 // @openreceive/medusa in a real Medusa 2: the Medusa trial's Widget Shop
-// server (trials/platforms/medusa/fixture/medusa, Medusa 2.21.2), with the
+// server (trials/platforms/medusa/fixture/medusa, Medusa 2.23.0), with the
 // plugin and the packages it needs packed from this tree, on PostgreSQL, and
 // a receive-only wallet on a local relay. The store API makes the carts, as a
 // storefront does.
