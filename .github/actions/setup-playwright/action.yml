@@ -31,7 +31,7 @@ runs:
       run: |
         echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
         echo "engines=${BROWSERS// /-}" >> "$GITHUB_OUTPUT"
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: playwright-cache
       with:
         path: ~/.cache/ms-playwright
@@ -42,6 +42,14 @@ runs:
         BROWSERS: ${{ inputs.browsers }}
       run: npx playwright install $BROWSERS --with-deps
       shell: bash
+    # Saved as soon as the browsers are in, not in the job's post step: a cold
+    # install of three engines takes about 13 minutes, and a job that then
+    # failed or timed out never saved it, so every rerun started cold again.
+    - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
     - if: steps.playwright-cache.outputs.cache-hit == 'true'
       env:
         BROWSERS: ${{ inputs.browsers }}
