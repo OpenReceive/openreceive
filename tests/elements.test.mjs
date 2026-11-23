@@ -137,7 +137,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(belowMin, /Minimum payment/);
   assert.match(
     belowMin,
-    /aria-disabled="true"[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+    /aria-disabled="true"[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/70[^"]*">Minimum amount/,
   );
 
   const startingSol = renderPaymentWizardHtml({
@@ -235,11 +235,11 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(usdtNetworksBelowMin, /Ethereum · Minimum/);
   assert.match(
     usdtNetworksBelowMin,
-    /aria-disabled="true"[\s\S]*?>Tron<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+    /aria-disabled="true"[\s\S]*?>Tron<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/70[^"]*">Minimum amount/,
   );
   assert.match(
     usdtNetworksBelowMin,
-    /aria-disabled="true"[\s\S]*?>Ethereum<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+    /aria-disabled="true"[\s\S]*?>Ethereum<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/70[^"]*">Minimum amount/,
   );
 
   const bitcoinStep = renderPaymentWizardHtml({

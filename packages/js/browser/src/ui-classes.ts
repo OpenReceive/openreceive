@@ -86,9 +86,9 @@ export const orClasses = {
    * coin can arrive on. Visible at EVERY width — a grid of five bare coin names
    * is a grid of five questions, and the answer is one short line long.
    */
-  methodTileDetail: "block whitespace-normal break-words text-xs leading-snug text-base-content/60",
+  methodTileDetail: "block whitespace-normal break-words text-xs leading-snug text-base-content/70",
   /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
-  methodLimitHint: "block px-1 text-center text-xs leading-snug text-base-content/55",
+  methodLimitHint: "block px-1 text-center text-xs leading-snug text-base-content/70",
   methodNetworkReveal: "rounded-box border border-base-content/20 bg-base-100 p-3",
   /**
    * Hidden only below 18rem, never by a bare `hidden`: a host page's own
@@ -107,7 +107,7 @@ export const orClasses = {
   methodNetworkLayout:
     "grid gap-3 @lg/openreceive:grid-cols-[9rem_minmax(0,1fr)_minmax(8rem,auto)] @lg/openreceive:items-start",
   methodNetworkHeading: "break-words text-sm font-semibold text-base-content m-0",
-  methodNetworkHint: "break-words mt-0.5 text-xs text-base-content/55 m-0",
+  methodNetworkHint: "break-words mt-0.5 text-xs text-base-content/60 m-0",
   methodNetworkGrid:
     "grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2 items-start",
   methodNetworkButton:

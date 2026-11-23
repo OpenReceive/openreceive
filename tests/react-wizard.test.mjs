@@ -141,7 +141,7 @@ test("React payment wizard greys under-minimum swaps with rounded minimum amount
   // Limit notes sit under the greyed tiles (sibling of the disabled button).
   assert.match(
     html,
-    /aria-disabled="true"[\s\S]*?<\/button><span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+    /aria-disabled="true"[\s\S]*?<\/button><span class="[^"]*text-base-content\/70[^"]*">Minimum amount/,
   );
 });
 
