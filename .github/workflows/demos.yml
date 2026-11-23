@@ -49,6 +49,29 @@ jobs:
           node-version-file: .nvmrc
       - run: node tools/validate/check-directions-release.mjs --live
 
+  # Random attempt-state-machine sequences through all four engines
+  # (tools/attempt-model): each engine's payment repository must agree with
+  # the model step by step. The seed is printed, so a failure replays with
+  # `npm run test:model -- --seed <n>`; the failing sequence is shrunk first.
+  # Ruby runs in a ruby:3.4 container when the runner's Ruby lacks the gems.
+  attempt-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: "8.4"
+          extensions: gmp, sodium, mbstring, pdo_sqlite
+      - run: composer install --no-interaction --no-progress --working-dir packages/php/openreceive
+      - run: npm run test:model -- --runs 500
+
   # Full browser E2E matrix: every Playwright spec (all four framework tabs,
   # settlement, refund/attention paths) against the node-express demo. The
   # per-push lane in ci.yml runs only the smoke spec; this weekly lane runs
