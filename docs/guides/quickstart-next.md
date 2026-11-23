@@ -112,7 +112,11 @@ import { db, orders, sessions } from "@/lib/app"; // your existing database hand
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const { GET, POST } = openReceiveNextHandlers({
+// One instance per process. `next dev` runs this file again on every save, and
+// each run would open another wallet connection and never close the last one.
+const cache = globalThis as { openReceive?: ReturnType<typeof openReceiveNextHandlers> };
+
+export const { GET, POST } = (cache.openReceive ??= openReceiveNextHandlers({
   wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, mysql2 Pool, node:sqlite, better-sqlite3, or a custom adapter
@@ -166,8 +170,12 @@ export const { GET, POST } = openReceiveNextHandlers({
   // point-of-sale too, where many payers share the terminal's IP.
   // rateLimiting: true,
   // trustProxyIpHeader: true,
-});
+}));
 ```
+
+The instance on `globalThis` keeps the hooks it was built with, so restart
+`next dev` after you change one. In production the file runs once, and the
+cache changes nothing.
 
 The route file is a **server module**. It imports your database handle and
 reads `process.env`, so no client component may import anything from it. The
@@ -176,7 +184,9 @@ you put the catch-all under another directory, pass a matching `prefix`.
 
 Sometimes the options are themselves async, such as a database opened lazily
 or a wallet client shared with a worker. Then build the handlers per request
-instead of at module load. The Buy a Button example does exactly this:
+instead of at module load, from a wallet client (`service`) kept on
+`globalThis` as above: `wallet: { nwc }` per request would open a relay
+connection on every request. The Buy a Button example does exactly this:
 
 ```ts
 async function handle(request: Request): Promise<Response> {

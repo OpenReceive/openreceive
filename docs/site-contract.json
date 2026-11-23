@@ -83,7 +83,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 18422
+      "bytes": 19012
     },
     {
       "path": "/guides/vercel",
@@ -486,7 +486,7 @@
       "slug": "sveltekit-recipe",
       "title": "SvelteKit Recipe",
       "category": "recipe",
-      "bytes": 9602
+      "bytes": 9895
     },
     {
       "path": "/guides/nuxt-recipe",
@@ -596,7 +596,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "agent-directions",
-      "bytes": 46755
+      "bytes": 47345
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -686,7 +686,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "category": "agent-directions",
-      "bytes": 38418
+      "bytes": 38711
     },
     {
       "path": "/guides/agent-directions-nuxt",
@@ -1056,7 +1056,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 46755,
+      "bytes": 47345,
       "copy_button": true,
       "self_contained": true
     },
@@ -1392,7 +1392,7 @@
       "kind": "agent-directions-payload",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38418,
+      "bytes": 38711,
       "copy_button": true,
       "self_contained": true
     },
