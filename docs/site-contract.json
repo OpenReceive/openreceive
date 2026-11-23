@@ -576,7 +576,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "agent-directions",
-      "bytes": 49455
+      "bytes": 49809
     },
     {
       "path": "/guides/agent-directions-flask",
@@ -616,7 +616,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "agent-directions",
-      "bytes": 45987
+      "bytes": 46351
     },
     {
       "path": "/guides/agent-directions-php",
@@ -636,7 +636,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "agent-directions",
-      "bytes": 48241
+      "bytes": 48577
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -1119,7 +1119,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 49455,
+      "bytes": 49809,
       "copy_button": true,
       "self_contained": true
     },
@@ -1161,7 +1161,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45987,
+      "bytes": 46351,
       "copy_button": true,
       "self_contained": true
     },
@@ -1203,7 +1203,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 48241,
+      "bytes": 48577,
       "copy_button": true,
       "self_contained": true
     },
