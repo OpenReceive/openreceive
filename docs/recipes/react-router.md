@@ -137,6 +137,7 @@ idempotent. See [Payment storage](../guides/storage.md).
 // app/routes/checkout.tsx
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
+import { useRef } from "react";
 import { data } from "react-router";
 import { currentVisitor, findOrder } from "~/lib/orders.server";
 import type { Route } from "./+types/checkout";
@@ -146,20 +147,47 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   if (!order || order.visitor !== (await currentVisitor(request))) {
     throw data("Not found", { status: 404 });
   }
-  return { reference: order.id };
+  return { reference: order.id, swapPaymentHash: order.swapPaymentHash ?? undefined };
 }
 
-export default function OrderCheckout({ loaderData }: Route.ComponentProps) {
-  return <Checkout reference={loaderData.reference} prefix="/openreceive" />;
+export default function OrderCheckout({ loaderData: order }: Route.ComponentProps) {
+  const saved = useRef(order.swapPaymentHash); // the order row's swap_payment_hash
+  return (
+    <Checkout
+      reference={order.reference}
+      prefix="/openreceive"
+      resumable
+      resumePaymentHash={order.swapPaymentHash}
+      onState={(state) => {
+        // With swaps on: keep a new swap's payment hash on the order row.
+        if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved.current) return;
+        saved.current = state.payment_hash;
+        void fetch(`/orders/${order.reference}/swap-hash`, {
+          method: "POST",
+          body: new URLSearchParams({ payment_hash: state.payment_hash }),
+        });
+      }}
+    />
+  );
 }
 ```
 
 Import `styles.css` from the route module, as above. Do not `@import` it
 into your Tailwind entry (`app/app.css`); the checkout styles are compiled
 already. The page renders on the server and starts the checkout in the
-browser. The payer picks Bitcoin and gets the invoice. Keep it at the order's
-own URL: a payer with a swap deposit in flight comes back to it
-([Swap refunds](../guides/swap-refunds.md)).
+browser. The payer picks Bitcoin and gets the invoice.
+
+With swaps on, a swap deposit that arrives short or late is refunded on a later
+visit to this page, sometimes hours later or from another browser. So the page
+is `resumable`, and `onState` keeps the swap's payment hash on the order row,
+which `resumePaymentHash` hands back.
+
+`/orders/:reference/swap-hash` is a route `action` of your own. It checks that
+the order belongs to this payer, as the page's `loader` does, and that the hash
+is 64 hex characters, then saves it in a `swap_payment_hash` column, empty
+until a swap starts. Not in browser storage: another browser has none, and a
+payer who returns after the swap's half hour would land on the payment methods
+with the refund off-screen ([Swap refunds](../guides/swap-refunds.md)).
 
 ## Settings
 

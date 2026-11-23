@@ -252,26 +252,15 @@ itself, and they hold for every integration.
   `refund_required` provider state. Do not build, promise, or imply a Lightning
   refund path.
 - IF YOU TURN SWAPS ON, BUILD THE ROUTE BACK. A deposit that arrives short or
-  late becomes `refund_required`, and the payer claims it on a SECOND VISIT,
-  after leaving your page to fetch an address from another wallet. Three things
-  must exist or that money is unreachable through your UI: a per-order URL your
-  server serves (`/checkout/:reference` — `syncUrl` on `<Checkout>`, `sync-url`
-  or `resumable` on `<openreceive-checkout>`), your own order-summary route to
-  restore the order from, and the ATTEMPT.
-  `/checkouts/prepare` returns no attempts, so a checkout rebuilt from the
-  reference alone opens on the method grid. Re-picking the same coin
-  (`POST /swaps`) re-serves the committed attempt — but only while it is live,
-  and the shadow invoice behind a swap lasts about half an hour, after which the
-  same click mints a NEW deposit address and the refund is off-screen. Keep the
-  `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
-  such window. On the drop-ins: `resumePaymentHash`, fed from `onState`, on
-  `<Checkout>`; the `resume-payment-hash` attribute, fed from the
-  `openreceive-state` event (`event.detail.state.payment_hash`), on
-  `<openreceive-checkout>`.
-  That visit can come hours later, and `authorize` must still know the payer:
-  a session that expired in between answers 403 and strands the deposit. On a
-  guest shop, tie the order to a long-lived signed cookie, or put a secret
-  per-order token in its URL that your page trades for that cookie.
+  late becomes `refund_required`, and the payer claims it on a later visit,
+  often hours later, after fetching an address from another wallet. The
+  quickstart below has the code: the checkout on the order's own page with
+  `resumable`, and the swap's `payment_hash` saved on your order row (never
+  browser storage) and handed back as `resumePaymentHash`
+  (`resume-payment-hash` on the element). Re-picking the coin is no substitute:
+  after about half an hour it mints a NEW deposit address. `authorize` must
+  still know the payer on that visit: on a guest shop, a long-lived cookie
+  signed with the app's own secret (Step 0), never a wallet or swap code.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amount_for` and both drop-ins render it above the amount.
@@ -429,25 +418,12 @@ components.
   App cancels an invoice opened from a link and pays the same invoice scanned
   or pasted. Show the QR code and a Copy invoice button.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Logos are data URIs; tutorial
-  images load from a JavaScript chunk. For a custom headless UI, load it when
-  a tutorial opens and look up the returned table by the tutorial's `path`:
-
-  ```js
-  import { loadPayTutorialImages } from "@openreceive/browser/headless";
-
-  const images = await loadPayTutorialImages();
-  const src = images[tutorial.path]; // data URI for the selected tutorial
-  ```
-
-  Render `src` as the image source and update your UI after loading. Existing
-  display objects do not update: their `tutorial.image` stays `undefined` if
-  created before loading. Alternatively, await the loader, recreate the displays
-  with `createWizardRouteDisplays`, and render the new `tutorial.image`.
-  Show the caption while loading or if loading fails; never use an empty image
-  source. Deploy all JavaScript chunks and allow `data:` in CSP `img-src`.
-  For missing images, check CSP errors, failed chunks, and stale displays.
-  Registry paths are lookup keys; there is no asset option or image route.
+  `createWizardRouteDisplays`. Lightning only. Logos are data URIs. Tutorial
+  images come from `loadPayTutorialImages()` when a tutorial opens (show the
+  caption until then), never from an image route or a registry path
+  (https://openreceive.org/guides/headless-checkout.md). Pass
+  `providerPreviewLimit` and build "show all" from `display.providerCount`,
+  or ~37 wallets push the QR off the screen.
 
 ## More documentation
 
@@ -825,8 +801,9 @@ Then render the checkout on the order's own page:
   <script type="module" src="/checkout-assets/openreceive-checkout.js"></script>
 </head>
 
-<openreceive-checkout reference="{{ order.id }}" prefix="/openreceive"
-                      csrf-header="X-CSRFToken"></openreceive-checkout>
+<openreceive-checkout id="checkout" reference="{{ order.id }}" prefix="/openreceive"
+                      resumable csrf-header="X-CSRFToken"
+                      resume-payment-hash="{{ order.swap_payment_hash or '' }}"></openreceive-checkout>
 ```
 
 The checkout renders, polls, and settles itself. `csrf-header` sends the
@@ -837,14 +814,43 @@ transaction-details panel; do not build a custom UI to show them
 ([Checkout UX](https://openreceive.org/guides/checkout-ux.md)).
 
 The order page is the payer's way back: a payer can reload or bookmark it to
-return to a pending payment or a swap refund. Set the `theme` attribute
-(`dark` or `light`) when the page always uses one theme. The stylesheet is
-scoped to the checkout and needs no Tailwind processing; your page's styles
-can still override it ([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)).
-Everything the checkout draws ships inside the script, so there is no image to
-serve. If your Content-Security-Policy has a strict `img-src`, allow `data:`.
-An app with a JavaScript build can use `@openreceive/react`, `/vue`,
-`/svelte` or `/angular` from npm instead, with `csrfHeader="X-CSRFToken"`.
+return to a pending payment or a swap refund, so it is `resumable`.
+
+**With swaps on**, a swap deposit that arrives short or late is refunded on a
+later visit, sometimes hours later or from another browser. Keep the swap's
+payment hash on the order row, and hand it back as `resume-payment-hash`:
+
+```html
+<script type="module">
+  const checkout = document.getElementById("checkout");
+  let saved = checkout.getAttribute("resume-payment-hash");
+  checkout.addEventListener("openreceive-state", ({ detail: { state } }) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+    saved = state.payment_hash;
+    fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+      method: "POST",
+      headers: { "X-CSRFToken": "{{ csrf_token() }}" },
+      body: new URLSearchParams({ payment_hash: saved }),
+    });
+  });
+</script>
+```
+
+`/orders/:id/swap-hash` is a view of your own. It checks that the order belongs
+to this payer, as your order page does, and that the hash is 64 hex characters,
+then saves it in a `swap_payment_hash` column, empty until a swap starts. Not
+in browser storage: another browser has none, and a payer who returns after the
+swap's half hour would land on the payment methods with the refund off-screen
+([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).
+
+Set the `theme` attribute (`dark` or `light`) when the page always uses one
+theme. The stylesheet is scoped to the checkout and needs no Tailwind
+processing; your page's styles can still override it ([Frontend
+checkout](https://openreceive.org/guides/frontend-checkout.md)). Everything the checkout draws ships inside
+the script, so there is no image to serve. If your Content-Security-Policy has
+a strict `img-src`, allow `data:`. An app with a JavaScript build can use
+`@openreceive/react`, `/vue`, `/svelte` or `/angular` from npm instead, with
+`csrfHeader="X-CSRFToken"`.
 
 That is the whole loop. Your server owns the price and the order. The payer
 gets an invoice. `on_paid` runs inside the settlement transaction. If that

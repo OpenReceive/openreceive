@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Lovable)
 
 ```text
-READ THIS FIRST: this file is 27 KB and a summary drops required steps. Read all of it:
+READ THIS FIRST: this file is 28 KB and a summary drops required steps. Read all of it:
 https://openreceive.org/agent-directions/lovable/full.md
 If your fetch tool gave you a summary, fetch that URL again for the full text.
 ```
@@ -257,8 +257,9 @@ itself.
   promise, or imply a Lightning refund path.
 - IF YOU TURN SWAPS ON, BUILD THE ROUTE BACK. A deposit that arrives short or
   late is refunded on a SECOND visit, so the order needs its own URL
-  (`/checkout/$reference`, with `syncUrl` on `<Checkout>`), and the attempt
-  must come back with it: keep the `payment_hash` from `onState` and pass it
+  (`/checkout/$reference`, with `resumable` on `<Checkout>`), and the attempt
+  must come back with it: keep the `payment_hash` from `onState` on the order
+  row, not in browser storage, and pass it back
   as `resumePaymentHash`. https://openreceive.org/guides/swap-refunds.md
 - Show the payer what they are buying: return a `description` beside the
   price from `amountFor`.
@@ -275,7 +276,7 @@ enough.
 - https://openreceive.org/guides/supabase-migration.md — the migration for Step 2
 - https://openreceive.org/guides/authorization.md — before you write `authorize`
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
-- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, including `syncUrl` and `resumePaymentHash`
+- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, including `resumable` and `resumePaymentHash`
 - https://openreceive.org/guides/checkout-ux.md — the rules the drop-in already follows
 - https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay tutorials come from: inside the JavaScript, nothing to serve
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
@@ -527,7 +528,38 @@ function OrderCheckout() {
 ```
 
 It renders on the server and starts the checkout in the browser. The payer
-picks Bitcoin and gets the invoice.
+picks Bitcoin and gets the invoice. Check in the route's `loader` that the
+order belongs to this visitor, as `authorize` does, before it renders.
+
+With swaps on, a swap deposit that arrives short or late is refunded on a later
+visit to this page, sometimes hours later or from another browser. So the page
+is `resumable`, and `onState` keeps the swap's payment hash on the order row:
+
+```tsx
+const saved = useRef(order.swapPaymentHash); // the order row's swap_payment_hash, from the loader
+
+<Checkout
+  reference={order.id}
+  prefix="/openreceive"
+  resumable
+  resumePaymentHash={order.swapPaymentHash || undefined}
+  onState={(state) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved.current) return;
+    saved.current = state.payment_hash;
+    void fetch(`/orders/${order.id}/swap-hash`, {
+      method: "POST",
+      body: new URLSearchParams({ payment_hash: state.payment_hash }),
+    });
+  }}
+/>;
+```
+
+`/orders/$id/swap-hash` is a server route of your own. It checks that the order
+belongs to this payer, as `authorize` does, and that the hash is 64 hex
+characters, then saves it in a `swap_payment_hash` column, empty until a swap
+starts. Not in browser storage: another browser has none, and a payer who
+returns after the swap's half hour would land on the payment methods with the
+refund off-screen ([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).
 
 ### Settings
 

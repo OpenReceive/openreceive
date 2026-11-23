@@ -169,18 +169,43 @@ if (!order || order.visitor !== Astro.cookies.get("visitor")?.value) {
     <title>Checkout</title>
   </head>
   <body>
-    <openreceive-checkout reference={order.id} prefix="/openreceive"></openreceive-checkout>
+    <openreceive-checkout id="checkout" reference={order.id} prefix="/openreceive" resumable
+      resume-payment-hash={order.swapPaymentHash ?? ""}></openreceive-checkout>
     <script>
       import { defineElements } from "@openreceive/elements";
       defineElements();
+
+      // With swaps on: keep a new swap's payment hash on the order row.
+      const checkout = document.getElementById("checkout")!;
+      let saved = checkout.getAttribute("resume-payment-hash");
+      checkout.addEventListener("openreceive-state", (event) => {
+        const { state } = (event as CustomEvent).detail;
+        if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved) return;
+        saved = state.payment_hash;
+        fetch(`/orders/${checkout.getAttribute("reference")}/swap-hash`, {
+          method: "POST",
+          body: new URLSearchParams({ payment_hash: saved }),
+        });
+      });
     </script>
   </body>
 </html>
 ```
 
 The element starts the checkout in the browser. The payer picks Bitcoin and
-gets the invoice. Keep it at the order's own URL: a payer with a swap deposit
-in flight comes back to it ([Swap refunds](../guides/swap-refunds.md)).
+gets the invoice.
+
+With swaps on, a swap deposit that arrives short or late is refunded on a later
+visit to this page, sometimes hours later or from another browser. So the page
+is `resumable`, and the script keeps the swap's payment hash on the order row
+and hands it back as `resume-payment-hash`.
+
+`src/pages/orders/[reference]/swap-hash.ts` is an endpoint of your own. It
+checks that the order belongs to this payer, as the page does, and that the
+hash is 64 hex characters, then saves it in a `swap_payment_hash` column, empty
+until a swap starts. Not in browser storage: another browser has none, and a
+payer who returns after the swap's half hour would land on the payment methods
+with the refund off-screen ([Swap refunds](../guides/swap-refunds.md)).
 
 ## Settings
 

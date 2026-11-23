@@ -1,6 +1,6 @@
 # OpenReceive agent directions: React Router (0.5.0)
 
-These directions are 37 KB. Download them with your shell and follow them from Step 0:
+These directions are 36 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/react-router/full.md
 

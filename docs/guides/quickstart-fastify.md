@@ -279,6 +279,45 @@ systems, use an outbox in your app: record the message in the transaction and
 send it after commit.
 <!-- shared:end render-notes -->
 
+<!-- shared:begin swap-way-back -->
+### With swaps on: the way back to a refund
+
+A swap deposit that arrives short or late is refunded on a later visit,
+sometimes hours later or from another browser. Render the checkout on the
+order's own page, and keep the swap's payment hash on the order row:
+
+```tsx
+const saved = useRef(order.swapPaymentHash); // the order row's swap_payment_hash
+
+<Checkout
+  reference={order.id}
+  prefix="/openreceive"
+  resumable // this page is the order's own URL, so the payer can come back
+  resumePaymentHash={order.swapPaymentHash || undefined}
+  onState={(state) => {
+    if (state.rail !== "swap" || !state.payment_hash || state.payment_hash === saved.current) return;
+    saved.current = state.payment_hash;
+    void fetch(`/orders/${order.id}/swap-hash`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payment_hash: state.payment_hash }),
+    });
+  }}
+/>;
+```
+
+`/orders/:id/swap-hash` is a route of your own. It checks that the order
+belongs to this payer, as your order page does, and that the hash is 64 hex
+characters, then saves it in a `swap_payment_hash` column, empty until a swap
+starts. Not in browser storage: another browser has none, and a payer who
+returns after the swap's half hour would land on the payment methods with the
+refund off-screen ([Swap refunds](swap-refunds.md)).
+
+On the element, the same props are the `resumable` and `resume-payment-hash`
+attributes and the `openreceive-state` event
+([Frontend checkout](frontend-checkout.md#the-way-back-to-a-refund)).
+<!-- shared:end swap-way-back -->
+
 Buy a Button is a runnable illustration of this boundary
 ([`examples/buttons/server/fastify`](../../examples/buttons/server/fastify)).
 It is not a template to copy models from. It has products, visitors, and
