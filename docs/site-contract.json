@@ -53,7 +53,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 16895
+      "bytes": 17483
     },
     {
       "path": "/guides/quickstart-django",
@@ -73,7 +73,7 @@
       "slug": "quickstart-flask",
       "title": "Flask Quickstart",
       "category": "quickstart",
-      "bytes": 19521
+      "bytes": 19929
     },
     {
       "path": "/guides/quickstart-next",
@@ -566,7 +566,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "agent-directions",
-      "bytes": 45069
+      "bytes": 45887
     },
     {
       "path": "/guides/agent-directions-django",
@@ -586,7 +586,7 @@
       "slug": "agent-directions-flask",
       "title": "Agent Directions: Flask",
       "category": "agent-directions",
-      "bytes": 47841
+      "bytes": 48372
     },
     {
       "path": "/guides/agent-directions-next",
@@ -1098,7 +1098,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45069,
+      "bytes": 45887,
       "copy_button": true,
       "self_contained": true
     },
@@ -1140,7 +1140,7 @@
       "kind": "agent-directions-payload",
       "stack": "flask",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 47841,
+      "bytes": 48372,
       "copy_button": true,
       "self_contained": true
     },

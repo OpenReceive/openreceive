@@ -263,8 +263,9 @@ itself, and they hold for every integration.
   non-empty.)
 - Copy `openreceive_flask.py` from the quickstart unchanged, register
   `openreceive.blueprint()` (it serves `/openreceive`), and call
-  `openreceive.start()` where the app boots, so a bad wallet stops the
-  deploy. Keep Flask-WTF's `CSRFProtect` on these routes too, never exempt the
+  `openreceive.start()` where the app is served (the quickstart's
+  `gunicorn.conf.py`), never in the module its tests import: they run with no
+  code, so a bad wallet stops the deploy and not the tests. Keep Flask-WTF's `CSRFProtect` on these routes too, never exempt the
   Blueprint: render `<meta name="csrf-token" content="{{ csrf_token() }}">` and
   give the checkout `csrf-header="X-CSRFToken"`. An app without Flask-WTF adds
   no CSRF layer: the engine's `Sec-Fetch-Site: cross-site` refusal is the

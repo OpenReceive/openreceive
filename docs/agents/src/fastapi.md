@@ -224,6 +224,9 @@ itself, and they hold for every integration.
 - `on_paid` must be idempotent. Its database fulfillment commits once per `reference` — your order id, one
   per thing you fulfill, created before checkout, kept across retries, never
   reused. A fresh id per page load lets one order be paid twice.
+- The app's own tests run with no wallet code, as on CI: build their app with
+  `openreceive_lifespan(..., lazy=True)`, as the quickstart shows. The served
+  app keeps the default, which stops a deploy with a missing or bad code.
 - Receive-only NWC is required; a spend-capable code fails closed at boot unless
   explicitly overridden.
 - There is NO merchant-initiated refund of a settled Lightning payment, because

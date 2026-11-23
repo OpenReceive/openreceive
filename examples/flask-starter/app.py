@@ -128,6 +128,5 @@ def create_tables():
 
 
 create_tables()
-# The receive-only wallet check: a missing or spend-capable code stops the
-# server here, not at the first payer.
-openreceive.start()
+# The receive-only wallet check runs where the app is served, in
+# gunicorn.conf.py, so tests can import this module with no wallet code.

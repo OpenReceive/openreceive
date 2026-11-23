@@ -283,8 +283,9 @@ itself, and they hold for every integration.
   non-empty.)
 - Copy `openreceive_flask.py` from the quickstart unchanged, register
   `openreceive.blueprint()` (it serves `/openreceive`), and call
-  `openreceive.start()` where the app boots, so a bad wallet stops the
-  deploy. Keep Flask-WTF's `CSRFProtect` on these routes too, never exempt the
+  `openreceive.start()` where the app is served (the quickstart's
+  `gunicorn.conf.py`), never in the module its tests import: they run with no
+  code, so a bad wallet stops the deploy and not the tests. Keep Flask-WTF's `CSRFProtect` on these routes too, never exempt the
   Blueprint: render `<meta name="csrf-token" content="{{ csrf_token() }}">` and
   give the checkout `csrf-header="X-CSRFToken"`. An app without Flask-WTF adds
   no CSRF layer: the engine's `Sec-Fetch-Site: cross-site` refusal is the
@@ -729,21 +730,33 @@ payments_engine = create_engine(os.environ["DATABASE_URL"])
 # public web shops. Leave it off for point-of-sale, where payers share an IP.
 openreceive = OpenReceiveFlask(host, payments_engine, rate_limiting=True)
 app.register_blueprint(openreceive.blueprint())  # serves /openreceive/...
-
-# The receive-only wallet check, where the app boots: a missing or
-# spend-capable code stops the server here instead of failing the first payer.
-openreceive.start()
 ```
+
+Run the receive-only wallet check where the app is served, so a missing or
+spend-capable code stops the server instead of failing the first payer. Keep
+it out of the module your tests import: they run with no code, as on CI.
+Under gunicorn, a `gunicorn.conf.py` beside the app does it, and gunicorn
+loads that file by itself:
+
+```python
+# gunicorn.conf.py
+def post_worker_init(worker):
+    from app import openreceive
+
+    openreceive.start()  # raises on a missing or spend-capable code: the worker never boots
+```
+
+Another server loads a `wsgi.py` that imports the app and calls
+`openreceive.start()`.
 
 A relay that does not answer when the app boots does not stop it. The worker
 starts, logs one line, and checkouts get a retryable `503 WALLET_UNAVAILABLE`
 until the wallet answers. The first checkout after a short wait (1 s, doubling
 to 60 s) checks again, so payments come back without a restart.
 
-`openreceive.start()` runs once per process. A command that imports the app
-with no wallet access, such as a build step, can skip it: the first payment
-request then runs the check, and the routes answer `503 WALLET_UNAVAILABLE`
-until it passes. There is no background reconciler, meaning no job that checks
+`openreceive.start()` runs once per process. Where it is not called (`flask
+run`, your tests, a build step), the first payment request runs the check, and
+the routes answer `503 WALLET_UNAVAILABLE` until it passes. There is no background reconciler, meaning no job that checks
 pending payments on a timer. Settlement runs during normal requests instead,
 through the durable reconcile gate.
 
