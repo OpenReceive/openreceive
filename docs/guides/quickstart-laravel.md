@@ -384,7 +384,8 @@ panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
 complete build output. Do not add image routes, copy package source images, or
 use registry `icon_path` / tutorial `path` keys as browser URLs.
 
-**No npm in this project?** Every GitHub release attaches
+**No npm in this project, or no asset build where the app runs** (a container
+that only runs `php artisan serve`)? Every GitHub release attaches
 `standalone-checkout-<version>.tar.gz`. It holds one self-registering ESM file,
 its stylesheet and a `MANIFEST.json` of hashes. Unpack it into
 `public/openreceive/`, and the same element needs just two tags:

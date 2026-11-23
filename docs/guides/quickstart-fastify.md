@@ -250,6 +250,36 @@ Its rules have low specificity, so your page's styles can override checkout
 styles. Scoping does not prevent that.
 <!-- shared:end render -->
 
+**Plain HTML pages, with no React and no JS build?** Install
+`@openreceive/elements` in place of `@openreceive/react`, and serve its
+standalone build straight from the package. There is nothing to build:
+
+```ts
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import fastifyStatic from "@fastify/static";
+
+// The package exports this path; its package.json and dist/ are not exported.
+const checkoutAssets = path.dirname(
+  fileURLToPath(import.meta.resolve("@openreceive/elements/standalone/openreceive-checkout.js")),
+);
+await app.register(fastifyStatic, {
+  root: checkoutAssets,
+  prefix: "/checkout-assets/",
+  decorateReply: false, // leaves reply.sendFile to the app's own @fastify/static
+});
+```
+
+Then, on the order's own page:
+
+```html
+<link rel="stylesheet" href="/checkout-assets/openreceive-checkout.css">
+<script type="module" src="/checkout-assets/openreceive-checkout.js"></script>
+<openreceive-checkout reference="ORDER_ID" prefix="/openreceive" resumable></openreceive-checkout>
+```
+
+The script is an ES module: a plain `<script>` tag runs nothing.
+
 <!-- shared:begin render-notes -->
 `<Checkout>` is complete as rendered. It already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom
