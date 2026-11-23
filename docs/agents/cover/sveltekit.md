@@ -1,6 +1,6 @@
 # OpenReceive agent directions: SvelteKit (0.5.0)
 
-These directions are 38 KB. Download them with your shell and follow them from Step 0:
+These directions are 39 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/sveltekit/full.md
 

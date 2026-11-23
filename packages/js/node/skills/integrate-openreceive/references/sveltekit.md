@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (SvelteKit)
 
 ```sh
-# READ THIS FIRST: this file is 38 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 39 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/sveltekit/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/sveltekit/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -530,12 +530,14 @@ import { NWC_URI } from "$app/env/private";
 import { db } from "./db"; // your existing pg Pool
 import { findOrder } from "./orders"; // your own orders
 
-let stack: Stack | undefined;
+// One stack per process, kept on globalThis: `vite dev` runs this module again
+// on every save, and each run would open another wallet connection.
+const cache = globalThis as { openReceiveStack?: Stack };
 
 // Built on the first request, not at import: the build imports server
 // modules to analyse them, and a stack connects to the wallet at once.
 function openReceive(): Stack {
-  stack ??= createStack({
+  cache.openReceiveStack ??= createStack({
     wallet: { nwc: NWC_URI },
     storage: {
       db,
@@ -565,7 +567,7 @@ function openReceive(): Stack {
       ip: ({ native }) => (native as RequestEvent).getClientAddress(),
     },
   });
-  return stack;
+  return cache.openReceiveStack;
 }
 
 export function handleOpenReceive(event: RequestEvent): Promise<Response> {
@@ -587,7 +589,8 @@ session your app already has: its cookies, or the `event.locals.user` your
 `hooks.server.ts` sets. The [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md)
 explains each hook. They are the same here.
 
-One stack serves the whole server process. Behind a reverse proxy, set
+One stack serves the whole server process. It keeps the hooks it was built
+with, so restart `vite dev` after you change one. Behind a reverse proxy, set
 adapter-node's `ADDRESS_HEADER` (and `XFF_DEPTH`), so that
 `getClientAddress()` returns the payer's address and not the proxy's
 ([Rate limiting](https://openreceive.org/guides/rate-limiting.md)).
