@@ -165,9 +165,25 @@ the deploy fails instead of the first payer. A relay that does not answer at
 start does not stop it: the app starts, logs one line, and checkouts get a
 retryable `503 WALLET_UNAVAILABLE` until the wallet answers. The first
 checkout after a short wait (1 s, doubling to 60 s) checks again, so payments
-come back without a restart. Pass `lazy=True` for tests and for build steps
-that have no secrets. The first request then checks the wallet, and requests
-get `503 WALLET_UNAVAILABLE` until the check passes.
+come back without a restart.
+
+Your own tests and CI have no wallet code, and this lifespan would stop the
+app there. Build the app with `lazy=True` in tests, and keep the default
+everywhere else:
+
+```python
+# conftest.py, or your test setup: before a TestClient starts the app
+from openreceive.fastapi import openreceive_lifespan
+from main import app, engine, host
+
+app.router.lifespan_context = openreceive_lifespan(host, engine=engine, lazy=True)
+```
+
+A test that starts uvicorn itself serves a factory that builds the app the
+same way (`uvicorn --factory main:create_test_app`). With `lazy=True` the
+first OpenReceive request checks the wallet, and the payment routes answer
+`503 WALLET_UNAVAILABLE` until the check passes. A build step that imports
+the app with no secrets can do the same.
 → [openreceive_router](api-reference.md#openreceive_router) ·
 [openreceive_lifespan](api-reference.md#openreceive_lifespan) ·
 [the authorize context](api-reference.md#host-python)
