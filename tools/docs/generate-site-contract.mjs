@@ -1155,6 +1155,18 @@ const platforms = JSON.parse(
   if (row.framework !== null && !frameworks.some((entry) => entry.id === row.framework)) {
     fail(`names framework ${row.framework}, which is not in frameworks[]`);
   }
+  // Contract v12: rows that are one platform built two ways (Vercel with
+  // Next.js, Vercel with no framework) share one card. The variant names its
+  // parent; both carry a short key for `?kind=` and the label the page's
+  // chooser shows. Checked against the whole file below.
+  for (const field of ["variant_of", "variant_key", "variant_label"]) {
+    if (row[field] !== undefined && (typeof row[field] !== "string" || row[field] === "")) {
+      fail(`${field} must be text when present`);
+    }
+  }
+  if (row.variant_key !== undefined && !/^[a-z0-9-]+$/.test(row.variant_key)) {
+    fail("variant_key must be a URL slug");
+  }
   const base = {
     id: row.id,
     label: row.label,
@@ -1162,8 +1174,14 @@ const platforms = JSON.parse(
     summary: row.summary,
     framework: row.framework,
     framework_path: row.framework === null ? null : `/integrations/${row.framework}`,
+    variant_of: row.variant_of ?? null,
+    variant_key: row.variant_key ?? null,
+    variant_label: row.variant_label ?? null,
   };
-  if (row.planned === true) return { ...base, status: "planned", path: null };
+  if (row.planned === true) {
+    if (row.variant_of !== undefined) fail("a planned row cannot be a variant");
+    return { ...base, status: "planned", path: null };
+  }
   const guide = bySlug.get(row.guide);
   if (!guide?.public)
     fail(`names guide ${row.guide}, which is not a public doc in docs/manifest.json`);
@@ -1207,6 +1225,36 @@ const platforms = JSON.parse(
     tested,
   };
 });
+// A variant's parent is a live row of the same kind that is not a variant
+// itself, and every row in a group has a key and a label, unique in the group.
+for (const row of platforms.filter((entry) => entry.variant_of !== null)) {
+  const fail = (message) => {
+    throw new Error(`${TARGET}: platform ${row.id}: ${message} (docs/site/platforms.json)`);
+  };
+  const parent = platforms.find((entry) => entry.id === row.variant_of);
+  if (parent === undefined || parent.path === null)
+    fail(`variant_of ${row.variant_of} is not a live row`);
+  if (parent.variant_of !== null) fail(`variant_of ${row.variant_of} is itself a variant`);
+  if (parent.kind !== row.kind)
+    fail(`its parent ${parent.id} is a ${parent.kind}, not a ${row.kind}`);
+  const group = [parent, ...platforms.filter((entry) => entry.variant_of === parent.id)];
+  for (const member of group) {
+    if (member.variant_key === null || member.variant_label === null) {
+      fail(`${member.id} is in the ${parent.id} group, so it needs variant_key and variant_label`);
+    }
+  }
+  if (new Set(group.map((member) => member.variant_key)).size !== group.length) {
+    fail(`the ${parent.id} group repeats a variant_key`);
+  }
+}
+for (const row of platforms.filter((entry) => entry.variant_of === null)) {
+  const grouped = platforms.some((entry) => entry.variant_of === row.id);
+  if (!grouped && (row.variant_key !== null || row.variant_label !== null)) {
+    throw new Error(
+      `${TARGET}: platform ${row.id}: variant_key and variant_label belong to a group, and ${row.id} has no variant (docs/site/platforms.json)`,
+    );
+  }
+}
 const platformPagePaths = platforms
   .filter((entry) => entry.path !== null)
   .map((entry) => entry.path)
@@ -1315,7 +1363,11 @@ const contract = {
   // demo, and a `tested` from a BTCPay-route run (`via: "btcpay-route"`, the
   // `store` and `btcpay` versions, and the plugin's version as `release`). A
   // bump because a site on v10 requires an example on every non-recipe row.
-  contract_version: 11,
+  // v12 adds `variant_of`, `variant_key` and `variant_label` to platforms[]:
+  // Vercel with no framework is a variant of Vercel, one card with a chooser
+  // on its page and `?kind=<key>` to open a variant. A bump because a site
+  // on v11 would draw two Vercel cards with one logo.
+  contract_version: 12,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.

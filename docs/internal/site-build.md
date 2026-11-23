@@ -33,7 +33,7 @@ a `markdown_path` as well as a `path`, and the directions link the
 
 ## `contract_version`
 
-The contract is at **v11**. A site that reads it should refuse to publish a
+The contract is at **v12**. A site that reads it should refuse to publish a
 version it does not understand, rather than publish part of it. A half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -146,6 +146,12 @@ contract is how a payload ends up linking a page nobody serves.
   BTCPay plugin's version as `release`. Label it "Tested via BTCPay · <date> ·
   plugin <release>". The version bumps because a site on v10 requires an
   example on every row that is not a recipe.
+- **v12**: platform variants. A platforms[] row may carry `variant_of` (the
+  id of another row), `variant_key` and `variant_label`. Vercel with no
+  framework (`vercel-functions`) is a variant of `vercel`: one platform
+  built two ways, shown as one card with a chooser on its page. See
+  [Variants](#variants-contract-v12). The version bumps because a site on
+  v11 draws every row as its own card: two Vercel cards with one logo.
 
 `release_version` changes with every library release and says nothing about the
 shape of this file. `contract_version` changes only when the site has to do
@@ -470,6 +476,7 @@ Each `platforms[]` row carries:
 | `guide_path`, `guide_source` | The full guide. The platform page renders `guide_source` below its header. |
 | `prompt` | Text for a Copy prompt button, or null. Copy it verbatim. |
 | `starter` | `{ label, url, source_url }` or null. `url` is a one-click deploy link. |
+| `variant_of`, `variant_key`, `variant_label` | Contract v12. A variant names its parent row in `variant_of`. Every row in a group (the parent and its variants) carries a `variant_key`, a URL slug such as `functions`, and a `variant_label` for the chooser. Null on rows with no variants. See [Variants](#variants-contract-v12). |
 | `tested` | `{ date, release, agents? }` of the latest passing agent trials, or null. `agents` lists the coding agents and models that ran them, as `agent/model` (`cursor/grok-4.7-medium-fast`, `codex/default`) |
 
 Logos are the site's own, like the framework logos. This repo sends facts, not
@@ -497,8 +504,8 @@ Add a Platforms section next to the framework section, in the same style:
 - headline: "Where are you building?"
 - subline: "Start from a template, or paste one prompt. Every platform marked
   Tested has a real deploy behind it."
-- one card per row whose `path` is not null: logo, `label`, `summary`, "Runs
-  on" plus the framework label, the badge, and up to three actions:
+- one card per row whose `path` is not null and whose `variant_of` is null:
+  logo, `label`, `summary`, "Runs on" plus the framework label, the badge, and up to three actions:
   - Get started, linking `path`
   - the starter's `label`, linking `starter.url`, when `starter` is set
   - Copy prompt, copying `prompt`, when `prompt` is set
@@ -517,8 +524,8 @@ The index works as a marketing page and as proof:
   coding agent starts from a plain app on the platform and follows the
   published directions. The result is deployed to the real platform, and the
   live site must issue a real Lightning invoice and refuse a stranger.
-- every row, grouped by `kind` (AI app builders, Hosting, Databases, Stores),
-  as cards with the badge. Planned rows appear as "Coming next" without a link.
+- every row whose `variant_of` is null, grouped by `kind` (AI app builders,
+  Hosting, Databases, Stores), as cards with the badge. Planned rows appear as "Coming next" without a link.
 - a short pointer to the framework section for people who write their own code
 
 ### `/platforms/<id>`
@@ -535,6 +542,31 @@ The index works as a marketing page and as proof:
   or a preview beside Copy prompt), wrap long lines on screen
   (`white-space: pre-wrap`) and copy the text unchanged
 - the twin `/platforms/<id>.md` serves the raw guide markdown
+
+### Variants (contract v12)
+
+Some platforms are built more than one way: an app on Vercel is Next.js, or
+static pages with functions and no framework. Each way has its own guide,
+prompt, starter and trials, so each is its own row, and the rows form a group:
+the parent (`vercel`) and each row whose `variant_of` names it
+(`vercel-functions`).
+
+- **One card.** The home page and `/platforms` draw the parent only. Its
+  `summary` covers every way in.
+- **A chooser on the page.** `/platforms/<id>` for any row in the group shows,
+  above the starter and Copy prompt buttons, one question: "How is your app
+  built?", with one choice per row, labelled `variant_label`, parent first,
+  then the variants in the contract's order. The chosen row's logo, summary,
+  badge, buttons, "How it runs" list and guide fill the page.
+- **A link to a choice.** `/platforms/<parent>?kind=<variant_key>` opens the
+  page with that row chosen, for a link someone sends: `?kind=functions` on
+  `/platforms/vercel` is the no-framework way. Choosing in the chooser puts
+  the same URL in the address bar, so the address is always shareable. The
+  parent's own key needs no parameter; an unknown key falls back to the
+  parent. The short link keeps the query: `/vercel?kind=functions`.
+- **Every row keeps its page.** `/platforms/<variant id>` still answers, with
+  that row chosen, and its twin `/platforms/<variant id>.md` serves its guide.
+  Links already sent keep working.
 
 Two rows can share one guide. `vercel` and `v0` do: the Vercel page leads with
 the deploy button, and the v0 page leads with Copy prompt.
