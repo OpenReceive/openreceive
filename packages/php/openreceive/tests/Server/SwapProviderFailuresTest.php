@@ -80,7 +80,8 @@ final class SwapProviderFailuresTest extends TestCase
             }
             return $reply;
         });
-        $provider = new FixedFloatProvider('synthetic-key', 'synthetic-secret', 'fixedfloat', 'https://ff.test', null, $transport, $clock);
+        // FixedFloat's own host, the one the guard counts for; the scripted transport answers.
+        $provider = new FixedFloatProvider('synthetic-key', 'synthetic-secret', 'fixedfloat', 'https://ff.io', null, $transport, $clock);
         $logger = $this->logger();
         $db = new PdoConnection(new \PDO('sqlite::memory:'));
         PaymentsSchema::migrate($db);
@@ -176,7 +177,8 @@ final class SwapProviderFailuresTest extends TestCase
         $engine = $this->engine();
         $this->replies['create'] = self::api(null, 1, 'Order could not be created');
         // /ccies spent 1 and each Try again spends a create weight (50) before the
-        // provider answers, so the third press would pass the 150 create gate.
+        // provider answers, so the fourth press would pass the 200 soft cap.
+        self::assertSame(502, $this->createSwap($engine)[0]);
         self::assertSame(502, $this->createSwap($engine)[0]);
         self::assertSame(502, $this->createSwap($engine)[0]);
         $creates = count(array_keys($this->calls, 'create', true));
@@ -230,10 +232,11 @@ final class SwapProviderFailuresTest extends TestCase
     {
         $engine = $this->engine();
         $this->replies['create'] = self::api(null, 1, 'Order could not be created');
-        // /ccies spent 1 and each refused create 50, so a third create would pass the 150 create gate.
+        // /ccies spent 1 and each refused create 50, so a fourth create would pass the 200 soft cap.
         self::assertSame(502, $this->createSwap($engine)[0]);
         self::assertSame(502, $this->createSwap($engine)[0]);
-        self::assertCount(2, $this->wallet->listInvoices(), 'a create the provider answers needs its invoice first');
+        self::assertSame(502, $this->createSwap($engine)[0]);
+        self::assertCount(3, $this->wallet->listInvoices(), 'a create the provider answers needs its invoice first');
         $creates = count(array_keys($this->calls, 'create', true));
         for ($attempt = 0; $attempt < 2; $attempt++) {
             [$status, $body] = $this->createSwap($engine);
@@ -241,15 +244,15 @@ final class SwapProviderFailuresTest extends TestCase
             self::assertSame('The swap provider is rate limited. Please try again shortly.', $body['message']);
             self::assertTrue($body['retryable']);
         }
-        self::assertCount(2, $this->wallet->listInvoices(), 'a refused swap made no invoice');
+        self::assertCount(3, $this->wallet->listInvoices(), 'a refused swap made no invoice');
         self::assertSame($creates, count(array_keys($this->calls, 'create', true)), 'and reached no provider');
         self::assertSame([], $this->repository->listForReference('order-swap'));
         // Two refusals, one log line: status polls must not bury the log.
         $lines = $this->rateLimitLines();
         self::assertCount(1, $lines);
         self::assertSame('warning', $lines[0]['level']);
-        self::assertSame("swap.provider.rate_limited: Swap provider call refused locally: this process reached the provider's per-minute limit.", $lines[0]['message']);
-        self::assertSame(['provider' => 'fixedfloat', 'path' => 'create', 'reason' => 'exhausted', 'used' => 101, 'gate' => 150], $lines[0]['context']);
+        self::assertSame('swap.provider.rate_limited: Swap provider call refused locally: this process reached the per-minute limit it keeps for FixedFloat.', $lines[0]['message']);
+        self::assertSame(['provider' => 'fixedfloat', 'path' => 'create', 'reason' => 'exhausted', 'used' => 151, 'gate' => 200], $lines[0]['context']);
     }
 
     public function testARateRefusalIsLoggedOnceAMinutePerCauseAndAnUnguardedProviderIsNotAsked(): void
@@ -262,7 +265,7 @@ final class SwapProviderFailuresTest extends TestCase
         $guarded = new class implements SwapProvider, SwapProviderRuntime, GuardedSwapProvider {
             public ?WeightBudget $budget = null;
             public int $creates = 0;
-            public function name(): string { return 'lightning-swap-com'; }
+            public function name(): string { return 'ff-io'; }
             public function supportedPayInAssets(): array { return ['USDT_TRON']; }
             public function payInAssetCatalog(): array { return []; }
             public function invoiceExpirySeconds(?string $payInAsset = null): int { return 1800; }
@@ -276,14 +279,14 @@ final class SwapProviderFailuresTest extends TestCase
             public function requestRefund(array $order, string $refundAddress): void {}
             public function attachSwapCache(TransientCache $cache): void {}
             public function attachWeightBudget(WeightBudget $budget): void { $this->budget = $budget; }
-            public function limits(): SwapProviderLimits { return SwapProviderLimits::lightningSwap(); }
+            public function limits(): SwapProviderLimits { return SwapProviderLimits::fixedFloat(); }
             public function assertCreateAvailable(): void { $this->budget?->assertAvailable('create'); }
         };
         $wallet = new FakeWallet($clock);
         $service = new Service($wallet, false, [$guarded], ['USD'], $clock, logger: $this->logger());
         $budget = $guarded->budget;
         self::assertNotNull($budget);
-        self::assertSame('lightning-swap', $budget->limits()->profile, 'the service sizes the guard by the provider\'s limits');
+        self::assertSame('fixedfloat', $budget->limits()->profile, 'the service builds the guard from the provider\'s limits');
         $refuse = static function (Service $service): void {
             try {
                 $service->createSwap(['reference' => 'order-busy', 'amount' => ['sats' => 20_000], 'pay_in_asset' => 'USDT_TRON']);
@@ -294,14 +297,18 @@ final class SwapProviderFailuresTest extends TestCase
                 self::assertTrue($error->retryable);
             }
         };
-        for ($i = 0; $i < 30; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $budget->reserve('create');
         }
         $refuse($service);
         $refuse($service);
         self::assertCount(1, $this->rateLimitLines());
         self::assertSame(
-            ['provider' => 'lightning-swap-com', 'path' => 'create', 'reason' => 'exhausted', 'used' => 30, 'gate' => 400, 'creates' => 30, 'create_limit' => 30],
+            "swap.provider.rate_limited: Swap provider call refused locally: this process reached the per-minute limit it keeps for FixedFloat.",
+            $this->rateLimitLines()[0]['message'],
+        );
+        self::assertSame(
+            ['provider' => 'ff-io', 'path' => 'create', 'reason' => 'exhausted', 'used' => 200, 'gate' => 200],
             $this->rateLimitLines()[0]['context'],
         );
         // Another cause is its own line: the provider's 429 started a stand-off.
@@ -344,13 +351,19 @@ final class SwapProviderFailuresTest extends TestCase
         };
         $wallet = new FakeWallet($clock);
         $service = new Service($wallet, false, [$unguarded], ['USD'], $clock, logger: $this->logger());
-        self::assertSame('fixedfloat', $unguarded->budget?->limits()->profile, 'a provider that states no limits gets the FixedFloat ones');
-        for ($i = 0; $i < 3; $i++) {
+        self::assertSame('provider-only', $unguarded->budget?->limits()->profile, 'a provider that states no limits is never counted locally');
+        for ($i = 0; $i < 500; $i++) {
             $unguarded->budget?->reserve('create');
         }
+        // Only the provider's own 429 stops it.
+        $unguarded->budget?->markRateLimited('create', 30);
         $refuse($service);
         self::assertCount(1, $wallet->listInvoices());
         self::assertCount(1, $this->rateLimitLines());
+        self::assertSame(
+            ['provider' => 'custom', 'path' => 'create', 'reason' => 'backoff', 'backoff_until' => $now + 30],
+            $this->rateLimitLines()[0]['context'],
+        );
     }
 
     public function testAProvider429IsLoggedOnceAMinuteWithTheProvidersOwnWords(): void
@@ -366,7 +379,7 @@ final class SwapProviderFailuresTest extends TestCase
         self::assertSame(503, $this->createSwap($engine)[0]);
         $lines = $this->rateLimitLines();
         self::assertCount(2, $lines);
-        self::assertSame(['provider' => 'fixedfloat', 'path' => 'create', 'reason' => 'backoff', 'used' => 0, 'gate' => 150, 'backoff_until' => 1_700_000_090], $lines[1]['context']);
+        self::assertSame(['provider' => 'fixedfloat', 'path' => 'create', 'reason' => 'backoff', 'used' => 0, 'gate' => 200, 'backoff_until' => 1_700_000_090], $lines[1]['context']);
         self::assertCount(1, $this->wallet->listInvoices(), 'only the create the provider answered made an invoice');
     }
 }

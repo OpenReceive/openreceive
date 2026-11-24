@@ -62,8 +62,8 @@ module OpenReceive
         DEFAULT_INVOICE_EXPIRY_MARGIN_SECONDS = 5 * 60
         PROVIDER_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,63}\z/
 
-        # `limits` are the provider's API limits (a SwapProviderLimits), which
-        # size the request guard the service attaches.
+        # `limits` (a SwapProviderLimits) say how the request guard the
+        # service attaches treats this provider.
         attr_reader :name, :limits
 
         def initialize(key:, secret:, id: "fixedfloat", base_url: nil, lightning_ccy: nil,
@@ -79,8 +79,8 @@ module OpenReceive
           @key = key
           @secret = secret
           @base_url = (base_url || DEFAULT_BASE_URL).sub(%r{/+\z}, "")
-          # The host names the provider, and the provider sets the limits: the
-          # same wire contract is served at very different rates.
+          # The host names the provider: only FixedFloat's own host is counted
+          # locally; every other provider limits its own accounts with a 429.
           @limits = SwapProviderLimits.for_base_url(@base_url)
           normalized_lightning = lightning_ccy.to_s.strip
           @lightning_ccy = normalized_lightning.empty? ? nil : normalized_lightning

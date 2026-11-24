@@ -249,17 +249,18 @@ public class FixedFloatProviderTests
     }
 
     [Fact]
-    public void The_host_in_the_LSC_code_picks_the_providers_limits()
+    public void Only_FixedFloats_own_host_in_the_LSC_code_is_counted_locally()
     {
         var client = new HttpClient(new FakeSwapProviderHandler(_ => FakeSwapProviderHandler.Json("{}")));
         SwapProviderLimits Limits(string lscUri) => FixedFloatCompatibleProvider.FromLsc(LscUri.Parse(lscUri), client).Limits;
 
-        Assert.Same(SwapProviderLimits.LightningSwap, Limits("lightning+swapconnect://lightning-swap.com/?key=k&secret=s"));
-        Assert.Same(SwapProviderLimits.LightningSwap, Limits("lightning+swapconnect://API.Lightning-Swap.com:8443/v1?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.ProviderOnly, Limits("lightning+swapconnect://lightning-swap.com/?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.ProviderOnly, Limits("lightning+swapconnect://API.Lightning-Swap.com:8443/v1?key=k&secret=s"));
         Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://ff.io/?key=k&secret=s"));
-        // A look-alike host is not Lightning Swap.
-        Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://evil-lightning-swap.com/?key=k&secret=s"));
-        Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://lightning-swap.com.example/?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.FixedFloat, Limits("lightning+swapconnect://API.FF.io:443/v2?key=k&secret=s"));
+        // A look-alike host is not FixedFloat.
+        Assert.Same(SwapProviderLimits.ProviderOnly, Limits("lightning+swapconnect://evil-ff.io/?key=k&secret=s"));
+        Assert.Same(SwapProviderLimits.ProviderOnly, Limits("lightning+swapconnect://ff.io.example/?key=k&secret=s"));
         // No base URL at all is FixedFloat's own API.
         Assert.Same(SwapProviderLimits.FixedFloat, new FixedFloatCompatibleProvider(new("ff", "k", "s"), client).Limits);
     }
@@ -268,11 +269,13 @@ public class FixedFloatProviderTests
     public async Task A_create_the_guard_would_refuse_is_refused_before_any_request()
     {
         var fixture = new Fixture();
-        var guard = new SwapProviderWeightBudget("ff-test", () => 1_700_000_000, fixture.Provider.Limits);
+        var guard = new SwapProviderWeightBudget("ff-test", () => 1_700_000_000, SwapProviderLimits.FixedFloat);
         var recording = new RecordingWeightBudget(guard);
         fixture.Provider.AttachWeightBudget(recording);
         fixture.Provider.AssertCreateAvailable(); // room for a create: nothing thrown, nothing used
+        // A busy minute on FixedFloat: three creates and a status call leave no room for a create.
         for (var i = 0; i < 3; i += 1) guard.Reserve("create");
+        guard.Reserve("order");
 
         var denied = Assert.Throws<SwapWeightBudgetException>(() => fixture.Provider.AssertCreateAvailable());
 

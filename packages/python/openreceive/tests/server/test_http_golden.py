@@ -16,6 +16,7 @@ import pytest
 from openreceive.server.errors import ConflictError
 from openreceive.server.handler import HttpRequest, RequestHandler
 from openreceive.server.service import Service
+from openreceive.swap.budget import FIXEDFLOAT_LIMITS
 from openreceive.swap.fixedfloat import FixedFloatApiError
 from openreceive.testing import FakeWallet
 from tests.conftest import VECTORS_DIR
@@ -99,9 +100,11 @@ class SettledWallet:
 
 class FailingSwapProvider:
     """Behind the swap_* vectors: a refused /create (the engine's own API error
-    of kind `api`), or a create the service-attached weight budget refuses."""
+    of kind `api`), or a create the service-attached weight budget refuses.
+    It states FixedFloat's limits, the only ones the guard counts for."""
 
     name = "fixedfloat"
+    limits = FIXEDFLOAT_LIMITS
 
     def __init__(self, failure: str) -> None:
         self.failure = failure
@@ -138,7 +141,7 @@ def swap_failure_service(failure: str) -> Service:
         clock=lambda: 1000,
     )
     if failure == "weight_budget":
-        for _ in range(3):  # three creates in this window: 150, the create gate
+        for _ in range(4):  # four creates in this window: 200, the soft cap
             provider.budget.reserve("create")
     return service
 

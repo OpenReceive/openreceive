@@ -179,9 +179,9 @@ class FixedFloatProvider:
         self._key = key
         self._secret = secret
         self._base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
-        # The host names the provider, and the provider sets the limits: the
-        # same wire contract is served at very different rates. The service
-        # sizes the request guard it attaches with these.
+        # The host names the provider: only FixedFloat's own host is counted
+        # locally; every other provider limits its own accounts with a 429.
+        # The service builds the request guard it attaches from these.
         self.limits: SwapProviderLimits = limits_for_base_url(self._base_url)
         self._lightning_ccy = (lightning_ccy or "").strip() or None
         self._http: HttpTransport = http or default_http_request

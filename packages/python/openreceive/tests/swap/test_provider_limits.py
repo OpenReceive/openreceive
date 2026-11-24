@@ -1,7 +1,7 @@
-"""The request guard is sized by who the provider is, and obeys the wait a 429
-names: the provider's host picks its limits, the transport hands the guard the
-429's path and wait, and a check asks whether a create is available without
-using any budget."""
+"""Only FixedFloat's own host is counted locally, and every provider's 429 is
+obeyed for the wait it names: the provider's host picks its limits, the
+transport hands the guard the 429's path and wait, and a check asks whether a
+create is available without using any budget."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import pytest
 from openreceive.swap import providers_from_connections
 from openreceive.swap.budget import (
     FIXEDFLOAT_LIMITS,
-    LIGHTNING_SWAP_LIMITS,
+    PROVIDER_ONLY_LIMITS,
     SwapProviderWeightBudget,
     WeightBudgetError,
     limits_for_base_url,
@@ -55,32 +55,33 @@ def denial_of(guard: SwapProviderWeightBudget, path: str) -> dict[str, Any]:
     return refused.value.denial
 
 
-def test_the_providers_host_picks_its_limits_and_an_unknown_host_gets_fixedfloat() -> None:
-    for url in (
-        "https://lightning-swap.com",
-        "https://lightning-swap.com/",
-        "https://api.lightning-swap.com/v1",
-        "https://LIGHTNING-SWAP.com",
-    ):
-        assert limits_for_base_url(url) is LIGHTNING_SWAP_LIMITS, url
+def test_only_fixedfloats_own_host_is_counted_locally() -> None:
     for url in (
         "https://ff.io",
+        "https://ff.io/",
+        "https://api.ff.io/v2",
+        "https://FF.IO",
+    ):
+        assert limits_for_base_url(url) is FIXEDFLOAT_LIMITS, url
+    for url in (
+        "https://lightning-swap.com",
         "https://swap.example/v1",
-        # A look-alike host is not Lightning Swap.
-        "https://evil-lightning-swap.com",
-        "https://lightning-swap.com.example",
-        "https://lightning-swap.com:not-a-port",
+        "http://127.0.0.1:18080",
+        # A look-alike host is not FixedFloat.
+        "https://evil-ff.io",
+        "https://ff.io.example",
+        "https://ff.io:not-a-port",
         "not a url",
         "",
         None,
     ):
-        assert limits_for_base_url(url) is FIXEDFLOAT_LIMITS, url
+        assert limits_for_base_url(url) is PROVIDER_ONLY_LIMITS, url
     lightning_swap = FixedFloatProvider(key="k", secret="s", base_url="https://lightning-swap.com")
-    assert lightning_swap.limits.profile == "lightning-swap"
+    assert lightning_swap.limits.profile == "provider-only"
     assert FixedFloatProvider(key="k", secret="s").limits.profile == "fixedfloat"
 
 
-def test_each_configured_connection_is_sized_by_its_own_host() -> None:
+def test_each_configured_connection_is_judged_by_its_own_host() -> None:
     # The base URLs an LSC connection parses to: a trailing slash and all.
     primary, backup = providers_from_connections(
         [
@@ -98,59 +99,68 @@ def test_each_configured_connection_is_sized_by_its_own_host() -> None:
             },
         ]
     )
-    assert primary.limits is LIGHTNING_SWAP_LIMITS
+    assert primary.limits is PROVIDER_ONLY_LIMITS
     assert backup.limits is FIXEDFLOAT_LIMITS
 
 
-def test_a_fixedfloat_guard_still_allows_three_creates_a_minute() -> None:
+def test_a_fixedfloat_guard_allows_four_creates_a_minute_when_nothing_else_ran() -> None:
     clock = {"now": 1_000}
-    guard = SwapProviderWeightBudget("fixedfloat", lambda: clock["now"])
+    guard = SwapProviderWeightBudget("fixedfloat", lambda: clock["now"], FIXEDFLOAT_LIMITS)
+    for _ in range(4):
+        guard.reserve("create")
+    with pytest.raises(WeightBudgetError, match=r"weight budget exhausted \(200\+50 > 200\)"):
+        guard.reserve("create")
+    clock["now"] += 60
+    guard.reserve("create")
+
+
+def test_on_fixedfloat_status_calls_can_no_longer_starve_new_swaps() -> None:
+    guard = SwapProviderWeightBudget("fixedfloat", lambda: 1_000, FIXEDFLOAT_LIMITS)
+    # Fifty status polls spend the share the calls that are not creates have.
+    for _ in range(50):
+        guard.reserve("order")
+    denial = denial_of(guard, "order")
+    assert denial["message"] == (
+        "Swap provider API weight budget for calls other than creates exhausted (50+1 > 50)."
+    )
+    assert (denial["reason"], denial["used"], denial["gate"]) == ("exhausted", 50, 50)
+    # Three payers can still start a swap this minute.
     for _ in range(3):
         guard.reserve("create")
     with pytest.raises(WeightBudgetError, match="weight budget exhausted"):
         guard.reserve("create")
-    clock["now"] += 60
-    guard.reserve("create")
 
 
-def test_a_lightning_swap_guard_allows_thirty_creates_and_keeps_status_calls_going() -> None:
-    clock = {"now": 1_000}
-    guard = SwapProviderWeightBudget(
-        "lightning-swap-com", lambda: clock["now"], LIGHTNING_SWAP_LIMITS
-    )
-    for _ in range(30):
-        guard.reserve("create")
-    denial = denial_of(guard, "create")
-    assert denial["message"] == "Swap provider create budget exhausted (30+1 > 30)."
-    assert denial["reason"] == "exhausted"
-    assert denial["creates"] == 30 and denial["create_limit"] == 30
-    # The swaps that exist can still be read and refunded.
-    guard.reserve("order")
-    guard.reserve("emergency")
-    clock["now"] += 60
-    guard.reserve("create")
+def test_the_guard_counts_nothing_for_any_other_provider() -> None:
+    for limits in (None, PROVIDER_ONLY_LIMITS):
+        guard = SwapProviderWeightBudget("lightning-swap-com", lambda: 1_000, limits)
+        for _ in range(500):
+            guard.reserve("create")
+        for _ in range(2_000):
+            guard.reserve("order")
+        guard.assert_available("create")
 
 
 def test_asking_whether_a_create_is_available_uses_no_budget() -> None:
-    guard = SwapProviderWeightBudget("fixedfloat", lambda: 1_000)
+    guard = SwapProviderWeightBudget("fixedfloat", lambda: 1_000, FIXEDFLOAT_LIMITS)
     for _ in range(10):
         guard.assert_available("create")
-    for _ in range(3):
+    for _ in range(4):
         guard.reserve("create")
     with pytest.raises(WeightBudgetError, match="weight budget exhausted"):
         guard.assert_available("create")
-    # A FixedFloat denial reports no create count: the profile has none.
-    assert "create_limit" not in denial_of(guard, "create")
 
 
-def test_a_lightning_swap_429_on_a_create_stops_creates_for_the_wait_it_names() -> None:
+def test_another_providers_429_on_a_create_stops_creates_for_the_wait_it_names() -> None:
     clock = {"now": 1_000}
     guard = SwapProviderWeightBudget(
-        "lightning-swap-com", lambda: clock["now"], LIGHTNING_SWAP_LIMITS
+        "lightning-swap-com", lambda: clock["now"], PROVIDER_ONLY_LIMITS
     )
     guard.mark_rate_limited(path="create", retry_after_seconds=12)
     denial = denial_of(guard, "create")
     assert denial["reason"] == "backoff" and denial["backoff_until"] == 1_012
+    # A guard that counts nothing reports no counts.
+    assert "used" not in denial and "gate" not in denial
     guard.reserve("order")
     clock["now"] = 1_012
     guard.reserve("create")
@@ -175,7 +185,7 @@ def test_a_lightning_swap_429_on_a_create_stops_creates_for_the_wait_it_names() 
 
 def test_a_fixedfloat_429_stops_every_call_for_at_least_a_minute() -> None:
     clock = {"now": 1_000}
-    guard = SwapProviderWeightBudget("fixedfloat", lambda: clock["now"])
+    guard = SwapProviderWeightBudget("fixedfloat", lambda: clock["now"], FIXEDFLOAT_LIMITS)
     guard.mark_rate_limited(path="create", retry_after_seconds=5)
     with pytest.raises(WeightBudgetError, match="in backoff until 1060"):
         guard.reserve("order")
@@ -191,13 +201,13 @@ def test_a_fixedfloat_429_stops_every_call_for_at_least_a_minute() -> None:
 
 @pytest.mark.parametrize("wait", [None, 0, -3, True, "12", float("nan"), float("inf")])
 def test_a_wait_that_is_not_a_positive_number_means_the_profiles_own_backoff(wait: Any) -> None:
-    guard = SwapProviderWeightBudget("lightning-swap-com", lambda: 1_000, LIGHTNING_SWAP_LIMITS)
+    guard = SwapProviderWeightBudget("lightning-swap-com", lambda: 1_000, PROVIDER_ONLY_LIMITS)
     guard.mark_rate_limited(path="create", retry_after_seconds=wait)
     assert denial_of(guard, "create")["backoff_until"] == 1_060
 
 
 def test_a_fractional_wait_is_rounded_up_and_an_absurd_one_is_capped() -> None:
-    guard = SwapProviderWeightBudget("lightning-swap-com", lambda: 1_000, LIGHTNING_SWAP_LIMITS)
+    guard = SwapProviderWeightBudget("lightning-swap-com", lambda: 1_000, PROVIDER_ONLY_LIMITS)
     guard.mark_rate_limited(path="create", retry_after_seconds=0.2)
     assert denial_of(guard, "create")["backoff_until"] == 1_001
     guard.mark_rate_limited(path="create", retry_after_seconds=10**400)

@@ -93,8 +93,8 @@ public sealed partial class FixedFloatCompatibleProvider : ISwapProvider
             (options.BaseUrl ?? DefaultBaseUrl).TrimEnd('/'),
             Name,
             TimeSpan.FromMilliseconds(requestTimeoutMs));
-        // The host names the provider, and the provider sets the limits: the same wire
-        // contract is served at very different rates.
+        // The host names the provider: only FixedFloat's own host is counted locally;
+        // every other provider limits its own accounts with a 429.
         Limits = SwapProviderLimits.ForBaseUrl(_transport.BaseUrl);
 
         var depositWindowSeconds = options.DepositWindowSeconds ?? DefaultDepositWindowSeconds;

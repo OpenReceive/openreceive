@@ -6,7 +6,8 @@ namespace BTCPayServer.Plugins.OpenReceive.Tests.Vectors;
 
 /// <summary>
 /// spec/test-vectors/swap-provider-limits.json through the production request guard: the
-/// profile numbers, the host that picks a profile, and every scenario step.
+/// profile numbers, the host that picks a profile (only FixedFloat's own is counted
+/// locally), and every scenario step.
 /// </summary>
 public class SwapProviderLimitsVectors
 {
@@ -15,7 +16,7 @@ public class SwapProviderLimitsVectors
     private static readonly Dictionary<string, SwapProviderLimits> Profiles = new(StringComparer.Ordinal)
     {
         [SwapProviderLimits.FixedFloatProfile] = SwapProviderLimits.FixedFloat,
-        [SwapProviderLimits.LightningSwapProfile] = SwapProviderLimits.LightningSwap,
+        [SwapProviderLimits.ProviderOnlyProfile] = SwapProviderLimits.ProviderOnly,
     };
 
     public static TheoryData<string> Hosts()
@@ -38,13 +39,16 @@ public class SwapProviderLimitsVectors
         foreach (var (name, limits) in Profiles)
         {
             Assert.Equal(name, limits.Profile);
+            var budget = limits.LocalBudget;
             var actual = new JsonObject
             {
-                ["soft_cap"] = limits.SoftCap,
-                ["create_gate"] = limits.CreateGate,
-                ["create_weight"] = limits.CreateWeight,
-                ["default_weight"] = limits.DefaultWeight,
-                ["create_limit"] = limits.CreateLimit,
+                ["local_budget"] = budget is null ? null : new JsonObject
+                {
+                    ["soft_cap"] = budget.SoftCap,
+                    ["non_create_cap"] = budget.NonCreateCap,
+                    ["create_weight"] = budget.CreateWeight,
+                    ["default_weight"] = budget.DefaultWeight,
+                },
                 ["backoff_seconds"] = limits.BackoffSeconds,
                 ["min_backoff_seconds"] = limits.MinBackoffSeconds,
                 ["max_backoff_seconds"] = limits.MaxBackoffSeconds,
@@ -64,7 +68,7 @@ public class SwapProviderLimitsVectors
 
         Assert.Equal(expected, limits.Profile);
         Assert.Same(Profiles[expected], limits);
-        // The provider exposes what its base URL picked, and the pool sizes the guard with it.
+        // The provider exposes what its base URL picked, and the pool builds the guard with it.
         using var client = new HttpClient(new FakeSwapProviderHandler(_ => FakeSwapProviderHandler.Json("{}")));
         var provider = new FixedFloatCompatibleProvider(new("vector", "key", "secret", baseUrl), client);
         Assert.Same(limits, provider.Limits);

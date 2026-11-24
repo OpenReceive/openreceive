@@ -35,7 +35,7 @@ final class SharedStandOffTest extends TestCase
         return new WeightBudget(
             'lightning-swap-com',
             fn (): int => $this->now,
-            $limits ?? SwapProviderLimits::lightningSwap(),
+            $limits ?? SwapProviderLimits::providerOnly(),
             $cache === false ? null : ($cache ?? $this->cache),
         );
     }
@@ -135,17 +135,17 @@ final class SharedStandOffTest extends TestCase
     {
         $limits = SwapProviderLimits::fixedFloat();
         $busy = $this->guard($limits);
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $busy->reserve('create');
         }
         self::assertSame('exhausted', self::denial(static fn () => $busy->reserve('create'))['reason'] ?? null);
         self::assertSame([], $this->cache->entries, 'reaching the per-minute limit stores nothing');
         // The next request starts with fresh counts.
         $next = $this->guard($limits);
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $next->reserve('create');
         }
-        // A stand-off stored by a guard that has counted calls does not hand its counts or window on either.
+        // A stand-off stored by a guard that has seen calls does not hand them or its window on either.
         $counted = $this->guard();
         for ($i = 0; $i < 5; $i++) {
             $counted->reserve('create');
@@ -165,7 +165,7 @@ final class SharedStandOffTest extends TestCase
 
     public function testAStoredEndTooFarAwayOrNotOursIsNoStandOff(): void
     {
-        $lightning = SwapProviderLimits::lightningSwap();
+        $lightning = SwapProviderLimits::providerOnly();
         $fixedFloat = SwapProviderLimits::fixedFloat();
         $ignored = [
             'further than the longest stand-off' => [$lightning, json_encode(['create_backoff_until' => $this->now + 301])],

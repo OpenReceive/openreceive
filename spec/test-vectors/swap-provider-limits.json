@@ -1,26 +1,24 @@
 {
-  "schema_version": "0.1.0",
-  "decision": "size_the_request_guard_by_provider",
-  "rationale": "Every engine attaches a per-process request guard to a swap provider so a busy site stays inside the provider's API limits. The same wire contract is served at very different rates: FixedFloat allows 250 weight a minute per key with a create costing 50, and blocks a key for longer each time it goes over; Lightning Swap allows an account 30 new swaps and 400 calls a minute, answers 429 with the wait, and never blocks a key. The provider's HTTPS host picks the limits. An unknown host gets the FixedFloat limits because they are the stricter. The provider stays the authority: its 429 always starts a stand-off, for the wait it names when it names one.",
+  "schema_version": "0.2.0",
+  "decision": "count_locally_for_fixedfloat_only",
+  "rationale": "Every engine attaches a per-process request guard to a swap provider. It counts calls only on FixedFloat's own host (ff.io, or a subdomain of it), because FixedFloat allows 250 weight a minute per API key with a create costing 50 and blocks a key for longer each time it goes over. There the guard keeps the calls in a window within a 200 soft cap, and the calls that are not creates (status, refund, catalog) may use at most 50 of it between them, so open swap screens polling their status can never starve new swaps: at least three creates a minute always fit, four when nothing else ran. Every other host (Lightning Swap, a provider this library does not know, a test fake, a value that is not a URL) gets no local count at all: the provider limits its own accounts and says so with a 429, and a local count of this library's own could only refuse payers the provider would have accepted. On every host the guard obeys a 429: it stands off for the wait the provider names (Retry-After, or the wait in the response body), and for its profile's default when it names none.",
   "window_seconds": 60,
+  "profiles_note": "`local_budget` is the per-window count the guard keeps, or null when it keeps none and only obeys the provider's 429. In it, `soft_cap` is the weight every call in one window may add up to, `non_create_cap` the part of it the calls that are not creates may use between them, and a create may bring the window up to the whole soft cap. `backoff_seconds` is the stand-off after a 429 that names no wait; a named wait is rounded up and kept between `min_backoff_seconds` and `max_backoff_seconds`. `create_backoff_only` is true when a 429 that answered a create stops creates only, so status and refund calls for swaps that already exist keep working; a 429 on any other path always stops every call.",
   "profiles": {
     "fixedfloat": {
-      "soft_cap": 200,
-      "create_gate": 150,
-      "create_weight": 50,
-      "default_weight": 1,
-      "create_limit": null,
+      "local_budget": {
+        "soft_cap": 200,
+        "non_create_cap": 50,
+        "create_weight": 50,
+        "default_weight": 1
+      },
       "backoff_seconds": 60,
       "min_backoff_seconds": 60,
       "max_backoff_seconds": 3600,
       "create_backoff_only": false
     },
-    "lightning-swap": {
-      "soft_cap": 400,
-      "create_gate": 400,
-      "create_weight": 1,
-      "default_weight": 1,
-      "create_limit": 30,
+    "provider-only": {
+      "local_budget": null,
       "backoff_seconds": 60,
       "min_backoff_seconds": 1,
       "max_backoff_seconds": 300,
@@ -29,59 +27,70 @@
   },
   "hosts": [
     {
-      "base_url": "https://lightning-swap.com",
-      "profile": "lightning-swap"
-    },
-    {
-      "base_url": "https://lightning-swap.com/",
-      "profile": "lightning-swap"
-    },
-    {
-      "base_url": "https://api.lightning-swap.com/v1",
-      "profile": "lightning-swap"
-    },
-    {
-      "base_url": "https://LIGHTNING-SWAP.com",
-      "profile": "lightning-swap"
-    },
-    {
-      "base_url": "https://lightning-swap.com:8443/api",
-      "profile": "lightning-swap"
-    },
-    {
       "base_url": "https://ff.io",
       "profile": "fixedfloat"
     },
     {
-      "base_url": "https://swap.example/v1",
+      "base_url": "https://ff.io/",
       "profile": "fixedfloat"
     },
     {
-      "base_url": "https://evil-lightning-swap.com",
-      "profile": "fixedfloat",
-      "note": "A look-alike host is not Lightning Swap."
+      "base_url": "https://FF.IO",
+      "profile": "fixedfloat"
     },
     {
-      "base_url": "https://lightning-swap.com.example",
+      "base_url": "https://api.ff.io/v2",
       "profile": "fixedfloat",
-      "note": "A look-alike host is not Lightning Swap."
+      "note": "A subdomain of ff.io is FixedFloat's."
+    },
+    {
+      "base_url": "https://ff.io:443/api",
+      "profile": "fixedfloat"
+    },
+    {
+      "base_url": "https://lightning-swap.com",
+      "profile": "provider-only"
+    },
+    {
+      "base_url": "https://api.lightning-swap.com/v1",
+      "profile": "provider-only"
+    },
+    {
+      "base_url": "https://swap.example/v1",
+      "profile": "provider-only",
+      "note": "A provider this library does not know is never counted locally."
+    },
+    {
+      "base_url": "http://127.0.0.1:18080",
+      "profile": "provider-only",
+      "note": "A test fake."
+    },
+    {
+      "base_url": "https://evil-ff.io",
+      "profile": "provider-only",
+      "note": "A look-alike host is not FixedFloat."
+    },
+    {
+      "base_url": "https://ff.io.example",
+      "profile": "provider-only",
+      "note": "A look-alike host is not FixedFloat."
     },
     {
       "base_url": "not a url",
-      "profile": "fixedfloat"
+      "profile": "provider-only"
     }
   ],
   "steps_note": "A scenario builds one guard for `profile` with its clock at the first step's `at`, then runs the steps in order with the clock set to each step's `at`. `reserve` uses budget; `check` asks whether a reserve would be allowed and uses none; `rate_limited` tells the guard the provider answered 429 on `path` (`retry_after` is the provider's wait in seconds, absent when it named none). `repeat` runs the step that many times. `expect` is `ok`, `exhausted` or `backoff`; `backoff_until` is the unix second the stand-off ends, as the denial reports it.",
   "scenarios": [
     {
-      "name": "FixedFloat: three creates a minute, then the window rolls",
+      "name": "FixedFloat: four creates fill the 200 soft cap, then the window rolls",
       "profile": "fixedfloat",
       "steps": [
         {
           "at": 1000,
           "op": "reserve",
           "path": "create",
-          "repeat": 3,
+          "repeat": 4,
           "expect": "ok"
         },
         {
@@ -94,15 +103,8 @@
           "at": 1000,
           "op": "reserve",
           "path": "order",
-          "repeat": 50,
-          "expect": "ok"
-        },
-        {
-          "at": 1000,
-          "op": "reserve",
-          "path": "order",
           "expect": "exhausted",
-          "note": "150 + 50 = the 200 soft cap."
+          "note": "4 x 50 = the 200 soft cap, which counts every call."
         },
         {
           "at": 1059,
@@ -115,6 +117,99 @@
           "op": "reserve",
           "path": "create",
           "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "FixedFloat: status calls can no longer starve new swaps",
+      "profile": "fixedfloat",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "repeat": 50,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "exhausted",
+          "note": "The calls that are not creates share 50 weight of the window."
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "emergency",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "repeat": 3,
+          "expect": "ok",
+          "note": "50 + 3 x 50 = the 200 soft cap."
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "exhausted"
+        },
+        {
+          "at": 1060,
+          "op": "reserve",
+          "path": "order",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "FixedFloat: two swaps and their status checks leave room for a third payer",
+      "profile": "fixedfloat",
+      "steps": [
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "repeat": 2,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "repeat": 2,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok",
+          "note": "102 + 50 = 152. A create may bring the window up to 200, no longer only to 150."
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "repeat": 48,
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "exhausted",
+          "note": "200 + 50 > 200."
         }
       ]
     },
@@ -140,13 +235,25 @@
           "at": 1000,
           "op": "check",
           "path": "create",
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
           "expect": "exhausted"
         },
         {
           "at": 1000,
           "op": "check",
           "path": "order",
-          "expect": "ok"
+          "expect": "exhausted"
         }
       ]
     },
@@ -245,90 +352,67 @@
       ]
     },
     {
-      "name": "Lightning Swap: thirty creates a minute, and status calls keep going",
-      "profile": "lightning-swap",
+      "name": "Any other provider: no local count however many calls, but its 429 is obeyed",
+      "profile": "provider-only",
       "steps": [
         {
           "at": 1000,
           "op": "reserve",
           "path": "create",
-          "repeat": 30,
+          "repeat": 1000,
           "expect": "ok"
         },
         {
           "at": 1000,
           "op": "reserve",
-          "path": "create",
-          "expect": "exhausted"
-        },
-        {
-          "at": 1000,
-          "op": "check",
-          "path": "create",
-          "expect": "exhausted"
-        },
-        {
-          "at": 1000,
-          "op": "reserve",
           "path": "order",
-          "repeat": 100,
+          "repeat": 5000,
           "expect": "ok"
         },
         {
           "at": 1000,
           "op": "reserve",
           "path": "emergency",
+          "repeat": 100,
           "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "check",
+          "path": "create",
+          "expect": "ok"
+        },
+        {
+          "at": 1000,
+          "op": "rate_limited",
+          "path": "order"
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "order",
+          "expect": "backoff",
+          "backoff_until": 1060
+        },
+        {
+          "at": 1000,
+          "op": "reserve",
+          "path": "create",
+          "expect": "backoff",
+          "backoff_until": 1060
         },
         {
           "at": 1060,
           "op": "reserve",
           "path": "create",
+          "repeat": 1000,
           "expect": "ok"
         }
       ]
     },
     {
-      "name": "Lightning Swap: four hundred calls a minute in all",
-      "profile": "lightning-swap",
-      "steps": [
-        {
-          "at": 1000,
-          "op": "reserve",
-          "path": "create",
-          "repeat": 10,
-          "expect": "ok"
-        },
-        {
-          "at": 1000,
-          "op": "reserve",
-          "path": "order",
-          "repeat": 390,
-          "expect": "ok"
-        },
-        {
-          "at": 1000,
-          "op": "reserve",
-          "path": "order",
-          "expect": "exhausted"
-        },
-        {
-          "at": 1000,
-          "op": "reserve",
-          "path": "create",
-          "expect": "exhausted"
-        },
-        {
-          "at": 1060,
-          "op": "reserve",
-          "path": "order",
-          "expect": "ok"
-        }
-      ]
-    },
-    {
-      "name": "Lightning Swap: a 429 on a create stops creates only, for the wait it names",
-      "profile": "lightning-swap",
+      "name": "Any other provider: a 429 on a create stops creates only, for the wait it names",
+      "profile": "provider-only",
       "steps": [
         {
           "at": 1000,
@@ -357,6 +441,12 @@
           "expect": "ok"
         },
         {
+          "at": 1000,
+          "op": "reserve",
+          "path": "emergency",
+          "expect": "ok"
+        },
+        {
           "at": 1011,
           "op": "reserve",
           "path": "create",
@@ -372,8 +462,8 @@
       ]
     },
     {
-      "name": "Lightning Swap: a 429 on any other call stops every call",
-      "profile": "lightning-swap",
+      "name": "Any other provider: a 429 on any other call stops every call",
+      "profile": "provider-only",
       "steps": [
         {
           "at": 1000,
@@ -404,8 +494,8 @@
       ]
     },
     {
-      "name": "Lightning Swap: no wait named means a minute; a long wait is retried after five",
-      "profile": "lightning-swap",
+      "name": "Any other provider: no wait named means a minute; a long wait is retried after five",
+      "profile": "provider-only",
       "steps": [
         {
           "at": 2000,
@@ -448,7 +538,7 @@
     },
     {
       "name": "a later, shorter 429 never shortens a stand-off already running",
-      "profile": "lightning-swap",
+      "profile": "provider-only",
       "steps": [
         {
           "at": 1000,

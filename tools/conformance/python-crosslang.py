@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -84,19 +85,22 @@ for case in vector("rate-limit-address")["cases"]:
         if client_ip.is_payer_address(form) is not case["expected"]["payer"]:
             fail(f"rate-limit-address parity: {case['name']} (as {form!r})")
 
-# swap-provider-limits: the request guard is sized by the provider's host.
+# swap-provider-limits: only FixedFloat's own host is counted locally.
 provider_limits = vector("swap-provider-limits")
 limit_profiles = {
     "fixedfloat": budget.FIXEDFLOAT_LIMITS,
-    "lightning-swap": budget.LIGHTNING_SWAP_LIMITS,
+    "provider-only": budget.PROVIDER_ONLY_LIMITS,
 }
 if budget.WINDOW_SECONDS != provider_limits["window_seconds"]:
     fail("swap-provider-limits parity: window_seconds")
 if sorted(provider_limits["profiles"]) != sorted(limit_profiles):
     fail("swap-provider-limits parity: the profile names")
 for name, expected in provider_limits["profiles"].items():
+    actual = asdict(limit_profiles[name])
+    if actual.pop("profile") != name:
+        fail(f"swap-provider-limits parity: {name} profile")
     for field, value in expected.items():
-        if getattr(limit_profiles[name], field) != value:
+        if actual.get(field) != value:
             fail(f"swap-provider-limits parity: {name} {field}")
 for item in provider_limits["hosts"]:
     if budget.limits_for_base_url(item["base_url"]).profile != item["profile"]:

@@ -26,10 +26,11 @@ Formats in use (one per file family):
   payer: never a loopback, private, carrier-shared or link-local address,
   which is the host's own proxy).
 - **`profiles` + `hosts` + `scenarios`** — `swap-provider-limits`: the request
-  guard every engine attaches to a swap provider. `profiles` are the limits per
-  provider, `hosts` maps a provider's HTTPS base URL to its profile, and each
-  scenario is a clocked list of reserve, check and 429 steps with the answer
-  the guard must give.
+  guard every engine attaches to a swap provider. `profiles` say how the guard
+  treats a provider (a local count for FixedFloat only, and how long a 429
+  stands off), `hosts` maps a provider's HTTPS base URL to its profile, and
+  each scenario is a clocked list of reserve, check and 429 steps with the
+  answer the guard must give.
 - **`provider` + `cases`** — `swap-state`: the FixedFloat status, emergency block,
   and refund-tx presence → OpenReceive swap state plus attention/refund reasons,
   run through each engine's production status normalizer — an interpreter of

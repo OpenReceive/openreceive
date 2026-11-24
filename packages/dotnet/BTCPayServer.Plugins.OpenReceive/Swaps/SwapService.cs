@@ -536,12 +536,20 @@ public sealed class SwapService
             _logger.LogWarning("swap.provider.rate_limited provider={Provider} path={Path} (the provider answered 429; new calls stand off until its wait is over)", name, path);
             return;
         }
+        var detail = denial.Reason == SwapProviderWeightBudget.ReasonBackoff
+            ? "refused locally: standing off after the provider's 429"
+            : "refused locally: this process reached the per-minute limit it keeps for FixedFloat";
+        if (denial.Used is null)
+        {
+            // A guard that counts nothing (every provider but FixedFloat) has no counts to name.
+            _logger.LogWarning(
+                "swap.provider.rate_limited provider={Provider} path={Path} reason={Reason} backoff_until={BackoffUntil} ({Detail})",
+                name, path, denial.Reason, denial.BackoffUntil, detail);
+            return;
+        }
         _logger.LogWarning(
-            "swap.provider.rate_limited provider={Provider} path={Path} reason={Reason} used={Used} gate={Gate} creates={Creates} create_limit={CreateLimit} backoff_until={BackoffUntil} ({Detail})",
-            name, path, denial.Reason, denial.Used, denial.Gate, denial.Creates, denial.CreateLimit, denial.BackoffUntil,
-            denial.Reason == SwapProviderWeightBudget.ReasonBackoff
-                ? "refused locally: standing off after the provider's 429"
-                : "refused locally: this process reached the provider's per-minute limit");
+            "swap.provider.rate_limited provider={Provider} path={Path} reason={Reason} used={Used} gate={Gate} backoff_until={BackoffUntil} ({Detail})",
+            name, path, denial.Reason, denial.Used, denial.Gate, denial.BackoffUntil, detail);
     }
 
     // ---- Writes ----

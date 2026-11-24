@@ -597,10 +597,11 @@ final class Service
 
     /**
      * One shared transient cache and one per-provider request guard, attached
-     * to every provider that accepts them. The guard is sized by the
-     * provider's own limits; a provider that states none gets the FixedFloat
-     * ones. With a shared cache the guard also keeps a provider's 429
-     * stand-off there, so the next request does not ask again too soon.
+     * to every provider that accepts them. The guard follows the provider's
+     * own limits; a provider that states none is never counted locally and
+     * only obeys its 429. With a shared cache the guard also keeps a
+     * provider's 429 stand-off there, so the next request does not ask again
+     * too soon.
      */
     private function attachSwapProviderRuntime(?SharedCache $sharedCache): void
     {
@@ -836,15 +837,13 @@ final class Service
         $this->logger?->warning(
             'swap.provider.rate_limited: ' . (($denial['reason'] ?? null) === 'backoff'
                 ? "Swap provider call refused locally: standing off after the provider's 429."
-                : "Swap provider call refused locally: this process reached the provider's per-minute limit."),
+                : 'Swap provider call refused locally: this process reached the per-minute limit it keeps for FixedFloat.'),
             Records::compact([
                 'provider' => $denial['provider'] ?? null,
                 'path' => $denial['path'] ?? null,
                 'reason' => $denial['reason'] ?? null,
                 'used' => $denial['used'] ?? null,
                 'gate' => $denial['gate'] ?? null,
-                'creates' => $denial['creates'] ?? null,
-                'create_limit' => $denial['create_limit'] ?? null,
                 'backoff_until' => $denial['backoff_until'] ?? null,
             ]),
         );

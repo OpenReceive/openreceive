@@ -330,10 +330,10 @@ test("rate-limit-address: the per-IP limit never counts a proxy's or the host's 
   }
 });
 
-test("swap-provider-limits: the request guard is sized by the provider's host", async () => {
+test("swap-provider-limits: only FixedFloat's own host is counted locally", async () => {
   const {
     FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
-    LIGHTNING_SWAP_PROVIDER_LIMITS,
+    PROVIDER_ONLY_SWAP_PROVIDER_LIMITS,
     SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS,
     SwapProviderWeightBudget,
     swapProviderLimitsForBaseUrl,
@@ -341,19 +341,25 @@ test("swap-provider-limits: the request guard is sized by the provider's host", 
   const family = vector("swap-provider-limits");
   const profiles = {
     fixedfloat: FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
-    "lightning-swap": LIGHTNING_SWAP_PROVIDER_LIMITS,
+    "provider-only": PROVIDER_ONLY_SWAP_PROVIDER_LIMITS,
   };
   assert.equal(SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS, family.window_seconds);
   assert.deepEqual(Object.keys(family.profiles).sort(), Object.keys(profiles).sort());
   for (const [name, expected] of Object.entries(family.profiles)) {
     const limits = profiles[name];
+    assert.equal(limits.profile, name);
+    const budget = limits.localBudget;
     assert.deepEqual(
       {
-        soft_cap: limits.softCap,
-        create_gate: limits.createGate,
-        create_weight: limits.createWeight,
-        default_weight: limits.defaultWeight,
-        create_limit: limits.createLimit ?? null,
+        local_budget:
+          budget === undefined
+            ? null
+            : {
+                soft_cap: budget.softCap,
+                non_create_cap: budget.nonCreateCap,
+                create_weight: budget.createWeight,
+                default_weight: budget.defaultWeight,
+              },
         backoff_seconds: limits.backoffSeconds,
         min_backoff_seconds: limits.minBackoffSeconds,
         max_backoff_seconds: limits.maxBackoffSeconds,

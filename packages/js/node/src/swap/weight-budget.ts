@@ -1,28 +1,34 @@
 import { compact } from "@openreceive/core";
 
 export const SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS = 60;
-export const SWAP_PROVIDER_WEIGHT_SOFT_CAP = 200;
-export const SWAP_PROVIDER_CREATE_WEIGHT_GATE = 150;
-export const SWAP_PROVIDER_CREATE_WEIGHT = 50;
-export const SWAP_PROVIDER_DEFAULT_WEIGHT = 1;
-export const SWAP_PROVIDER_WEIGHT_BACKOFF_SECONDS = 60;
+const SWAP_PROVIDER_WEIGHT_BACKOFF_SECONDS = 60;
 
 /**
- * What one provider allows an API key per window, as far as this guard needs
- * to know it. The guard exists so a busy site stays inside the provider's
- * limits; the provider remains the authority and its 429 always wins.
+ * The per-window count the guard keeps for a provider that needs one. Every
+ * call adds its weight to the window; a create may bring the window up to the
+ * whole soft cap, and the calls that are not creates (status, refund,
+ * catalog) may use only `nonCreateCap` of it between them, so open swap
+ * screens polling their status never starve new swaps.
  */
-export interface SwapProviderLimits {
-  /** Whose published limits these are. */
-  readonly profile: "fixedfloat" | "lightning-swap";
+export interface SwapProviderLocalBudget {
   /** Weight every call in one window may add up to. */
   readonly softCap: number;
-  /** Weight a create may bring the window up to. */
-  readonly createGate: number;
+  /** Weight the calls that are not creates may use between them in one window. */
+  readonly nonCreateCap: number;
   readonly createWeight: number;
   readonly defaultWeight: number;
-  /** Creates per window, for a provider that counts them on their own. */
-  readonly createLimit?: number;
+}
+
+/**
+ * How the request guard treats one provider. The provider remains the
+ * authority: its 429 always starts a stand-off. Only a provider that punishes
+ * going over also gets a local count, so a busy site never asks too often.
+ */
+export interface SwapProviderLimits {
+  /** `fixedfloat` for FixedFloat's own host; `provider-only` for every other. */
+  readonly profile: "fixedfloat" | "provider-only";
+  /** The per-window count, or undefined when the guard keeps none and only obeys the provider's 429. */
+  readonly localBudget?: SwapProviderLocalBudget;
   /** Stand-off after a 429 that names no wait. */
   readonly backoffSeconds: number;
   /** Shortest and longest stand-off a 429's own wait is honored for. */
@@ -38,16 +44,19 @@ export interface SwapProviderLimits {
 
 /**
  * FixedFloat: 250 weight a minute per key, a create costs 50, and going over
- * blocks the key for longer each time. The guard stops well short: three
- * creates a minute, 200 weight in all. Also the default for a provider this
- * library does not know, because it is the stricter of the two.
+ * blocks the key for longer each time. So the guard counts: 200 weight a
+ * minute in all, of which the calls that are not creates may use 50. At least
+ * three creates a minute always fit, four when nothing else ran. A 429 stops
+ * every call for at least a minute.
  */
 export const FIXEDFLOAT_SWAP_PROVIDER_LIMITS: SwapProviderLimits = Object.freeze({
   profile: "fixedfloat",
-  softCap: SWAP_PROVIDER_WEIGHT_SOFT_CAP,
-  createGate: SWAP_PROVIDER_CREATE_WEIGHT_GATE,
-  createWeight: SWAP_PROVIDER_CREATE_WEIGHT,
-  defaultWeight: SWAP_PROVIDER_DEFAULT_WEIGHT,
+  localBudget: Object.freeze({
+    softCap: 200,
+    nonCreateCap: 50,
+    createWeight: 50,
+    defaultWeight: 1,
+  }),
   backoffSeconds: SWAP_PROVIDER_WEIGHT_BACKOFF_SECONDS,
   minBackoffSeconds: SWAP_PROVIDER_WEIGHT_BACKOFF_SECONDS,
   maxBackoffSeconds: 3_600,
@@ -55,27 +64,23 @@ export const FIXEDFLOAT_SWAP_PROVIDER_LIMITS: SwapProviderLimits = Object.freeze
 });
 
 /**
- * Lightning Swap: per account, 30 new swaps and 400 API calls a minute once
- * the account has completed a swap, every call counting as one. It refuses
- * with a 429 that says how long to wait and never blocks a key for going
- * over, so the guard sits at the limit itself. An account on lower limits
- * (one that has not completed a swap yet) is held to them by the provider's
- * own 429, which this guard then obeys.
+ * Every other provider (Lightning Swap, one this library does not know, a
+ * test fake): no local count. The provider limits its own accounts and says
+ * so with a 429; a count of this library's own could only refuse payers the
+ * provider would have accepted. A 429 that answered a create stops creates
+ * only, for the wait it names (1 to 300 seconds; a minute when it names none).
+ * Lightning Swap answers this way: it counts new swaps apart from its other
+ * calls, per account, and names the wait in `Retry-After`.
  */
-export const LIGHTNING_SWAP_PROVIDER_LIMITS: SwapProviderLimits = Object.freeze({
-  profile: "lightning-swap",
-  softCap: 400,
-  createGate: 400,
-  createWeight: 1,
-  defaultWeight: 1,
-  createLimit: 30,
+export const PROVIDER_ONLY_SWAP_PROVIDER_LIMITS: SwapProviderLimits = Object.freeze({
+  profile: "provider-only",
   backoffSeconds: 60,
   minBackoffSeconds: 1,
   maxBackoffSeconds: 300,
   createBackoffOnly: true,
 });
 
-const LIGHTNING_SWAP_HOST = "lightning-swap.com";
+const FIXEDFLOAT_HOST = "ff.io";
 
 /** The limits to guard a provider API with, chosen by its HTTPS host. */
 export function swapProviderLimitsForBaseUrl(baseUrl: string): SwapProviderLimits {
@@ -83,11 +88,11 @@ export function swapProviderLimitsForBaseUrl(baseUrl: string): SwapProviderLimit
   try {
     hostname = new URL(baseUrl).hostname.toLowerCase();
   } catch {
-    return FIXEDFLOAT_SWAP_PROVIDER_LIMITS;
+    return PROVIDER_ONLY_SWAP_PROVIDER_LIMITS;
   }
-  return hostname === LIGHTNING_SWAP_HOST || hostname.endsWith(`.${LIGHTNING_SWAP_HOST}`)
-    ? LIGHTNING_SWAP_PROVIDER_LIMITS
-    : FIXEDFLOAT_SWAP_PROVIDER_LIMITS;
+  return hostname === FIXEDFLOAT_HOST || hostname.endsWith(`.${FIXEDFLOAT_HOST}`)
+    ? FIXEDFLOAT_SWAP_PROVIDER_LIMITS
+    : PROVIDER_ONLY_SWAP_PROVIDER_LIMITS;
 }
 
 export type SwapWeightBudgetDenialReason = "exhausted" | "backoff";
@@ -97,13 +102,13 @@ export interface SwapWeightBudgetDenial {
   readonly path: string;
   readonly reason: SwapWeightBudgetDenialReason;
   readonly message: string;
-  readonly used: number;
-  readonly cost: number;
-  readonly gate: number;
-  readonly window_start: number;
+  /** Weight already used against `gate`; only for a guard that counts. */
+  readonly used?: number;
+  readonly cost?: number;
+  /** The cap that refused (or would refuse) this call; only for a guard that counts. */
+  readonly gate?: number;
+  readonly window_start?: number;
   readonly backoff_until?: number;
-  readonly creates?: number;
-  readonly create_limit?: number;
 }
 
 /** What a provider's 429 said, for {@link SwapProviderWeightBudget.markRateLimited}. */
@@ -118,20 +123,16 @@ export interface SwapProviderRateLimitNotice {
 export class SwapProviderWeightBudget {
   #windowStart: number;
   #used = 0;
-  #creates = 0;
+  #nonCreateUsed = 0;
   #backoffUntil: number | undefined;
   #createBackoffUntil: number | undefined;
 
   constructor(
     private readonly providerId: string,
     private readonly now: () => number,
-    private readonly limits: SwapProviderLimits = FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
+    private readonly limits: SwapProviderLimits = PROVIDER_ONLY_SWAP_PROVIDER_LIMITS,
   ) {
     this.#windowStart = now();
-  }
-
-  weightForPath(path: string): number {
-    return path === "create" ? this.limits.createWeight : this.limits.defaultWeight;
   }
 
   /**
@@ -139,46 +140,14 @@ export class SwapProviderWeightBudget {
    * caller refuse a new swap before it does any other work for it.
    */
   async assertAvailable(path: string): Promise<void> {
-    this.#rollWindow();
-    const now = this.now();
-    const cost = this.weightForPath(path);
-    const gate = this.#gate(path);
-    const backoffUntil = this.#activeBackoff(path, now);
-    if (backoffUntil !== undefined) {
-      this.#deny(
-        path,
-        "backoff",
-        cost,
-        gate,
-        `Swap provider API is in backoff until ${backoffUntil}.`,
-        backoffUntil,
-      );
-    }
-    if (this.#used + cost > gate) {
-      this.#deny(
-        path,
-        "exhausted",
-        cost,
-        gate,
-        `Swap provider API weight budget exhausted (${this.#used}+${cost} > ${gate}).`,
-      );
-    }
-    const createLimit = this.limits.createLimit;
-    if (path === "create" && createLimit !== undefined && this.#creates + 1 > createLimit) {
-      this.#deny(
-        path,
-        "exhausted",
-        cost,
-        gate,
-        `Swap provider create budget exhausted (${this.#creates}+1 > ${createLimit}).`,
-      );
-    }
+    this.#check(path);
   }
 
   async reserve(path: string): Promise<void> {
-    await this.assertAvailable(path);
-    this.#used += this.weightForPath(path);
-    if (path === "create") this.#creates += 1;
+    const cost = this.#check(path);
+    if (cost === undefined) return;
+    this.#used += cost;
+    if (path !== "create") this.#nonCreateUsed += cost;
   }
 
   async markRateLimited(notice: SwapProviderRateLimitNotice = {}): Promise<void> {
@@ -193,7 +162,52 @@ export class SwapProviderWeightBudget {
     // count would go on refusing calls the provider has started accepting.
     this.#windowStart = this.#backoffUntil;
     this.#used = 0;
-    this.#creates = 0;
+    this.#nonCreateUsed = 0;
+  }
+
+  /** Deny `path`, or return what reserving it costs (undefined: nothing is counted). */
+  #check(path: string): number | undefined {
+    this.#rollWindow();
+    const backoffUntil = this.#activeBackoff(path, this.now());
+    const budget = this.limits.localBudget;
+    if (backoffUntil !== undefined) {
+      this.#deny(
+        path,
+        "backoff",
+        `Swap provider API is in backoff until ${backoffUntil}.`,
+        budget === undefined ? undefined : this.#weigh(path, budget),
+        backoffUntil,
+      );
+    }
+    if (budget === undefined) return undefined;
+    const cost = path === "create" ? budget.createWeight : budget.defaultWeight;
+    if (this.#used + cost > budget.softCap) {
+      this.#deny(
+        path,
+        "exhausted",
+        `Swap provider API weight budget exhausted (${this.#used}+${cost} > ${budget.softCap}).`,
+        { used: this.#used, cost, gate: budget.softCap },
+      );
+    }
+    if (path !== "create" && this.#nonCreateUsed + cost > budget.nonCreateCap) {
+      this.#deny(
+        path,
+        "exhausted",
+        `Swap provider API weight budget for calls other than creates exhausted ` +
+          `(${this.#nonCreateUsed}+${cost} > ${budget.nonCreateCap}).`,
+        { used: this.#nonCreateUsed, cost, gate: budget.nonCreateCap },
+      );
+    }
+    return cost;
+  }
+
+  #weigh(
+    path: string,
+    budget: SwapProviderLocalBudget,
+  ): { readonly used: number; readonly cost: number; readonly gate: number } {
+    return path === "create"
+      ? { used: this.#used, cost: budget.createWeight, gate: budget.softCap }
+      : { used: this.#nonCreateUsed, cost: budget.defaultWeight, gate: budget.nonCreateCap };
   }
 
   #backoffSeconds(retryAfterSeconds: number | undefined): number {
@@ -223,17 +237,13 @@ export class SwapProviderWeightBudget {
   // The weight window rolls; the 429 backoff does NOT ride along with it.
   // Clearing it here cut a backoff arbitrarily short — markRateLimited() at
   // second 59 of the window was forgiven one second later — so the backoff
-  // expires on its own clock, checked in assertAvailable().
+  // expires on its own clock, checked in #check().
   #rollWindow(): void {
     const now = this.now();
     if (now - this.#windowStart < SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS) return;
     this.#windowStart = now;
     this.#used = 0;
-    this.#creates = 0;
-  }
-
-  #gate(path: string): number {
-    return path === "create" ? this.limits.createGate : this.limits.softCap;
+    this.#nonCreateUsed = 0;
   }
 
   // The denial carries its own diagnostics on the thrown error: there is no
@@ -242,9 +252,8 @@ export class SwapProviderWeightBudget {
   #deny(
     path: string,
     reason: SwapWeightBudgetDenialReason,
-    cost: number,
-    gate: number,
     message: string,
+    weight?: { readonly used: number; readonly cost: number; readonly gate: number },
     backoffUntil?: number,
   ): never {
     throw weightBudgetError(
@@ -254,13 +263,11 @@ export class SwapProviderWeightBudget {
         path,
         reason,
         message,
-        used: this.#used,
-        cost,
-        gate,
-        window_start: this.#windowStart,
+        used: weight?.used,
+        cost: weight?.cost,
+        gate: weight?.gate,
+        window_start: this.limits.localBudget === undefined ? undefined : this.#windowStart,
         backoff_until: backoffUntil ?? this.#backoffUntil,
-        creates: this.limits.createLimit === undefined ? undefined : this.#creates,
-        create_limit: this.limits.createLimit,
       }),
     );
   }

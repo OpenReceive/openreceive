@@ -180,7 +180,7 @@ function logProviderRateLimit(context: ServiceContext, error: unknown): void {
       ? "The swap provider answered 429 (rate limited); new calls stand off until its wait is over."
       : denial.reason === "backoff"
         ? "Swap provider call refused locally: standing off after the provider's 429."
-        : "Swap provider call refused locally: this process reached the provider's per-minute limit.",
+        : "Swap provider call refused locally: this process reached the per-minute limit it keeps for FixedFloat.",
     denial === undefined
       ? {}
       : {
@@ -189,8 +189,6 @@ function logProviderRateLimit(context: ServiceContext, error: unknown): void {
           reason: denial.reason,
           used: denial.used,
           gate: denial.gate,
-          creates: denial.creates,
-          create_limit: denial.create_limit,
           backoff_until: denial.backoff_until,
         },
   );

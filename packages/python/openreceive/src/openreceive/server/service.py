@@ -43,7 +43,7 @@ from openreceive.swap import assets, providers_from_environment
 from openreceive.swap.address import valid_for_pay_in_asset
 from openreceive.swap.assets import is_pay_in_asset
 from openreceive.swap.budget import (
-    FIXEDFLOAT_LIMITS,
+    PROVIDER_ONLY_LIMITS,
     SwapProviderLimits,
     SwapProviderWeightBudget,
     weight_budget_denial,
@@ -608,9 +608,9 @@ class Service:
 
     def _attach_swap_provider_runtime(self) -> None:
         """One shared transient cache and one per-provider weight budget,
-        attached to every provider that supports them. The budget is sized by
-        the limits the provider exposes; one that exposes none (a test double,
-        a custom provider) gets the FixedFloat limits."""
+        attached to every provider that supports them. The budget follows the
+        limits the provider exposes; one that exposes none (a test double, a
+        custom provider) is never counted locally and only obeys its 429."""
         if not self._swap_providers:
             return
         cache = TransientSwapCache(self._clock)
@@ -623,7 +623,7 @@ class Service:
                     SwapProviderWeightBudget(
                         provider.name,
                         self._clock,
-                        limits if isinstance(limits, SwapProviderLimits) else FIXEDFLOAT_LIMITS,
+                        limits if isinstance(limits, SwapProviderLimits) else PROVIDER_ONLY_LIMITS,
                     )
                 )
 
@@ -846,8 +846,6 @@ class Service:
                     "reason",
                     "used",
                     "gate",
-                    "creates",
-                    "create_limit",
                     "backoff_until",
                 )
                 if denial.get(name) is not None
@@ -856,7 +854,7 @@ class Service:
                 "Swap provider call refused locally: standing off after the provider's 429."
                 if denial.get("reason") == "backoff"
                 else "Swap provider call refused locally: this process reached the "
-                "provider's per-minute limit."
+                "per-minute limit it keeps for FixedFloat."
             )
             message = f"{sentence} ({fields})" if fields else sentence
         self._log("warning", f"swap.provider.rate_limited: {message}")
