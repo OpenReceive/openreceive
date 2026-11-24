@@ -382,14 +382,15 @@ module OpenReceive
       lambda do |action:, request:, reference:, input:, pay_in_asset: nil|
         # Before the host is asked for a price: a host may well answer nil for an
         # order it already knows is paid, and "unknown order" is the wrong thing
-        # to tell the payer who paid it.
-        if %w[checkout.prepare checkout.create swap.create].include?(action)
+        # to tell the payer who paid it. payments/check reads it too, to answer
+        # `paid` on every attempt of a paid order.
+        paid = nil
+        if %w[checkout.prepare checkout.create swap.create payment.check].include?(action)
           paid = OpenReceivePayment.where(reference: reference, status: "settled").order(:created_at).first
-          if paid
+          if paid && action != "payment.check"
             raise OpenReceive::Server::ConflictError, "This reference is already paid." unless action == "checkout.prepare"
 
-            next({ payment_hash: paid.payment_hash, checkout: paid.checkout_data, paid: true,
-                   paid_at: paid.paid_at&.to_i, swap: !paid.swap_data.nil? }.compact)
+            next(paid_attempt(paid).merge(paid: true))
           end
         end
         pricing = %w[checkout.prepare swap.quote checkout.create swap.create].include?(action)
@@ -400,8 +401,16 @@ module OpenReceive
         # the minting service stays exactly the price.
         amount = price_only(price)
         description = price_description(price)
-        if %w[checkout.prepare swap.quote].include?(action)
-          next({ amount: amount, description: description }.compact)
+        next({ amount: amount, description: description }.compact) if action == "swap.quote"
+
+        if action == "checkout.prepare"
+          # The attempt a picker opened on this reference watches: the newest
+          # one still pending, superseded or not, since a superseded invoice
+          # can still be paid. Any pending attempt would do (`paid` answers for
+          # the whole order); the newest is the one most likely still on the
+          # payer's wallet screen.
+          pending = OpenReceivePayment.where(reference: reference).pending.newest_first.pick(:payment_hash)
+          next({ amount: amount, description: description, pending_payment_hash: pending }.compact)
         end
 
         requested_hash = input["payment_hash"] || input[:payment_hash]
@@ -424,9 +433,17 @@ module OpenReceive
           description: description,
           payment_hash: payment&.payment_hash,
           checkout: payment&.checkout_data,
-          swap_data: payment&.swap_data
+          swap_data: payment&.swap_data,
+          paid_attempt: paid && paid_attempt(paid)
         }.compact
       end
+    end
+
+    # The attempt that paid a reference, as the request handler builds its
+    # `paid` object (OpenAPI PaidAttempt) from it.
+    def paid_attempt(payment)
+      { payment_hash: payment.payment_hash, checkout: payment.checkout_data,
+        paid_at: payment.paid_at&.to_i, swap: !payment.swap_data.nil? }.compact
     end
 
     # The price alone. A host that returns a display string beside it must not

@@ -15,6 +15,11 @@ module OpenReceive
   # Wallet-history pages a request-path pass may walk, mirroring the JS
   # OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES.
   RECONCILE_SCAN_MAX_PAGES = 50
+  # How far back an earlier attempt's invoice may have expired and still be
+  # checked before a new attempt is minted. A payment lands before its invoice
+  # expires; this only covers the scan that has not caught up with it yet.
+  # Mirrors the JS handler's EARLIER_ATTEMPT_LOOKBACK_SECONDS.
+  EARLIER_ATTEMPT_LOOKBACK_SECONDS = 10 * 60
   # Cap on the `openreceive:notifications` worker's resubscribe backoff, and
   # the subscription lifetime past which the ramp resets to 1s.
   NOTIFICATIONS_MAX_BACKOFF_SECONDS = 60
@@ -172,6 +177,33 @@ module OpenReceive
       { "reason" => "scan_failed" }
     end
 
+    # The engine's create routes call this right before a new attempt is
+    # minted (the request handler's check_earlier_attempts hook): the
+    # reference's pending attempts whose invoice expired no more than
+    # EARLIER_ATTEMPT_LOOKBACK_SECONDS ago, minus those this request's own
+    # gated pass (`reconcile_pass`) already checked, go through one ungated
+    # reconcile_attempts! pass. Returns its checks; the handler refuses the
+    # mint as "already paid" when one came back settled, and as retryable
+    # when this raises. The gated pass at the top of the request is skipped
+    # while the gate is closed (3 to 12 s between scans), so a payment made
+    # just before a reload would otherwise go unseen. Mirrors the JS handler's
+    # assertEarlierAttemptsUnpaid.
+    def check_earlier_attempts!(reference, reconcile_pass: nil, now: nil)
+      observed_at = Integer(now || Time.now.to_i)
+      checked = if reconcile_pass.is_a?(Hash) && reconcile_pass["reason"] == "ran"
+                  Array(reconcile_pass["checks"]).map { |check| check.fetch("payment_hash").to_s.downcase }
+                else
+                  []
+                end
+      earlier = OpenReceivePayment.pending_attempts_for(reference).select do |attempt|
+        attempt.fetch("expires_at") + EARLIER_ATTEMPT_LOOKBACK_SECONDS > observed_at &&
+          !checked.include?(attempt.fetch("payment_hash").downcase)
+      end
+      return [] if earlier.empty?
+
+      reconcile_attempts!(earlier, now: observed_at)
+    end
+
     # Opt-in NWC-02 notifications: subscribe to the configured NWC client's
     # `payment_received` notifications. Notifications are authenticated wallet
     # data — a payload that satisfies the shared settlement rule (`settled_at`
@@ -266,6 +298,54 @@ module OpenReceive
         "(will retry next pass): #{sanitize_failure_message(e)}"
       )
       false
+    end
+
+    # One ungated, bounded reconcile over exactly these attempts (the JS
+    # reconcileHostPayments({ attempts })): no gate claim and no scheduler
+    # checkpoint, one Service#reconcile_payments walk capped at
+    # RECONCILE_SCAN_MAX_PAGES and RECONCILE_SCAN_TIMEOUT_SECONDS. Settlements
+    # go through the settlement hook (write-once + on_paid) and terminal
+    # transitions are recorded, like any pass. Unlike the gated pass it raises
+    # instead of warning: a failed delivery, a wallet error, or a walk the
+    # deadline cut short means the check did not finish, and its caller must
+    # not act as if it had. A hash the page cap left undecided is simply
+    # omitted, as in the JS walk.
+    def reconcile_attempts!(attempts, now: nil)
+      return [] if attempts.empty?
+
+      observed_at = Integer(now || Time.now.to_i)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + RECONCILE_SCAN_TIMEOUT_SECONDS
+      checks = config.service.reconcile_payments(
+        "attempts" => attempts, "max_pages" => RECONCILE_SCAN_MAX_PAGES, "deadline" => deadline
+      )
+      by_hash = attempts.to_h { |attempt| [attempt.fetch("payment_hash").downcase, attempt] }
+      # One failing delivery must not starve the rest; the first failure is
+      # raised once every check has had its turn.
+      failures = []
+      checks.each do |checked|
+        attempt = by_hash[checked.fetch("payment_hash").downcase]
+        next if attempt.nil?
+
+        if checked["status"] == "settled"
+          config.settlement_hook.call(
+            "payment_hash" => checked.fetch("payment_hash"),
+            "paid_at" => checked.fetch("paid_at"),
+            "details" => checked["details"]
+          )
+        else
+          record_attempt_transition(attempt, checked, observed_at)
+        end
+      rescue StandardError => e
+        failures << e
+      end
+      raise failures.first unless failures.empty?
+      if checks.length < attempts.length && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        raise OpenReceive::WalletUnavailableError,
+              "the wallet history walk reached its #{RECONCILE_SCAN_TIMEOUT_SECONDS}s deadline " \
+              "before every attempt was checked"
+      end
+
+      checks
     end
 
     # Closure is decided by the shared reconciliation rules from a scan result

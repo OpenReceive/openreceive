@@ -429,6 +429,62 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal 1, @wallet.transactions.length
   end
 
+  # A storage-aware caller hands create a check of the reference's earlier
+  # unpaid attempts (the Rails engine's check_earlier_attempts!). It runs only
+  # when the create would mint, after the rate limit; a settled check refuses
+  # as already paid, a check that raises refuses as retryable, and neither
+  # mints. Mirrors the JS assertEarlierAttemptsUnpaid.
+  def test_create_checks_earlier_attempts_only_before_a_mint
+    order = []
+    outcome = nil
+    committed = nil
+    handler = OpenReceive::Server::RequestHandler.new(
+      service: @service,
+      authorize: ->(_context) { true },
+      resolve_checkout: lambda do |**_context|
+        { "amount" => { "sats" => 5 }, "payment_hash" => committed&.fetch(:payment_hash),
+          "checkout" => committed&.fetch(:checkout) }.compact
+      end,
+      on_checkout_created: ->(**payment) { committed = payment },
+      on_paid: ->(_payment) {},
+      rate_limit: ->(_context) { order << :rate_limit }
+    )
+    check = lambda do |reference|
+      order << [:check, reference]
+      raise "relay unreachable" if outcome == :raise
+
+      [{ "payment_hash" => "7f" * 32, "status" => outcome.to_s }]
+    end
+    create = lambda do |id|
+      handler.create_checkout(raw_body: JSON.generate("reference" => "ruby-earlier"), request: JSON_REQUEST,
+                              request_id: id, check_earlier_attempts: check)
+    end
+
+    outcome = :settled
+    status, _headers, body = create.call("req-paid")
+    assert_equal [409, "CONFLICT", "This reference is already paid."],
+                 [status, body.fetch("code"), body.fetch("message")]
+    assert_equal [:rate_limit, [:check, "ruby-earlier"]], order
+
+    outcome = :raise
+    raised = nil
+    _out, err = capture_io { raised = create.call("req-raise") }
+    status, _headers, body = raised
+    assert_equal [503, "INTERNAL", true], [status, body.fetch("code"), body.fetch("retryable")]
+    assert_match(/payment\.reconcile\.before_mint\.failed: .*relay unreachable/, err)
+    assert_equal "Could not confirm this order's earlier payment attempt. Please try again in a moment.",
+                 body.fetch("message")
+    assert_empty @wallet.transactions, "a refused create mints nothing"
+
+    outcome = :pending
+    assert_equal 201, create.call("req-mint").first
+    assert_equal 1, @wallet.transactions.length
+    # Re-serving the committed attempt mints nothing and checks nothing.
+    order.clear
+    assert_equal 201, create.call("req-reuse").first
+    assert_empty order
+  end
+
   def test_handler_checks_the_exact_host_owned_payment_attempt
     checkout = @service.create_checkout("reference" => "ruby-check", "amount" => { "sats" => 5 })
     selected_hash = checkout.fetch("payment_hash")

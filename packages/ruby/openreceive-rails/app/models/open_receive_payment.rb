@@ -279,6 +279,21 @@ class OpenReceivePayment < ActiveRecord::Base
     end
   end
 
+  # One reference's pending attempts, superseded ones included (a superseded
+  # invoice can still be paid), as the same reconciliation DTO. A create
+  # checks these against the wallet before minting another attempt.
+  def self.pending_attempts_for(reference)
+    OpenReceiveMeta.assert_supported_schema!
+    pending.where(reference: reference.to_s).order(created_at: :asc, payment_hash: :asc)
+           .pluck(:payment_hash, :created_at, :checkout_data).map do |hash, created_at, checkout|
+      {
+        "payment_hash" => hash, "created_at" => created_at.to_i,
+        "expires_at" => settlement_expires_at(checkout, hash),
+        "created_at_source" => checkout["created_at_source"] || checkout[:created_at_source] || "host"
+      }
+    end
+  end
+
   # Same reconciliation DTO for authenticated by-hash notification lookup.
   def self.find_pending_attempt(payment_hash)
     OpenReceiveMeta.assert_supported_schema!

@@ -81,6 +81,21 @@ module OpenReceive
       OpenReceive.config.request_handler
     end
 
+    # Engine mode checks a reference's earlier unpaid attempts against the
+    # wallet before a create mints another, skipping those the around_action's
+    # gated pass already checked (OpenReceive.check_earlier_attempts!).
+    # Advanced mode (custom repository) has no engine-owned rows to check.
+    def openreceive_create_arguments
+      return {} if OpenReceive.config.advanced_hooks?
+
+      reconcile_pass = @openreceive_reconcile_pass
+      {
+        check_earlier_attempts: lambda do |reference|
+          OpenReceive.check_earlier_attempts!(reference, reconcile_pass: reconcile_pass)
+        end
+      }
+    end
+
     # Always server-generated (matches RackApp and JS): client-supplied
     # X-Request-Id values are unvalidated content and are never reflected.
     def openreceive_request_id

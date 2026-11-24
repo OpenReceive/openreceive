@@ -14,7 +14,8 @@ module OpenReceive
       openreceive_respond(openreceive_handler.create_checkout(
         raw_body: openreceive_raw_body,
         request: request,
-        request_id: openreceive_request_id
+        request_id: openreceive_request_id,
+        **openreceive_create_arguments
       ))
     end
   end
