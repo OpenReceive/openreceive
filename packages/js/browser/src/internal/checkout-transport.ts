@@ -113,6 +113,89 @@ export async function readJsonResponse(
   return body;
 }
 
+/**
+ * How long a status poll may take. The shop cuts its own wallet scan at 9 s, so
+ * a healthy answer comes well inside this; polls run one at a time, so one that
+ * never answers must not hold back the next.
+ */
+export const OPENRECEIVE_STATUS_TIMEOUT_MS = 15_000;
+
+/**
+ * How long prepare, a new invoice or a swap start may take before the payer is
+ * offered Try again. The shop's own worst case is a 9 s wallet scan followed by
+ * the wallet or the swap provider answering; past this, nothing is coming.
+ */
+export const OPENRECEIVE_REQUEST_TIMEOUT_MS = 25_000;
+
+/**
+ * POST and read one JSON answer, giving up after `timeoutMs`.
+ *
+ * Without a limit a request that gets no answer (a mobile network that lost its
+ * route, a proxy holding the socket) waits as long as the browser does, and none
+ * of Chromium, Firefox or WebKit gave up within 20 s in the browser lab: the
+ * payer sat on a spinner, and a stuck status poll stopped all polling. Past the
+ * limit the request fails as a retryable 504, which the checkout already words
+ * as "try again". The race, not only the abort, enforces it, so a host `fetch`
+ * that ignores its signal is held to the limit too. A caller's own abort wins.
+ */
+export async function fetchJsonWithin(
+  fetcher: typeof globalThis.fetch,
+  url: string,
+  init: RequestInit,
+  limit: { readonly timeoutMs: number; readonly fallbackMessage: string },
+): Promise<unknown> {
+  const controller = new AbortController();
+  const outer = init.signal ?? undefined;
+  const forward = () => controller.abort(outer?.reason);
+  if (outer?.aborted) forward();
+  else outer?.addEventListener("abort", forward, { once: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new BrowserRequestError(`${limit.fallbackMessage} The server did not answer in time.`, {
+          status: 504,
+          retryable: true,
+        }),
+      );
+      controller.abort();
+    }, limit.timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      (async () =>
+        readJsonResponse(
+          await fetcher(url, { ...init, signal: controller.signal }),
+          limit.fallbackMessage,
+        ))(),
+      late,
+    ]);
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener("abort", forward);
+  }
+}
+
+/**
+ * A new invoice or swap start that answers 409 is sent once more.
+ *
+ * A payer who reloads while the shop is still minting, and picks again, sends a
+ * second request that mints too; whichever commits second is refused with 409,
+ * because the order already has a live attempt for that method. Asked again,
+ * the shop re-serves the attempt that won, so the payer sees it instead of an
+ * error. The losing invoice or provider order is never shown to anyone and
+ * expires unused. A second 409 (the order was paid meanwhile, say) is the
+ * answer, and the picker's status poll brings up the receipt.
+ */
+export async function retryOnceOnConflict<T>(send: () => Promise<T>): Promise<T> {
+  try {
+    return await send();
+  } catch (error) {
+    if (!(error instanceof BrowserRequestError) || error.status !== 409) throw error;
+    return send();
+  }
+}
+
 interface NormalizedRequestCheckoutOptions {
   readonly signal?: AbortSignal;
   readonly routes: Routes;
@@ -163,15 +246,19 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   };
 
   const headers = request.headers === undefined ? {} : request.headers;
-  const response = await fetcher(request.routes.checkouts, {
-    method: "POST",
-    signal: request.signal,
-    headers: requestHeaders(headers, request.csrfHeader),
-    body: JSON.stringify(requestBody),
-  });
-  const body = (await readJsonResponse(response, "Could not create checkout.")) as
-    | Record<string, unknown>
-    | undefined;
+  const body = (await retryOnceOnConflict(() =>
+    fetchJsonWithin(
+      fetcher,
+      request.routes.checkouts,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: requestHeaders(headers, request.csrfHeader),
+        body: JSON.stringify(requestBody),
+      },
+      { timeoutMs: OPENRECEIVE_REQUEST_TIMEOUT_MS, fallbackMessage: "Could not create checkout." },
+    ),
+  )) as Record<string, unknown> | undefined;
 
   const snapshot = checkoutSnapshotFromResponseBody(body);
   const responseInvoice = snapshot.active;
@@ -204,13 +291,17 @@ export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<
   }
 
   const headers = request.headers === undefined ? {} : request.headers;
-  const response = await fetcher(request.routes.checkoutsPrepare, {
-    method: "POST",
-    signal: request.signal,
-    headers: requestHeaders(headers, request.csrfHeader),
-    body: JSON.stringify({ reference: request.reference }),
-  });
-  const body = await readJsonResponse(response, "Could not prepare checkout.");
+  const body = await fetchJsonWithin(
+    fetcher,
+    request.routes.checkoutsPrepare,
+    {
+      method: "POST",
+      signal: request.signal,
+      headers: requestHeaders(headers, request.csrfHeader),
+      body: JSON.stringify({ reference: request.reference }),
+    },
+    { timeoutMs: OPENRECEIVE_REQUEST_TIMEOUT_MS, fallbackMessage: "Could not prepare checkout." },
+  );
 
   return checkoutLockSnapshotFromPrepareBody(body, request.reference);
 }
@@ -237,13 +328,37 @@ export function createStatusFetcher(
     }
 
     const headers = options.headers === undefined ? {} : options.headers;
+    const check = async (paymentHash: string): Promise<Record<string, unknown>> =>
+      recordOrEmpty(
+        await fetchJsonWithin(
+          fetcher,
+          routes.paymentsCheck,
+          {
+            method: "POST",
+            headers: requestHeaders(headers, options.csrfHeader),
+            body: JSON.stringify({ reference, payment_hash: paymentHash }),
+          },
+          {
+            timeoutMs: OPENRECEIVE_STATUS_TIMEOUT_MS,
+            fallbackMessage: "Could not refresh invoice status.",
+          },
+        ),
+      );
+    // The method picker has no attempt of its own. When the order has one
+    // (the page was reloaded, or reopened from the background, after a pick),
+    // prepare names it and the picker watches it, so a payer who paid just
+    // before the page came back is shown the receipt without picking again.
+    if (snapshot.active?.rail === "checkout_lock") {
+      const watched = snapshot.pending_payment_hash;
+      if (watched === undefined || !PAYMENT_HASH.test(watched)) return snapshot;
+      const paid = paidSnapshotFromCheck(await check(watched), snapshot);
+      if (paid === undefined) return null;
+      snapshot = paid;
+      return snapshot;
+    }
     const activePaymentHash =
-      nonEmptyString(snapshot.active?.payment_hash) ??
-      (snapshot.active?.rail === "checkout_lock"
-        ? undefined
-        : nonEmptyString(snapshot.active?.invoice_id));
-    // Deferred checkout_lock has no attempt yet — skip wallet status until Lightning or swap.
-    if (activePaymentHash === undefined || !/^[0-9a-f]{64}$/i.test(activePaymentHash)) {
+      nonEmptyString(snapshot.active?.payment_hash) ?? nonEmptyString(snapshot.active?.invoice_id);
+    if (activePaymentHash === undefined || !PAYMENT_HASH.test(activePaymentHash)) {
       return snapshot;
     }
     const next = structuredClone(snapshot);
@@ -253,14 +368,18 @@ export function createStatusFetcher(
     let paymentError: unknown;
     if (checkoutMonitoring(active).payment) {
       try {
-        const response = await fetcher(routes.paymentsCheck, {
-          method: "POST",
-          headers: requestHeaders(headers, options.csrfHeader),
-          body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
-        });
-        payment = recordOrEmpty(
-          await readJsonResponse(response, "Could not refresh invoice status."),
-        );
+        payment = await check(activePaymentHash);
+        // Paid by another attempt: a swap deposit open while its Lightning
+        // invoice was paid, or a second invoice for an order paid by the first.
+        // The receipt replaces the screen; asking for more money does not.
+        const paidElsewhere = paidSnapshotFromCheck(payment, snapshot);
+        if (
+          paidElsewhere !== undefined &&
+          paidElsewhere.active?.payment_hash !== activePaymentHash.toLowerCase()
+        ) {
+          snapshot = paidElsewhere;
+          return snapshot;
+        }
         const state = nonEmptyString(payment.status) ?? "pending";
         const paidAt = optionalSafeInteger(payment.paid_at, "paid_at");
         active = {
@@ -275,15 +394,20 @@ export function createStatusFetcher(
     }
     if (active.rail === "swap" && checkoutMonitoring(active).provider) {
       try {
-        const swapResponse = await fetcher(routes.swapsStatus, {
-          method: "POST",
-          headers: requestHeaders(headers, options.csrfHeader),
-          body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
-        });
-        active = mergeSwapStatusIntoInvoice(
-          active,
-          recordOrEmpty(await readJsonResponse(swapResponse, "Could not refresh swap status.")),
+        const swapStatus = await fetchJsonWithin(
+          fetcher,
+          routes.swapsStatus,
+          {
+            method: "POST",
+            headers: requestHeaders(headers, options.csrfHeader),
+            body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
+          },
+          {
+            timeoutMs: OPENRECEIVE_STATUS_TIMEOUT_MS,
+            fallbackMessage: "Could not refresh swap status.",
+          },
         );
+        active = mergeSwapStatusIntoInvoice(active, recordOrEmpty(swapStatus));
         swapStatusFailures = 0;
       } catch (error) {
         swapStatusFailures += 1;
@@ -396,6 +520,7 @@ function checkoutLockSnapshotFromPrepareBody(
       description,
     });
   }
+  const pending = nonEmptyString(record.pending_payment_hash)?.toLowerCase();
   return {
     checkout_id: lockId,
     reference: reference,
@@ -406,7 +531,31 @@ function checkoutLockSnapshotFromPrepareBody(
     invoices: [lockInvoice],
     ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
     ...(description === undefined ? {} : { description }),
+    ...(pending === undefined || !PAYMENT_HASH.test(pending)
+      ? {}
+      : { pending_payment_hash: pending }),
   };
+}
+
+const PAYMENT_HASH = /^[0-9a-f]{64}$/i;
+
+/**
+ * The receipt, when a `payments/check` answer says the order is paid (its
+ * `paid` object names the attempt that paid it). Undefined while it is not.
+ */
+function paidSnapshotFromCheck(
+  payment: Record<string, unknown>,
+  current: CheckoutSnapshot,
+): CheckoutSnapshot | undefined {
+  if (!isRecord(payment.paid)) return undefined;
+  const paymentMethods = normalizePaymentMethods(payment.payment_methods);
+  return paidSnapshotFromPrepare(payment.paid, {
+    reference: current.reference,
+    amountMsats: current.amount_msats,
+    fiat: current.fiat,
+    paymentMethods: paymentMethods ?? current.payment_methods,
+    description: current.description,
+  });
 }
 
 /**

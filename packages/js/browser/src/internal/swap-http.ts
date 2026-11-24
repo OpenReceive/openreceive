@@ -1,7 +1,12 @@
 import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
 import { mergeAttemptIntoSnapshot } from "./checkout-merge.ts";
 import { optionalSafeInteger } from "./checkout-read.ts";
-import { readJsonResponse, requestCheckout } from "./checkout-transport.ts";
+import {
+  fetchJsonWithin,
+  OPENRECEIVE_REQUEST_TIMEOUT_MS,
+  requestCheckout,
+  retryOnceOnConflict,
+} from "./checkout-transport.ts";
 import { resolveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { requestHeaders } from "./request-headers.ts";
 import { checkoutRoutes, type Routes } from "./routes.ts";
@@ -136,10 +141,12 @@ export async function startSwapRequest(
   };
   emitSwapActionLog(options.logger, "requested", logBody);
   try {
-    const body = await requestJson(options, checkoutRoutes(options.prefix).swaps, {
-      reference: options.reference,
-      pay_in_asset: options.payInAsset,
-    });
+    const body = await retryOnceOnConflict(() =>
+      requestJson(options, checkoutRoutes(options.prefix).swaps, {
+        reference: options.reference,
+        pay_in_asset: options.payInAsset,
+      }),
+    );
     emitSwapActionLog(options.logger, "succeeded", logBody, swapActionResultFields(body));
     return normalizeSwapStartInvoice(body);
   } catch (error) {
@@ -307,13 +314,17 @@ async function requestJson(
   // a method of the options object rebinds `this` and the browser throws
   // "Illegal invocation".
   const fetcher = options.fetch;
-  const response = await fetcher(url, {
-    method: "POST",
-    signal: options.signal,
-    headers: requestHeaders(options.headers, options.csrfHeader),
-    body: JSON.stringify(body),
-  });
-  return readJsonResponse(response, "OpenReceive request failed.");
+  return fetchJsonWithin(
+    fetcher,
+    url,
+    {
+      method: "POST",
+      signal: options.signal,
+      headers: requestHeaders(options.headers, options.csrfHeader),
+      body: JSON.stringify(body),
+    },
+    { timeoutMs: OPENRECEIVE_REQUEST_TIMEOUT_MS, fallbackMessage: "OpenReceive request failed." },
+  );
 }
 
 function copyOptionalSwapFields(

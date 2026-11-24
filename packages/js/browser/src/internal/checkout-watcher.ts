@@ -24,6 +24,9 @@ import {
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
 } from "./ui.ts";
 
+/** The longest a failed status poll waits before the next, without a Retry-After. */
+const MAX_POLL_BACKOFF_SECONDS = 6;
+
 export class CheckoutWatcher {
   private options: CheckoutWatcherOptions;
   private state: CheckoutState | undefined;
@@ -245,10 +248,13 @@ export class CheckoutWatcher {
       }, 1000);
     }
 
+    // The method picker polls only when the order already has an attempt that
+    // prepare named (see CheckoutSnapshot.pending_payment_hash).
     const canPollAttempt =
-      state.rail !== "checkout_lock" &&
-      typeof state.payment_hash === "string" &&
-      /^[0-9a-f]{64}$/i.test(state.payment_hash);
+      state.rail === "checkout_lock"
+        ? typeof this.snapshot.pending_payment_hash === "string" &&
+          /^[0-9a-f]{64}$/i.test(this.snapshot.pending_payment_hash)
+        : typeof state.payment_hash === "string" && /^[0-9a-f]{64}$/i.test(state.payment_hash);
     if (
       this.options.refreshStatus === undefined ||
       state.reference.length === 0 ||
@@ -304,8 +310,14 @@ export class CheckoutWatcher {
       this.pollFailureCount += 1;
       const retryAfterSeconds =
         error instanceof BrowserRequestError ? error.retryAfterSeconds : undefined;
+      // 2, 4, then every 6 s: half the normal rate, so a struggling server is
+      // not hammered, while a payer who paid during an outage sees the receipt
+      // within a few seconds of the network coming back. Doubling up to 60 s
+      // kept them waiting up to a minute, and listening for the browser's
+      // `online` event is machinery a 6 s wait makes unnecessary.
       const backoffSeconds =
-        retryAfterSeconds ?? Math.min(60, 2 ** Math.min(this.pollFailureCount, 6));
+        retryAfterSeconds ??
+        Math.min(MAX_POLL_BACKOFF_SECONDS, 2 ** Math.min(this.pollFailureCount, 6));
       this.pollBackoffUntil = this.now() + backoffSeconds;
       this.options.onError?.(error);
     } finally {

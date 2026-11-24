@@ -366,6 +366,12 @@ export interface CheckoutSnapshot {
    * host's own markup (React `children`, the element's `order` slot).
    */
   readonly description?: string;
+  /**
+   * On the method picker only: the newest unpaid attempt the order already
+   * has, as prepare named it. The picker polls its status so that a payer who
+   * paid just before a reload sees the receipt without picking again.
+   */
+  readonly pending_payment_hash?: string;
 }
 
 export interface CheckoutElementAttributeOptions {
