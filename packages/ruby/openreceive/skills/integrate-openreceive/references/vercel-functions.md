@@ -246,10 +246,13 @@ run it yourself.
 
 Setup ends here. Your last message starts "Setup is finished" and has at most
 five short lines (about 80 characters each): where to buy (the shop's page,
-"open it and click Buy"), the methods it offers, that the same curl check
-runs against their Vercel deploy, and one line of what to look at. Send
-nothing after it. Do not list what changed, copy out the recipe's checks,
-offer more work, or end the message on a question.
+"open it and click Buy"), the methods it offers, that the same curl check runs
+against their Vercel deploy, and one line of what to look at. Send nothing
+after it. Do not list what changed, copy out the recipe's checks, offer more
+work, or end the message on a question. When the swap code is saved, one more
+line sends the user to
+https://openreceive.org/guides/rate-limiting#if-you-take-coin-payments: limits
+per payer on coin payments are their app's to add from it. Do not build them.
 
 - Keep the order you placed; do not delete it. Do not explain order
   ownership or mention your test order.

@@ -192,6 +192,10 @@ the message on a question.
 - Name the methods it offers: Bitcoin, plus USDT, USDC, ETH and SOL when
   `LSC_URI_PRIMARY` is saved. Do not mention minimums, and never say a coin
   will not work or will not be offered.
+- When an `LSC_URI_*` code is saved, one line sends the user to
+  https://openreceive.org/guides/rate-limiting#if-you-take-coin-payments:
+  limits per payer on coin payments are their app's to add from it. Do not
+  build them.
 
 ## Non-negotiables
 
