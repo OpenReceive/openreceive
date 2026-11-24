@@ -1112,7 +1112,9 @@ How the bodies map to the Node objects above:
 - `POST …/checkouts` returns [Checkout](#servicecreatecheckout) in snake_case
   (the generated `WireCheckout`).
 - `POST …/checkouts/prepare` returns the prepare result plus
-  [swap options](#servicelistswapoptions).
+  [swap options](#servicelistswapoptions) as `payment_methods`. That list holds
+  the swap pay-in methods only: Bitcoin over Lightning is always offered and is
+  never in it.
 - `POST …/payments/check` returns [PaymentCheck](#paymentcheck) plus
   `payment_methods`. This is the same swap-option list. It is empty when
   Lightning is the only payment rail. It comes from a 60-second cache inside

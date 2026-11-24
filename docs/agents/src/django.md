@@ -47,7 +47,7 @@ Before anything else, check one file: the project's `.env`, if it exists.
 it sets without printing them. Check with that, here and after each write,
 not by reading the file, and never print the values. A code that is already
 set is not asked for again; if both are set, make sure `.gitignore` covers
-`.env` (and `.dockerignore`, if the app has one), then skip to step 5
+`.env` (and `.dockerignore`, made if a Dockerfile copies the app), then skip to step 5
 (making the server load the file), then the quickstart.
 
 Otherwise your next action is a question to the user. Do not install the package,
@@ -88,7 +88,7 @@ say which line in which file is missing, and stop.
    `NWC_URI=<paste>` into the project's `.env` with your file-editing tool,
    creating the file if needed. Never write it with a shell command (`echo`,
    `printf`, a heredoc, `python -c`): the command line shows the code. Make
-   sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has one).
+   sure `.gitignore` covers `.env` (and `.dockerignore`, made if a Dockerfile copies the app).
    Never echo the value, commit it, or put it in client code. Reply only that
    it is saved, then ask the next question.
 3. **Second message — swaps.** If the user asked for stablecoins, USDT, USDC,

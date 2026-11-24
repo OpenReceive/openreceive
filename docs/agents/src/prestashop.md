@@ -25,7 +25,8 @@ the site's own user.
 ## Step 0 — ask for the two codes, one question at a time
 
 Before anything else, check one thing: whether OpenReceive is already
-installed (`php bin/console openreceive:doctor`). If the command exists, it
+installed (`php bin/console openreceive:doctor`; without the module it answers
+that no command is defined, which means not installed). If it exists, it
 prints `NWC_URI: set` or `unset` (likewise `LSC_URI_PRIMARY`), never the
 values. A code that is already set is not asked for again; if both are set,
 skip to Step 3.

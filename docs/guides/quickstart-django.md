@@ -23,7 +23,7 @@ INSTALLED_APPS += ["openreceive.django"]
 OPENRECEIVE = {
     "HOST": "shop.openreceive_host.Host",  # the class with the three hooks (generated below)
     "PRICE_CURRENCIES": ["USD"],
-    "RATE_LIMITING": False,  # True for public web shops (see below)
+    "RATE_LIMITING": True,  # False for point-of-sale, where payers share one IP (see below)
     "OPPORTUNISTIC_RECONCILE": True,  # or {"min_interval_seconds": …}; False only with your own worker
     "DATABASE": "default",  # the DATABASES alias that holds the two engine tables
 }
@@ -284,9 +284,10 @@ rejected. If your app brings its own NWC client, price feed or swap providers,
 set `OPENRECEIVE["SERVICE"]` to the dotted path of a callable
 `(env) -> openreceive.server.Service`. Everyone else leaves it out.
 
-For public web shops, turn on the per-IP invoice cap with
-`"RATE_LIMITING": True` (or `{"limit_per_hour": …, "limit_per_day": …}`).
-Leave it off (the default) when many payers share one IP. The cap counts
+For public web shops, keep the per-IP invoice cap on with
+`"RATE_LIMITING": True` (or `{"limit_per_hour": …, "limit_per_day": …}`), as
+`openreceive_install` prints it. Set it to `False` (the default when the key
+is absent) when many payers share one IP. The cap counts
 `REMOTE_ADDR` after your own proxy handling. Behind a reverse proxy, put a
 trusted-proxy middleware first, or the cap counts the proxy instead of the
 payer.

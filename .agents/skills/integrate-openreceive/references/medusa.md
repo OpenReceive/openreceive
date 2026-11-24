@@ -95,7 +95,8 @@ line in which file is missing, and stop.
    Swaps are now on, so keep the route back (the swap non-negotiable below).
 
 Medusa loads `.env` itself. Under Docker Compose, give the Medusa service
-`env_file: .env` and recreate it with `docker compose up -d`. Do not report
+`env_file` pointing at that `.env` (its path from the compose file, such as
+`./medusa/.env`), and recreate it with `docker compose up -d`. Do not report
 setup as complete until the NWC code is saved, and the LSC code is saved or
 the user said "Bitcoin only". Never invent a placeholder code.
 

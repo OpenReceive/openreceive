@@ -343,7 +343,9 @@ Workers ties every socket to the request that opened it, and forbids network
 calls at import. So the route builds its database pool and its OpenReceive
 stack inside each request, and closes both before it responds. Each request
 then opens its own wallet connection; in our test a checkout request took one
-to four seconds. The same code works on Node.
+to four seconds. The same code runs on Node, but a long-running Node server
+should build one stack for the process instead, as the other framework
+recipes do.
 
 ### The payment route
 

@@ -67,7 +67,7 @@ Before anything else, check one file: the project's `.env`, if it exists.
 it sets without printing them. Check with that, here and after each write,
 not by reading the file, and never print the values. A code that is already
 set is not asked for again; if both are set, make sure `.gitignore` covers
-`.env` (and `.dockerignore`, if the app has one), then skip to step 5
+`.env` (and `.dockerignore`, made if a Dockerfile copies the app), then skip to step 5
 (making the server load the file), then the quickstart.
 
 Otherwise your next action is a question to the user. Do not install the package,
@@ -108,7 +108,7 @@ say which line in which file is missing, and stop.
    `NWC_URI=<paste>` into the project's `.env` with your file-editing tool,
    creating the file if needed. Never write it with a shell command (`echo`,
    `printf`, a heredoc, `python -c`): the command line shows the code. Make
-   sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has one).
+   sure `.gitignore` covers `.env` (and `.dockerignore`, made if a Dockerfile copies the app).
    Never echo the value, commit it, or put it in client code. Reply only that
    it is saved, then ask the next question.
 3. **Second message — swaps.** If the user asked for stablecoins, USDT, USDC,
@@ -490,7 +490,7 @@ INSTALLED_APPS += ["openreceive.django"]
 OPENRECEIVE = {
     "HOST": "shop.openreceive_host.Host",  # the class with the three hooks (generated below)
     "PRICE_CURRENCIES": ["USD"],
-    "RATE_LIMITING": False,  # True for public web shops (see below)
+    "RATE_LIMITING": True,  # False for point-of-sale, where payers share one IP (see below)
     "OPPORTUNISTIC_RECONCILE": True,  # or {"min_interval_seconds": …}; False only with your own worker
     "DATABASE": "default",  # the DATABASES alias that holds the two engine tables
 }
@@ -747,9 +747,10 @@ rejected. If your app brings its own NWC client, price feed or swap providers,
 set `OPENRECEIVE["SERVICE"]` to the dotted path of a callable
 `(env) -> openreceive.server.Service`. Everyone else leaves it out.
 
-For public web shops, turn on the per-IP invoice cap with
-`"RATE_LIMITING": True` (or `{"limit_per_hour": …, "limit_per_day": …}`).
-Leave it off (the default) when many payers share one IP. The cap counts
+For public web shops, keep the per-IP invoice cap on with
+`"RATE_LIMITING": True` (or `{"limit_per_hour": …, "limit_per_day": …}`), as
+`openreceive_install` prints it. Set it to `False` (the default when the key
+is absent) when many payers share one IP. The cap counts
 `REMOTE_ADDR` after your own proxy handling. Behind a reverse proxy, put a
 trusted-proxy middleware first, or the cap counts the proxy instead of the
 payer.
