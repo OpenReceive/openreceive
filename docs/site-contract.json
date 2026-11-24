@@ -326,7 +326,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 22443
+      "bytes": 22465
     },
     {
       "path": "/guides/automated-swaps",
@@ -416,7 +416,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 136284
+      "bytes": 136340
     },
     {
       "path": "/guides/security",
@@ -916,7 +916,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 136284,
+      "bytes": 136340,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -3069,7 +3069,7 @@
         "source": "spec/openapi/openreceive-http.v1.yaml",
         "content_type": "application/yaml; charset=utf-8",
         "kind": "openapi",
-        "bytes": 24041
+        "bytes": 25059
       }
     ],
     "head_links": {
