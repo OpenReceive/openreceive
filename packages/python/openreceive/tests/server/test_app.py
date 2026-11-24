@@ -504,3 +504,123 @@ def test_a_host_without_a_description_mints_an_invoice_without_one(harness: Harn
     status, body, _ = harness.call("POST", "/checkouts", {"reference": "order-bare"})
     assert status == 201, body
     assert "description" not in minted[-1]
+
+
+EARLIER_UNCONFIRMED = (
+    "Could not confirm this order's earlier payment attempt. Please try again in a moment."
+)
+
+
+def _wallet_history_fails(harness: Harness) -> None:
+    def fail(params: dict[str, Any] | None = None) -> dict[str, Any]:
+        raise RuntimeError("relay down")
+
+    harness.wallet.list_transactions = fail  # type: ignore[method-assign]
+
+
+def test_re_serving_an_attempt_runs_no_check_before_mint(harness: Harness) -> None:
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 201, body
+    payment_hash = body["checkout"]["payment_hash"]
+    # Only a mint checks the earlier attempts: with the wallet history down, a
+    # re-serve still answers (the gated scan never fails a request).
+    _wallet_history_fails(harness)
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 201 and body["checkout"]["payment_hash"] == payment_hash
+
+
+def test_a_create_that_cannot_check_an_earlier_attempt_refuses_as_retryable(
+    harness: Harness, caplog: pytest.LogCaptureFixture
+) -> None:
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 201, body
+    payment_hash = body["checkout"]["payment_hash"]
+    # Too close to expiry to re-serve: the next create would mint a replacement.
+    harness.now = body["checkout"]["expires_at"] - 30
+    _wallet_history_fails(harness)
+    with caplog.at_level("WARNING", logger="openreceive"):
+        status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 503, body
+    assert body["code"] == "INTERNAL" and body["retryable"] is True
+    assert body["message"] == EARLIER_UNCONFIRMED
+    assert "earlier attempts before a new one" in caplog.text
+    # Nothing minted, nothing committed.
+    assert len(harness.wallet.list_invoices()) == 1
+    rows = harness.repository.list_for_reference(REFERENCE)
+    assert [row.payment_hash for row in rows] == [payment_hash]
+
+
+def test_a_create_whose_earlier_check_runs_out_of_time_refuses_as_retryable(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openreceive.server import app as app_module
+
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 201, body
+    harness.now = body["checkout"]["expires_at"] - 30
+    # Other payments only, and no time left: the walk ends before it reaches
+    # the earlier attempt, which is not proof that it is unpaid.
+    others = {
+        "transactions": [
+            {
+                "type": "incoming",
+                "payment_hash": f"{index:02x}" * 32,
+                "amount_msats": 1000,
+                "created_at": harness.now - 60,
+                "transaction_state": "settled",
+                "settled_at": harness.now - 50,
+            }
+            for index in range(0x10, 0x24)
+        ]
+    }
+    harness.wallet.list_transactions = lambda params=None: others  # type: ignore[method-assign]
+    monkeypatch.setattr(app_module, "RECONCILE_SCAN_TIMEOUT_SECONDS", 0)
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 503 and body["message"] == EARLIER_UNCONFIRMED, body
+    assert len(harness.wallet.list_invoices()) == 1
+
+
+def test_a_swap_poll_on_an_order_paid_by_lightning_answers_the_paid_attempt(
+    harness: Harness,
+) -> None:
+    status, body, _ = harness.call(
+        "POST", "/swaps", {"reference": REFERENCE, "pay_in_asset": "USDT_TRON"}
+    )
+    assert status == 201, body
+    swap_hash = body["swap"]["payment_hash"]
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 201, body
+    lightning = body["checkout"]
+    harness.wallet.settle_invoice(lightning["payment_hash"], settled_at=harness.now + 1)
+    harness.now += 12
+    status, body, _ = harness.call(
+        "POST", "/payments/check", {"reference": REFERENCE, "payment_hash": swap_hash}
+    )
+    assert status == 200 and body["status"] == "pending", body
+    assert body["paid"] == {
+        "payment_hash": lightning["payment_hash"],
+        "rail": "lightning",
+        "bolt11": lightning["bolt11"],
+        "paid_at": harness.now - 11,
+    }
+    # prepare on the paid order answers the receipt, with no pending hash.
+    status, body, _ = harness.call("POST", "/checkouts/prepare", {"reference": REFERENCE})
+    assert status == 200 and body["paid"]["payment_hash"] == lightning["payment_hash"]
+    assert "pending_payment_hash" not in body
+
+
+def test_prepare_names_the_newest_pending_attempt(harness: Harness) -> None:
+    status, body, _ = harness.call("POST", "/checkouts/prepare", {"reference": REFERENCE})
+    assert status == 200 and "pending_payment_hash" not in body
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 201, body
+    first = body["checkout"]["payment_hash"]
+    harness.now += 5
+    status, body, _ = harness.call(
+        "POST", "/swaps", {"reference": REFERENCE, "pay_in_asset": "USDT_TRON"}
+    )
+    assert status == 201, body
+    newest = body["swap"]["payment_hash"]
+    assert newest != first
+    status, body, _ = harness.call("POST", "/checkouts/prepare", {"reference": REFERENCE})
+    assert status == 200 and body["pending_payment_hash"] == newest

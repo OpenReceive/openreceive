@@ -55,6 +55,15 @@ def assert_golden_value(actual: Any, expected: Any, context: str) -> None:
 
 
 SETTLED_HASH = "7f" * 32
+OLDER_HASH = "6e" * 32
+# Repository handlers whose gate is preclaimed, so the request's own gated
+# scan is skipped.
+GATE_BUSY_HANDLERS = (
+    "repository_gate_busy",
+    "repository_paid_elsewhere",
+    "repository_pending_gate_busy",
+    "repository_unseen_payment",
+)
 # Deterministic settled attempt behind the settled_check vector: the wallet
 # row deliberately carries the preimage and raw invoice, and the vector's
 # exact key-set assertion proves neither leaks into the payer-polled body.
@@ -273,19 +282,41 @@ def build_repository_app(vector, repository, on_paid):
         swap_providers=[Provider()] if provider_order else [],
         clock=lambda: 1000,
     )
+    checkout = SETTLED_CHECKOUT
+    if kind == "repository_paid_elsewhere":
+        # 28: an older invoice that 7f..7f supersedes; it stays pending.
+        older = {
+            **SETTLED_CHECKOUT,
+            "payment_hash": OLDER_HASH,
+            "bolt11": "lnbcgoldenolder",
+            "created_at": 870,
+            "expires_at": 1030,
+        }
+        repository.commit_attempt(PaymentInsert(SETTLED_CHECKOUT["reference"], OLDER_HASH, older))
+    if kind == "repository_unseen_payment":
+        # 30: too close to expiry to re-serve at clock 1000, so a create would
+        # mint; the wallet holds its payment, which no scan has recorded.
+        checkout = {**SETTLED_CHECKOUT, "expires_at": 1030}
+        wallet.list_transactions = lambda _: {"transactions": [SETTLED_ROW]}
+        wallet.make_invoice = lambda _: (_ for _ in ()).throw(
+            AssertionError("a paid order was handed a new invoice")
+        )
     repository.commit_attempt(
         PaymentInsert(
             SETTLED_CHECKOUT["reference"],
             SETTLED_HASH,
-            SETTLED_CHECKOUT,
+            checkout,
             swap_data={"version": 1, "provider_order": provider_order} if provider_order else None,
         )
     )
-    if kind == "repository_gate_busy":
+    if kind in ("repository_gate_busy", "repository_paid_elsewhere"):
         repository.record_settlement(SettlementRecord(SETTLED_HASH, 950), on_paid)
+    if kind == "repository_gate_busy":
         extra = {**SETTLED_CHECKOUT, "reference": "pending-gate", "payment_hash": "8f" * 32}
         repository.commit_attempt(PaymentInsert("pending-gate", extra["payment_hash"], extra))
+    if kind in GATE_BUSY_HANDLERS:
         assert repository.claim_reconcile_gate(now=1000, interval_seconds=2) is not None
+    if kind in GATE_BUSY_HANDLERS and kind != "repository_unseen_payment":
         wallet.list_transactions = lambda _: (_ for _ in ()).throw(
             AssertionError("gate loser scanned")
         )
@@ -304,6 +335,13 @@ def assert_repository_effects(vector, repository, body, fulfilled_count):
     if kind == "repository_failed_settlement":
         assert record.status == "pending"
         assert fulfilled_count == 0
+    if kind == "repository_unseen_payment":
+        # The check before the mint recorded the payment the skipped scan had
+        # not seen, fulfilled once, and minted nothing.
+        assert record.status == "settled" and record.paid_at == 950
+        assert fulfilled_count == 1
+        attempts = repository.list_for_reference(SETTLED_CHECKOUT["reference"])
+        assert [attempt.payment_hash for attempt in attempts] == [SETTLED_HASH]
     provider_order = vector.get("setup", {}).get("provider_order")
     if provider_order:
         assert (
