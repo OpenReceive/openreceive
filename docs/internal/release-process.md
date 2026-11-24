@@ -72,12 +72,24 @@ create accounts or enforce environment reviewer settings.
   manual gem fallback uses. Source it first in every release shell.
 - On npmjs.com, each of the 16 public packages has one trusted publisher:
   GitHub Actions, repository `OpenReceive/openreceive`, workflow
-  `publish-npm.yml`, environment `npm`. Set them all from a shell logged in as
-  `openreceive` (npm 11.10 or later):
+  `publish-npm.yml`, environment `npm`. `npm trust` refuses granular tokens
+  that bypass 2FA, so log in with the account itself, in an interactive
+  terminal: npm prints the 2FA link only there, and masks it in captured
+  output. The login is a short session, not a stored token:
 
   ```sh
+  NPM_CONFIG_USERCONFIG=~/.npmrc-openreceive npx -y npm@11 login --auth-type=web
+  ```
+
+  Then set all 16 from the same terminal (npm 11.10 or later). The first one
+  asks for 2FA in the browser; tick "skip 2FA for the next 5 minutes" there and
+  the rest go through:
+
+  ```sh
+  export NPM_CONFIG_USERCONFIG=~/.npmrc-openreceive
   for p in $(node --input-type=module -e "import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES as n } from './tools/package/public-packages.mjs'; console.log(n.join(' '))"); do
     npx -y npm@11 trust github "$p" --repo OpenReceive/openreceive --file publish-npm.yml --env npm --allow-publish -y
+    sleep 2
   done
   ```
 
@@ -341,9 +353,9 @@ Run from the repo root on a clean, current `master`.
    version` from outside the workspace.
 
    If the workflow cannot run, the manual fallback publishes from the
-   maintainer's machine with a granular token ("Bypass 2FA", read and write)
-   in the npm userconfig that `.env.release` names. npm revokes such tokens in
-   January 2027. Rehearse first:
+   maintainer's machine, logged in with `npm login --auth-type=web` as above
+   (npm asks for 2FA on publish). No stored token: npm revokes granular tokens
+   that bypass 2FA in January 2027. Rehearse first:
 
    ```sh
    npm run release:publish -- --tag latest --dry-run
@@ -356,8 +368,12 @@ Run from the repo root on a clean, current `master`.
    locally. `--skip-tests` skips it unconditionally. The script builds exact
    tarballs under `.release/npm/<version>/tarballs`, skips versions already on
    npm, and publishes only the public package family. Pass `--otp <code>` only
-   on a machine whose npm account still has a TOTP authenticator. The
-   OpenReceive account uses a bypass-2FA token instead.
+   on a machine whose npm account still has a TOTP authenticator.
+
+   The GitHub release (step 9) carries the bytes npm serves: fetch them with
+   `npm pack <package>@<x.y.z> --pack-destination .release/npm/<x.y.z>/tarballs`
+   for each public package. Right after a publish the registry's cache can
+   answer "no such version" for a few minutes; retry.
 
 9. Assemble **all platforms**, even when the motivating fix was WordPress or
    one SDK. The general family releases in lockstep. Fetch published gems and
