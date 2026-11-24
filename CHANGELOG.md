@@ -39,6 +39,38 @@
 - `paid` on `POST /payments/check` and `pending_payment_hash` on
   `POST /checkouts/prepare`. Both are optional fields; older clients ignore
   them.
+- The rate-limiting guide has a new section, "If you take coin
+  payments", with the two limits per payer one production shop runs: a cap on
+  a payer's open swaps in the rate-limit hook, and a cap on swap starts per
+  hour in the app's own middleware.
+- A new HTTP golden vector shows a rate-limit hook refusing with its own
+  message in every engine.
+
+### Changed
+
+- **Swaps:** OpenReceive no longer counts calls to a swap provider
+  itself, except for FixedFloat. Lightning Swap, a provider the library does
+  not know and a test provider are never refused locally, however many swaps a
+  site starts; the provider limits its own account. Before, an unknown host was
+  held to FixedFloat's three new swaps a minute, and Lightning Swap to 30, so a
+  site could refuse payers the provider would have accepted. A provider's 429
+  is still obeyed for the wait it names (`Retry-After`, or the wait in the
+  response), between 1 second and 5 minutes, and a minute when it names none.
+  A 429 that answered a new swap stops new swaps only; status and refund calls
+  for swaps already started keep working. While new swaps are stopped, a new
+  swap is still refused before an invoice is made for it.
+- **Swaps:** with FixedFloat (`ff.io`), status and refund calls may use
+  only 50 of the 200 weight a minute each server process allows itself, so open
+  swap screens checking their status can no longer use up the room for new
+  swaps. At least three new swaps a minute always fit, four when nothing else
+  ran. A new swap may now fill the whole 200, where it stopped at 150.
+- **Custom swap providers:** the limits a provider may state have a
+  local budget (none for a provider that is not counted) in place of the soft
+  cap, create gate and create limit, and the Lightning Swap profile added in
+  0.5.0 is gone. Its replacement is the provider-only profile: Python
+  `PROVIDER_ONLY_LIMITS`, PHP `SwapProviderLimits::providerOnly()`, Ruby
+  `PROVIDER_ONLY_SWAP_PROVIDER_LIMITS`. A provider that states no limits is
+  no longer held to FixedFloat's; it is not counted at all.
 
 ## 0.5.0 - 2026-11-16
 
