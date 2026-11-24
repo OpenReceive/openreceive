@@ -60,6 +60,13 @@ interface OwnTests {
   readonly paths: readonly string[];
   /** Set for the test run only, over the shop's own environment. */
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Why this stack's app is always started with a wallet code. Set, the
+   * no-codes run (`own_tests_no_codes`) is left out: the app refuses to start
+   * without a code by design, so that run could only fail, and
+   * `own_tests_offline` already runs the suite with the testkit code.
+   */
+  readonly needsCode?: string;
 }
 
 interface HotReload {
@@ -192,7 +199,14 @@ const STACKS: Readonly<Record<string, StackTools>> = {
     sqlite: "python",
   },
   fastapi: {
-    tests: { command: "python -m unittest test_shop", paths: ["test_shop.py"] },
+    tests: {
+      command: "python -m unittest test_shop",
+      paths: ["test_shop.py"],
+      // openreceive_lifespan stops the deploy when NWC_URI is missing: a broken
+      // deploy must not become a payer-facing 500. Decided 2026-11-23: the app
+      // always starts with a code.
+      needsCode: "the FastAPI binding refuses to start without NWC_URI, by design",
+    },
     workers: {
       start: `exec uvicorn main:app --workers ${WORKER_COUNT} --host 0.0.0.0 --port $PORT`,
       process: /uvicorn|multiprocessing/,
@@ -443,6 +457,8 @@ async function ownTestChecks(target: DevtoolsTarget, tools: StackTools): Promise
   } catch (error) {
     checks.push(check("own_tests_offline", false, "The shop's own test suite ran.", String(error)));
   }
+  // A stack that starts only with a code (OwnTests.needsCode) has no no-codes run.
+  if ((tools.tests as OwnTests).needsCode !== undefined) return checks;
   try {
     const noCodes = await runOwnTests(target, tools, false);
     checks.push({
