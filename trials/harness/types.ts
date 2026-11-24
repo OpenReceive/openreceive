@@ -25,6 +25,8 @@ export type Intent =
   | "lsc_backup"
   | "bitcoin_choice"
   | "delegate"
+  /** The agent asked the merchant to save a code in a file it named (merchant.ts). */
+  | "file"
   | "done"
   | "other";
 
