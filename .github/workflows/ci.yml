@@ -414,9 +414,11 @@ jobs:
   # Playwright ships WebKit's and Firefox's system libraries for it.
   browsers:
     runs-on: ubuntu-24.04
-    # A Playwright bump means a cold install of three engines (about 13
-    # minutes) before the lab's own five.
-    timeout-minutes: 30
+    # A cold install of three engines (a Playwright bump, or a PR whose base
+    # has no saved browsers) took 13 to 25 minutes, and the lab itself about
+    # 15 with the reload and bad-network cases. At 30 minutes a cold run was
+    # cancelled five minutes into the tests (PR #169, 2026-11-24).
+    timeout-minutes: 45
     env:
       NWC_URI: ""
     steps:
