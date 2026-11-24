@@ -98,6 +98,7 @@ export {
   swapDepositRisk,
 } from "./internal/checkout.ts";
 export type { DetailLinkKind } from "./internal/checkout-links.ts";
+export { openCheckoutModal } from "./internal/checkout-modal.ts";
 export {
   mergeAttemptIntoCheckout,
   mergeAttemptIntoSnapshot,

@@ -37,8 +37,13 @@ export const orClasses = {
   stateSettled: "badge badge-success badge-sm",
   statePending: "badge badge-ghost badge-sm",
   actions: "flex flex-wrap gap-2 justify-start",
-  btn: "btn btn-outline",
-  btnGhost: "btn btn-ghost",
+  /**
+   * Every button may grow when its label wraps (a long label in a narrow
+   * column touched both borders at the fixed 40 px), and on a touch screen is
+   * at least 44 px tall, the size a thumb hits reliably.
+   */
+  btn: "btn btn-outline h-auto min-h-10 py-1.5 pointer-coarse:min-h-11",
+  btnGhost: "btn btn-ghost h-auto min-h-10 py-1.5 pointer-coarse:min-h-11",
   copyIcon: "shrink-0 size-4",
   themeToggle: "btn btn-outline btn-sm gap-2 justify-self-end",
   paymentStatus: "flex items-center gap-2.5 min-w-0",
@@ -50,7 +55,12 @@ export const orClasses = {
   continueSpinner: "loading loading-spinner loading-md shrink-0",
   settledIcon: "size-8 shrink-0 text-success",
   countdown: "text-base-content/60 text-sm",
-  countdownStrong: "text-base-content font-semibold",
+  /**
+   * A fixed width for the time: "10:00" is wider than "9:59", and a line that
+   * fitted only after the first tick moved Copy invoice up 20 px under the
+   * payer's thumb.
+   */
+  countdownStrong: "text-base-content font-semibold tabular-nums inline-block min-w-[5ch]",
   /** The spinner/notice body of the creating, minting and create-error screens; sits inside `root`, which pads. */
   creating: "grid gap-2 place-items-center",
   wizard: "overflow-hidden rounded-box border border-base-content/20 bg-base-200 grid gap-0",
@@ -160,7 +170,7 @@ export const orClasses = {
   /** The amount line's spinner while its quote is in flight: small and quiet. */
   methodEstimateSpinner: "loading loading-spinner loading-sm shrink-0 text-base-content/60",
   methodTile: "grid h-full min-w-0 content-start gap-0.5",
-  breadcrumbs: "breadcrumbs text-sm",
+  breadcrumbs: "breadcrumbs text-sm pointer-coarse:[&_button]:min-h-11",
   breadcrumbCurrent: "font-bold",
   routePicker: "grid grid-cols-2 @md:grid-cols-4 gap-2",
   routeButton:
@@ -176,22 +186,28 @@ export const orClasses = {
     "card card-border bg-base-100 p-3 grid gap-2 items-center grid-cols-[minmax(0,1fr)_auto] @md:grid-cols-[minmax(0,1fr)_auto_auto] @md:gap-x-2 @md:gap-y-1",
   providerHeading: "flex gap-2 items-center min-w-0",
   providerIcon: "rounded size-7 shrink-0",
-  providerName: "font-semibold truncate m-0 min-w-0",
+  /** Wraps rather than truncates: at 360 px "Cash App" was cut to "Cash …". */
+  providerName: "font-semibold m-0 min-w-0 leading-tight wrap-break-word",
   providerKind: "text-base-content/60 text-sm m-0 justify-self-end text-right",
   providerActions: "col-span-2 flex w-full @md:col-span-1 @md:w-auto @md:justify-self-end",
-  providerOpen: "btn btn-outline btn-sm w-full @md:w-auto",
+  providerOpen: "btn btn-outline btn-sm w-full @md:w-auto pointer-coarse:min-h-11",
   swapActions: "grid gap-2.5 grid-cols-1 @md:grid-cols-3",
   swapAction: "grid gap-2",
   swapEstimate: "text-base-content/60 m-0 text-sm",
   swapWarning: "alert alert-warning text-sm",
-  swapNetworkWarning: "alert alert-error alert-soft text-sm items-start gap-3",
+  /**
+   * The one warning that must be read, so its words take the theme's body
+   * colour; the red stays in the fill, border and icon. A host theme's pale
+   * error tint under error-coloured text measured 2.64:1.
+   */
+  swapNetworkWarning: "alert alert-error alert-soft text-sm items-start gap-3 text-base-content",
   /**
    * Same deposit heading on a rail whose address format pins both the chain and
    * the asset (`SwapDepositRisk` "pinned"): identical layout, no alarm colour
    * and no warning triangle. A red banner on every rail is read on none.
    */
   swapNetworkNotice: "alert alert-soft text-sm items-start gap-3",
-  swapNetworkWarningIcon: "size-6 shrink-0 stroke-current",
+  swapNetworkWarningIcon: "size-6 shrink-0 stroke-current text-error",
   swapNetworkWarningContent: "grid gap-1 min-w-0 w-full",
   swapNetworkWarningTitle: "font-bold m-0",
   swapNetworkWarningBody: "m-0",
@@ -238,14 +254,14 @@ export const orClasses = {
   swapDetailsInput:
     "input input-sm w-full min-w-0 font-mono text-sm outline-none! focus:outline-none! focus:outline-offset-0!",
   swapDetailsActions: "flex flex-wrap gap-2 justify-end",
-  detailCopy: "btn btn-sm btn-square btn-ghost",
-  swapDetailsLink: "btn btn-sm btn-outline",
+  detailCopy: "btn btn-sm btn-square btn-ghost pointer-coarse:size-11",
+  swapDetailsLink: "btn btn-sm btn-outline pointer-coarse:min-h-11",
   swapBreakdown: "grid gap-2 rounded-box border border-base-content/15 bg-base-100 px-3 py-2.5",
   swapBreakdownTitle: "m-0 text-base-content/60 text-xs font-bold uppercase",
   swapBreakdownRows: "grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-baseline m-0",
   swapWaitingTitle: "flex items-baseline justify-between gap-3 min-w-0",
   swapCountdown: "shrink-0 text-base-content font-semibold tabular-nums",
-  swapBack: "btn btn-sm btn-outline justify-self-start",
+  swapBack: "btn btn-sm btn-outline justify-self-start pointer-coarse:min-h-11",
   swapSupport: "collapse collapse-arrow bg-base-200",
   swapSupportTitle: "collapse-title font-bold min-h-0 py-2",
   swapSupportContent: "collapse-content",
@@ -275,8 +291,8 @@ export const orClasses = {
    */
   keepOrder: "grid gap-1.5 rounded-box border border-base-content/15 bg-base-100 px-3 py-2.5",
   keepOrderBody: "m-0 text-base-content/60 text-sm",
-  swapRefundInput: "input input-bordered w-full",
-  swapRefundInputInvalid: "input input-bordered input-error w-full",
+  swapRefundInput: "input input-bordered w-full pointer-coarse:min-h-11",
+  swapRefundInputInvalid: "input input-bordered input-error w-full pointer-coarse:min-h-11",
   swapRefundError: "m-0 text-error text-sm",
   swapRefundHint: "m-0 text-warning text-sm",
   tutorialModal: "modal modal-open",
@@ -285,8 +301,8 @@ export const orClasses = {
   tutorialTitle:
     "flex items-center gap-2.5 min-w-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold",
   tutorialHeaderLogo: "size-7 rounded shrink-0",
-  tutorialClose: "btn btn-sm btn-square btn-ghost",
-  tutorialCopy: "btn btn-outline btn-sm justify-self-start",
+  tutorialClose: "btn btn-sm btn-square btn-ghost pointer-coarse:size-11",
+  tutorialCopy: "btn btn-outline btn-sm justify-self-start pointer-coarse:min-h-11",
   /** Step 1 is the biggest thing in the dialog: a payer who skips it has nothing to paste. */
   tutorialCopyStep:
     "btn btn-primary btn-lg h-auto min-h-14 py-2 w-full justify-start gap-2 text-left whitespace-normal",

@@ -172,6 +172,7 @@
         "networkMobileRevealClasses",
         "networkSummaryIconClasses",
         "normalizeSwapStartInvoice",
+        "openCheckoutModal",
         "OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES",
         "OPENRECEIVE_CHECKOUT_DATA_SELECTORS",
         "OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES",

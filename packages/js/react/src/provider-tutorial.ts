@@ -3,6 +3,7 @@
 import {
   checkoutLabels,
   createLightningInvoiceDecodeUrl,
+  openCheckoutModal,
   orClasses,
   type WizardProviderDisplay,
 } from "@openreceive/browser/headless";
@@ -53,8 +54,11 @@ export function ProviderTutorialModal(options: {
   // between this page and the wallet for each step.
   const copySteps = options.invoice === "" ? 0 : 1;
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  const onCloseRef = React.useRef(options.onClose);
+  onCloseRef.current = options.onClose;
   // Modal dialog contract: focus moves into the dialog on open, Tab is
-  // trapped inside it, and focus returns to the opener on close.
+  // trapped inside it, Android's Back closes it, and focus returns to the
+  // opener on close (openCheckoutModal).
   React.useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog === null) return;
@@ -62,8 +66,9 @@ export function ProviderTutorialModal(options: {
       dialog.ownerDocument.activeElement instanceof HTMLElement
         ? dialog.ownerDocument.activeElement
         : null;
-    dialog.focus();
+    const closed = openCheckoutModal(dialog, () => onCloseRef.current());
     return () => {
+      closed();
       opener?.focus();
     };
   }, []);

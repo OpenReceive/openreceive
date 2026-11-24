@@ -33,6 +33,7 @@ import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+  openCheckoutModal,
   orClasses,
   parseBooleanAttribute,
   parseOptionalInteger,
@@ -175,6 +176,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     private refundAddressDraftSelectionEnd: number | null = null;
     /** Tutorial provider whose dialog was last focused, so re-renders don't re-steal focus. */
     private focusedTutorialProviderId: string | null = null;
+    /** Undoes what `openCheckoutModal` set up for the open walkthrough. */
+    private closeTutorialModal: (() => void) | undefined;
     private tutorialImagesRequested = false;
     /**
      * Create mode's whole request lifecycle — prepare-once, the deferred
@@ -426,6 +429,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       this.stopCheckoutController();
       this.stopThemeAncestorObserver();
       this.resetTutorial();
+      this.closeTutorialModal?.();
+      this.closeTutorialModal = undefined;
+      this.focusedTutorialProviderId = null;
     }
 
     /**
@@ -441,7 +447,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           if (!this.isConnected) return;
           this.render();
           // The rebuild dropped the focus the dialog took when it opened.
-          this.shadowRoot?.querySelector<HTMLElement>('[part="tutorial"]')?.focus();
+          this.shadowRoot
+            ?.querySelector<HTMLElement>('[part="tutorial"]')
+            ?.focus({ preventScroll: true });
         },
         () => undefined,
       );
@@ -1279,7 +1287,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         this.activeTutorialCopied = true;
         this.render();
         // The rebuild dropped the dialog's focus.
-        this.shadowRoot?.querySelector<HTMLElement>('[part="tutorial"]')?.focus();
+        this.shadowRoot
+          ?.querySelector<HTMLElement>('[part="tutorial"]')
+          ?.focus({ preventScroll: true });
       };
 
       root
@@ -1331,10 +1341,18 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         this.focusedTutorialProviderId !== this.activeTutorialProviderId
       ) {
         this.focusedTutorialProviderId = this.activeTutorialProviderId;
-        tutorial.focus();
+        // Focus, bring the box into view, and close on Android's Back.
+        this.closeTutorialModal?.();
+        this.closeTutorialModal = openCheckoutModal(tutorial, () => {
+          if (this.activeTutorialProviderId === null) return;
+          this.resetTutorial();
+          this.render();
+        });
       }
       if (this.activeTutorialProviderId === null) {
         this.focusedTutorialProviderId = null;
+        this.closeTutorialModal?.();
+        this.closeTutorialModal = undefined;
       }
     }
 
