@@ -1005,8 +1005,28 @@ function SwapRefundForm(props: {
           },
           checkoutLabels.confirmRefundTo.replace("{address}", props.submittedRefundAddress),
         ),
+    // The warning sits above the field, so the button follows the field
+    // closely: with the keyboard up, Safari scrolls the field into view, and
+    // a button four lines further down landed in the strip above the keyboard
+    // that Safari 27's minimized address bar takes taps from (iPhone SE,
+    // tests/ios/findings.md).
+    props.submittedRefundAddress === undefined
+      ? React.createElement(
+          "p",
+          {
+            className: orClasses.swapRefundHint,
+          },
+          `Make sure you control this ${props.networkLabel} address. Refunds sent to the wrong address usually cannot be recovered.`,
+        )
+      : null,
     React.createElement("input", {
+      // A typed address must reach the server as typed: a phone keyboard
+      // capitalizes the first letter of an empty field, and a Solana address
+      // carries no checksum to catch it.
+      autoCapitalize: "none",
       autoComplete: "off",
+      autoCorrect: "off",
+      spellCheck: false,
       "aria-invalid": showError ? true : undefined,
       className: showError ? orClasses.swapRefundInputInvalid : orClasses.swapRefundInput,
       onChange: (event) => {
@@ -1030,15 +1050,6 @@ function SwapRefundForm(props: {
             role: "alert",
           },
           addressError,
-        )
-      : null,
-    props.submittedRefundAddress === undefined
-      ? React.createElement(
-          "p",
-          {
-            className: orClasses.swapRefundHint,
-          },
-          `Make sure you control this ${props.networkLabel} address. Refunds sent to the wrong address usually cannot be recovered.`,
         )
       : null,
     React.createElement(

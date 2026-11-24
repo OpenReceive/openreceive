@@ -255,13 +255,17 @@ export function renderElementSwapPanelHtml(
             ${display.refundAllowed ? `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAllowed}="true"` : ""}
           >
             ${refundFormIntro}
+            <p part="swap-refund-hint" class="${orClasses.swapRefundHint}">Make sure you control this ${escapeHtml(display.networkLabel)} address. Refunds sent to the wrong address usually cannot be recovered.</p>
             <input
               class="${orClasses.swapRefundInput}"
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
               name="refund_address"
               placeholder="${escapeHtml(checkoutLabels.refundAddressPlaceholder.replace("{network}", display.networkLabel))}"
               type="text"
+              autocapitalize="none"
               autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
               required
             >
             <p
@@ -271,7 +275,6 @@ export function renderElementSwapPanelHtml(
               hidden
               role="alert"
             ></p>
-            <p part="swap-refund-hint" class="${orClasses.swapRefundHint}">Make sure you control this ${escapeHtml(display.networkLabel)} address. Refunds sent to the wrong address usually cannot be recovered.</p>
             <button class="${orClasses.btn}" type="submit">${escapeHtml(checkoutLabels.reviewRefundAddress)}</button>
           </form>
         `

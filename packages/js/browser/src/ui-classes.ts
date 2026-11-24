@@ -252,7 +252,7 @@ export const orClasses = {
   // Readonly select-all fields: keep the quiet resting border, suppress daisyUI's
   // focus outline+offset which otherwise reads as a double ring around selected text.
   swapDetailsInput:
-    "input input-sm w-full min-w-0 font-mono text-sm outline-none! focus:outline-none! focus:outline-offset-0!",
+    "input input-sm w-full min-w-0 font-mono text-sm outline-none! focus:outline-none! focus:outline-offset-0! pointer-coarse:min-h-11",
   swapDetailsActions: "flex flex-wrap gap-2 justify-end",
   detailCopy: "btn btn-sm btn-square btn-ghost pointer-coarse:size-11",
   swapDetailsLink: "btn btn-sm btn-outline pointer-coarse:min-h-11",

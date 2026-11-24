@@ -17,6 +17,17 @@ iOS 17.x is not installed on this Mac; 18.4 is the older runtime. Desktop
 WebKit for comparison: `OPENRECEIVE_BROWSERS=webkit node --import tsx --test
 tests/real-browser-*.test.mjs` passed 144 of 144 (Playwright WebKit 27.2).
 
+## Status
+
+Fixed for the next release and re-checked in the lab on the iPhone SE (iOS
+27.2, React and Vue): **1** (the refund field turns off auto-capitalization,
+autocorrect and spellcheck; the typed address now arrives as typed), **2**
+(the warning moved above the field; Review now sits at y 207–253 with the
+keyboard up, and the payer's first tap opens the review), and **7** (copy
+fields 44 pt on touch screens). **3** is a design question about the host page's
+history; see "Finding 3: the strategy" at the end. **4** to
+**6** are left as they are.
+
 ## Product problems, most severe first
 
 ### 1. The phone keyboard capitalizes a Solana refund address, and the checkout accepts the different address

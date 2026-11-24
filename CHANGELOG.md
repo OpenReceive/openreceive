@@ -31,6 +31,19 @@
   least 44 px on touch screens, Copy invoice no longer jumps when the
   countdown ticks, the wrong-network warning reads at full contrast on any
   theme, and wallet names wrap instead of being cut off.
+- **iPhones** (found by the new on-demand iOS Safari lab, `tests/ios/`):
+  - **A refund address keeps the letters the payer typed.** The keyboard
+    capitalized the first letter of the empty field, so a Solana address
+    typed as `v2Ua…` was sent as `V2Ua…`, a different account that still
+    passed validation (Solana addresses carry no checksum). The refund field
+    now turns off auto-capitalization, autocorrect and spellcheck.
+  - **"Review refund address" takes the first tap with the keyboard up.** It
+    now follows the field directly, with the warning above the field. On an
+    iPhone SE with iOS 27 it sat in the strip above the keyboard where
+    Safari's minimized address bar takes taps: the first tap only closed the
+    keyboard.
+  - The read-only copy fields (deposit address, amount, order id, checkout
+    link) are at least 44 px tall on touch screens.
 
 ### Added
 
