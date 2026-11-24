@@ -266,7 +266,7 @@
       "slug": "btcpay-reference",
       "title": "BTCPay Plugin Reference",
       "category": "reference",
-      "bytes": 26147
+      "bytes": 26295
     },
     {
       "path": "/guides/node-orms",
@@ -296,7 +296,7 @@
       "slug": "rate-limiting",
       "title": "Rate Limiting",
       "category": "security",
-      "bytes": 14578
+      "bytes": 22880
     },
     {
       "path": "/guides/frontend-checkout",

@@ -124,8 +124,10 @@ slow down a payer who tries several assets. Abuse is limited in other ways:
 - The caller must know the invoice id.
 - A repeat create for the same invoice and asset returns the live row without
   calling the provider.
-- Every provider call counts against the per-provider request budget: three
-  new swaps a minute with FixedFloat, 30 with Lightning Swap.
+- The swap provider limits its own account, and its 429 stops new swaps for
+  the wait it names. Only with FixedFloat does the plugin also count calls: at
+  most four new swaps a minute per process (three when status checks ran), and
+  at most 50 status and refund calls.
 
 Snapshot fields are snake_case:
 
@@ -407,9 +409,9 @@ plugin's rows only make sure a payment is found.
     other within 5 seconds.
 
   Two things are per process. Each worker has its own scan memo, and walks
-  only for the invoices it was asked about, one walk per interval. Each worker
-  also has its own provider weight budget, so two workers can spend twice the
-  provider's per-minute allowance.
+  only for the invoices it was asked about, one walk per interval. With
+  FixedFloat, each worker also keeps its own request count, so two workers can
+  make twice the calls a minute the plugin allows one.
 - **Beside the Nostr plugin**: each plugin loads its own copy of NNostr in its
   own load context. BTCPay's loader shares only host types. So the two plugins
   never conflict over an assembly version. They also do not share relay
