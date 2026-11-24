@@ -185,6 +185,52 @@ final class Reconciler
     }
 
     /**
+     * One ungated pass over exactly `$attempts` (the JS
+     * reconcileHostPayments({attempts}) twin), for a caller that must know now
+     * and cannot wait for the gate: the check before a mint. It is the gated
+     * pass's bounded scan over one fresh window, cut at `$deadline` (hrtime
+     * seconds) the way ReconcileScan::slice cuts every pass. A payment is
+     * recorded through the settlement hook while its page is read; the other
+     * results are recorded as transitions. Unlike the gated pass it throws: a
+     * failed walk, or a payment the hook did not record, reaches the caller.
+     *
+     * @param list<array{payment_hash: string, created_at: int, created_at_source: string, expires_at: int}> $attempts
+     * @return array{checks: list<array<string, mixed>>, complete: bool, stalled: bool}
+     */
+    public function reconcileAttempts(array $attempts, float $deadline, int $overlapSeconds = 60): array
+    {
+        if ($attempts === []) {
+            return ['checks' => [], 'complete' => true, 'stalled' => false];
+        }
+        $observedAt = ($this->clock)();
+        $byHash = array_column($attempts, null, 'payment_hash');
+        $unrecorded = [];
+        // settleAttempt logs why; the pass still reads the rest of the page.
+        $positive = function (array $checked) use (&$unrecorded): bool {
+            if ($this->settleAttempt($checked)) {
+                return true;
+            }
+            $unrecorded[] = $checked['payment_hash'];
+            return false;
+        };
+        $window = ReconcileScan::newWindow($attempts, $observedAt, $overlapSeconds);
+        $slice = ReconcileScan::slice($this->service, $window, self::RECONCILE_SCAN_MAX_PAGES, $deadline, $positive);
+        $checks = [];
+        foreach ($slice['checks'] as $checked) {
+            if (($checked['status'] ?? null) !== 'settled') {
+                $this->recordTransition($byHash[$checked['payment_hash']], $checked, $checked['_coverage_started_at'] ?? $observedAt);
+                unset($checked['_coverage_started_at']);
+            }
+            $checks[] = $checked;
+        }
+        if ($unrecorded !== []) {
+            throw new \RuntimeException('the wallet reported a payment the settlement hook did not record: ' . implode(', ', $unrecorded));
+        }
+        $this->logPass($attempts, $checks, $overlapSeconds, $observedAt);
+        return ['checks' => $checks, 'complete' => $slice['complete'], 'stalled' => $slice['stalled']];
+    }
+
+    /**
      * One NWC-02 payload: `payment_received` that satisfies the settlement
      * rule and matches a pending attempt settles directly; anything less
      * falls back to one bounded pass. Other types are ignored.

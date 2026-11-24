@@ -28,6 +28,9 @@ use Psr\Log\LoggerInterface;
  * Hooks (all callables):
  *   authorize(AuthorizeContext): bool
  *   resolveCheckout(array{action, request, reference, input, pay_in_asset?}): array
+ *     (optional keys: `paid_attempt` on payment.check, the attempt that paid the
+ *     reference as payment_hash/checkout/paid_at?/swap; `pending_payment_hash`
+ *     on an unpaid prepare, its newest pending attempt)
  *   onCheckoutCreated(array{reference, payment_hash, checkout, swap_data, client_ip}): void
  *   onPaid(array{payment_hash, paid_at, details}): void
  *   rateLimit(AuthorizeContext): bool           (optional)
@@ -112,6 +115,13 @@ final class RequestHandler
             if ($description !== null) {
                 $out['description'] = $description;
             }
+            // The newest unpaid attempt, when the resolver names one: a page rebuilt
+            // from the reference alone opens on the picker and polls this hash, so a
+            // payment made just before a reload still reaches the screen.
+            $pending = $resolved['pending_payment_hash'] ?? null;
+            if (is_string($pending) && $pending !== '') {
+                $out['pending_payment_hash'] = strtolower($pending);
+            }
             return $this->success(200, $out, $requestId);
         });
     }
@@ -125,27 +135,48 @@ final class RequestHandler
     private static function paidPrepare(string $reference, array $resolved): array
     {
         $checkout = $resolved['checkout'];
-        $swap = ($resolved['swap'] ?? false) === true;
-        $paid = ['payment_hash' => $resolved['payment_hash'], 'rail' => $swap ? 'swap' : 'lightning'];
-        if (!$swap) {
-            $paid['bolt11'] = $checkout['bolt11'];
-        }
-        if (isset($resolved['paid_at'])) {
-            $paid['paid_at'] = $resolved['paid_at'];
-        }
         return [
             'reference' => $reference,
             'amount_msats' => $checkout['amount_msats'],
             'fiat_quote' => $checkout['fiat_quote'] ?? null,
             'payment_methods' => [],
-            'paid' => $paid,
+            'paid' => self::paidAttemptBody($resolved),
         ];
     }
 
-    /** @return array{0: int, 1: array<string, string>, 2: array<string, mixed>} */
-    public function createCheckout(string $rawBody, mixed $request, string $requestId): array
+    /**
+     * The `paid` object (OpenAPI `PaidAttempt`) for the attempt that paid a
+     * reference, from a resolved payment_hash, checkout, paid_at? and swap flag.
+     *
+     * @param array<string, mixed> $attempt
+     * @return array<string, mixed>
+     */
+    private static function paidAttemptBody(array $attempt): array
     {
-        return $this->handle($requestId, function () use ($rawBody, $request, $requestId): array {
+        $swap = ($attempt['swap'] ?? false) === true;
+        $paid = ['payment_hash' => strtolower((string) $attempt['payment_hash']), 'rail' => $swap ? 'swap' : 'lightning'];
+        if (!$swap) {
+            $paid['bolt11'] = Records::asArray($attempt['checkout'])['bolt11'];
+        }
+        if (isset($attempt['paid_at'])) {
+            $paid['paid_at'] = $attempt['paid_at'];
+        }
+        return $paid;
+    }
+
+    /**
+     * Storage-aware callers pass `$reconcilePass` (the request-level gated
+     * reconcile result) and `$earlierAttemptsUnpaid`, a callable(reference,
+     * pass) that checks the order's unpaid attempts against the wallet and
+     * throws when one was paid. It runs only before a mint, never when a
+     * committed attempt is re-served.
+     *
+     * @param array<string, mixed>|null $reconcilePass
+     * @return array{0: int, 1: array<string, string>, 2: array<string, mixed>}
+     */
+    public function createCheckout(string $rawBody, mixed $request, string $requestId, ?array $reconcilePass = null, ?callable $earlierAttemptsUnpaid = null): array
+    {
+        return $this->handle($requestId, function () use ($rawBody, $request, $requestId, $reconcilePass, $earlierAttemptsUnpaid): array {
             $body = $this->parse($rawBody, 'checkout.create', $request);
             $reference = $this->requiredReference($body);
             $this->authorizeAction('checkout.create', $request, ['reference' => $reference]);
@@ -154,6 +185,7 @@ final class RequestHandler
             // Rate limits meter minting only: re-serving a committed attempt costs no wallet call.
             if (!$reused) {
                 $this->enforceRateLimit('checkout.create', $request, ['reference' => $reference]);
+                $this->assertEarlierAttemptsUnpaid($earlierAttemptsUnpaid, $reference, $reconcilePass);
             }
             $checkout = $reused
                 ? $this->committedCheckout($reference, $resolved)
@@ -200,6 +232,13 @@ final class RequestHandler
             $checked = $reconcilePass === null
                 ? $this->checkedViaWallet($hash, $checkout)
                 : $this->checkedFromPass($hash, $reconcilePass, $attemptStatus);
+            // Every attempt of a paid order answers the attempt that paid it, so a
+            // payer looking at a swap deposit, or at a second invoice, for an order
+            // paid some other way is shown the receipt instead of paying again. The
+            // built-in resolver supplies it; a custom one may not.
+            if (Records::isRecord($resolved['paid_attempt'] ?? null)) {
+                $checked['paid'] = self::paidAttemptBody(Records::asArray($resolved['paid_attempt']));
+            }
             $checked['payment_methods'] = $this->service->listSwapOptions((int) $checkout['amount_msats']);
             return $this->success(200, $checked, $requestId);
         });
@@ -218,10 +257,15 @@ final class RequestHandler
         });
     }
 
-    /** @return array{0: int, 1: array<string, string>, 2: array<string, mixed>} */
-    public function createSwap(string $rawBody, mixed $request, string $requestId): array
+    /**
+     * `$reconcilePass` and `$earlierAttemptsUnpaid` as for createCheckout.
+     *
+     * @param array<string, mixed>|null $reconcilePass
+     * @return array{0: int, 1: array<string, string>, 2: array<string, mixed>}
+     */
+    public function createSwap(string $rawBody, mixed $request, string $requestId, ?array $reconcilePass = null, ?callable $earlierAttemptsUnpaid = null): array
     {
-        return $this->handle($requestId, function () use ($rawBody, $request, $requestId): array {
+        return $this->handle($requestId, function () use ($rawBody, $request, $requestId, $reconcilePass, $earlierAttemptsUnpaid): array {
             $body = $this->parse($rawBody, 'swap.create', $request);
             $reference = $this->requiredReference($body);
             $asset = $this->required($body['pay_in_asset'] ?? null, 'pay_in_asset');
@@ -230,6 +274,7 @@ final class RequestHandler
             $reused = isset($resolved['payment_hash']);
             if (!$reused) {
                 $this->enforceRateLimit('swap.create', $request, ['reference' => $reference]);
+                $this->assertEarlierAttemptsUnpaid($earlierAttemptsUnpaid, $reference, $reconcilePass);
             }
             if ($reused) {
                 $data = $this->requiredSwapData($resolved['swap_data'] ?? null);
@@ -431,6 +476,20 @@ final class RequestHandler
         }
         if (($this->rateLimit)(new AuthorizeContext($action, self::hostRequest($request), $resource)) !== true) {
             throw new RateLimitedError();
+        }
+    }
+
+    /**
+     * Immediately before a mint, after authorize, resolve and the rate limit:
+     * the storage-aware check of the order's unpaid attempts (Engine's), which
+     * throws "already paid" or a retryable 503. Storage-agnostic callers pass none.
+     *
+     * @param array<string, mixed>|null $reconcilePass
+     */
+    private function assertEarlierAttemptsUnpaid(?callable $check, string $reference, ?array $reconcilePass): void
+    {
+        if ($check !== null) {
+            $check($reference, $reconcilePass);
         }
     }
 
