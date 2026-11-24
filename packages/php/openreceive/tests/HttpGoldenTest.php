@@ -119,7 +119,15 @@ final class HttpGoldenTest extends TestCase
         $db->execute('CREATE TABLE host_credits (reference TEXT)');
         $repo = new \OpenReceive\Storage\SqlPaymentRepository($db, static fn (): int => 1000);
         $swapData = isset($vector['setup']['provider_order']) ? ['version' => 1, 'provider_order' => $vector['setup']['provider_order']] : null;
-        $repo->commitAttempt($checkout['reference'], $checkout['payment_hash'], $checkout, $swapData);
+        if ($mode === 'repository_paid_elsewhere') {
+            // An older invoice for the same order, too close to expiry to re-serve at
+            // clock 1000: the settled-golden attempt below supersedes it, and it stays pending.
+            $older = str_repeat('6e', 32);
+            $repo->commitAttempt($checkout['reference'], $older, [...$checkout, 'payment_hash' => $older, 'bolt11' => 'lnbcgoldenolder', 'created_at' => 870, 'expires_at' => 1030]);
+        }
+        // repository_unseen_payment: an invoice too close to expiry to re-serve, so a create would mint.
+        $seeded = $mode === 'repository_unseen_payment' ? [...$checkout, 'expires_at' => 1030] : $checkout;
+        $repo->commitAttempt($checkout['reference'], $checkout['payment_hash'], $seeded, $swapData);
         $host = new class ($mode) implements \OpenReceive\Host {
             public function __construct(private readonly string $mode) {}
             public function authorize(\OpenReceive\Server\AuthorizeContext $context): bool { return true; }
@@ -129,7 +137,8 @@ final class HttpGoldenTest extends TestCase
                 if ($this->mode === 'repository_failed_settlement') throw new \RuntimeException('synthetic host rollback');
             }
         };
-        $wallet = $mode === 'repository_failed_settlement' ? $settledWallet : new FakeWallet(static fn (): int => 1000);
+        // The settled wallet reports 7f..7f paid at 950 and fails any mint.
+        $wallet = in_array($mode, ['repository_failed_settlement', 'repository_unseen_payment'], true) ? $settledWallet : new FakeWallet(static fn (): int => 1000);
         $providers = [];
         if ($swapData !== null) {
             $providers[] = new class implements \OpenReceive\Swap\SwapProvider {
@@ -148,6 +157,13 @@ final class HttpGoldenTest extends TestCase
             $repo->markPaidOnce($checkout['payment_hash'], 950, null, static fn () => null);
             $sibling = [...$checkout, 'reference' => 'other-pending', 'payment_hash' => str_repeat('a', 64)];
             $repo->commitAttempt($sibling['reference'], $sibling['payment_hash'], $sibling);
+            $repo->claimReconcileGate(1000, 2);
+        }
+        if ($mode === 'repository_paid_elsewhere') {
+            $repo->markPaidOnce($checkout['payment_hash'], 950, null, static fn () => null);
+        }
+        // The request's own gated pass is skipped, so wallet I/O can only come from the handler.
+        if (in_array($mode, ['repository_paid_elsewhere', 'repository_pending_gate_busy', 'repository_unseen_payment'], true)) {
             $repo->claimReconcileGate(1000, 2);
         }
         if ($mode === 'repository_failed_create') {
@@ -252,6 +268,12 @@ final class HttpGoldenTest extends TestCase
             }
             if (($vector['handler'] ?? '') === 'repository_failed_create') {
                 self::assertSame([], $repository->listForReference('order-create-failed'));
+            }
+            if (($vector['handler'] ?? '') === 'repository_unseen_payment') {
+                // The check recorded the payment it found, and no attempt was minted.
+                $attempts = $repository->listForReference('order-golden-settled');
+                self::assertSame([[$settledHash, 'settled', 950]], array_map(static fn ($row): array => [$row->paymentHash, $row->status, $row->paidAt], $attempts));
+                self::assertSame([['reference' => 'order-golden-settled']], $database->query('SELECT * FROM host_credits'));
             }
         }
     }

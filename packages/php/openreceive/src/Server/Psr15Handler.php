@@ -19,7 +19,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * matter how large the body is), request ids are always server-generated
  * (`req_<uuid>`), and every failure still answers with the shared JSON error
  * contract. Storage-aware hosts (Engine) pass `$opportunisticReconcile` and
- * `$attemptStatus` so every payment route first runs the gated reconcile pass.
+ * `$attemptStatus` so every payment route first runs the gated reconcile pass,
+ * and `$earlierAttemptsUnpaid` so a create checks the order's unpaid attempts
+ * before it mints another.
  */
 final class Psr15Handler implements RequestHandlerInterface
 {
@@ -31,10 +33,13 @@ final class Psr15Handler implements RequestHandlerInterface
     private $opportunisticReconcile;
     /** @var (callable(string): (array<string, mixed>|null))|null */
     private $attemptStatus;
+    /** @var (callable(string, array<string, mixed>|null): mixed)|null */
+    private $earlierAttemptsUnpaid;
 
     /**
      * @param (callable(): array<string, mixed>)|null $opportunisticReconcile runs one gated reconcile pass; returns ['reason' => 'ran', 'checks' => …] or a skip reason
      * @param (callable(string): (array<string, mixed>|null))|null $attemptStatus a payment hash → ['status' => …, 'paid_at' => ?] from the host rows
+     * @param (callable(string, array<string, mixed>|null): mixed)|null $earlierAttemptsUnpaid a reference and this request's pass → throws when an unpaid attempt of it was paid
      */
     public function __construct(
         private readonly RequestHandler $handler,
@@ -42,11 +47,13 @@ final class Psr15Handler implements RequestHandlerInterface
         ?ResponseFactoryInterface $responseFactory = null,
         ?callable $opportunisticReconcile = null,
         ?callable $attemptStatus = null,
+        ?callable $earlierAttemptsUnpaid = null,
     ) {
         $this->prefix = rtrim($prefix, '/');
         $this->responses = $responseFactory ?? self::discoverResponseFactory();
         $this->opportunisticReconcile = $opportunisticReconcile;
         $this->attemptStatus = $attemptStatus;
+        $this->earlierAttemptsUnpaid = $earlierAttemptsUnpaid;
     }
 
     public function requestHandler(): RequestHandler
@@ -90,6 +97,9 @@ final class Psr15Handler implements RequestHandlerInterface
             $pass = $this->opportunisticReconcile === null ? null : ($this->opportunisticReconcile)();
             if ($route === 'checkPayment') {
                 return $this->respond($this->handler->checkPayment($rawBody, $request, $requestId, $pass, $this->attemptStatus));
+            }
+            if ($route === 'createCheckout' || $route === 'createSwap') {
+                return $this->respond($this->handler->{$route}($rawBody, $request, $requestId, $pass, $this->earlierAttemptsUnpaid));
             }
             return $this->respond($this->handler->{$route}($rawBody, $request, $requestId));
         } catch (\Throwable $e) {

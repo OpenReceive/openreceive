@@ -9,8 +9,11 @@ use OpenReceive\Host;
 use OpenReceive\Hosts\AfterPaid;
 use OpenReceive\PaymentSettlement;
 use OpenReceive\Server\Errors\ConflictError;
+use OpenReceive\Server\Errors\HttpError;
 use OpenReceive\Server\Errors\NotFoundError;
+use OpenReceive\Storage\PaymentRecord;
 use OpenReceive\Storage\PaymentRepository;
+use OpenReceive\Storage\SqlPaymentRepository;
 use OpenReceive\Support\Records;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -27,6 +30,13 @@ use Psr\Log\LoggerInterface;
  */
 final class Engine
 {
+    /**
+     * How far back an earlier attempt's invoice may have expired and still be
+     * checked before a new attempt is minted. A payment lands before its invoice
+     * expires; this only covers the scan that has not caught up with it yet.
+     */
+    private const EARLIER_ATTEMPT_LOOKBACK_SECONDS = 10 * 60;
+
     private ?RequestHandler $requestHandler = null;
     private ?Reconciler $reconciler = null;
     /** @var callable(mixed): ?string */
@@ -112,7 +122,11 @@ final class Engine
         }
     }
 
-    /** The PSR-15 mount: every payment route first runs the gated reconcile pass; payments/check is served from it. */
+    /**
+     * The PSR-15 mount: every payment route first runs the gated reconcile pass;
+     * payments/check is served from it, and a create that mints first checks
+     * the order's unpaid attempts.
+     */
     public function psr15Handler(): Psr15Handler
     {
         return new Psr15Handler(
@@ -121,7 +135,79 @@ final class Engine
             $this->responseFactory,
             fn (): array => $this->reconciler()->maybeReconcile(),
             fn (string $hash): ?array => $this->reconciler()->attemptStatus($hash),
+            fn (string $reference, ?array $pass): null => $this->assertEarlierAttemptsUnpaid($reference, $pass),
         );
+    }
+
+    /**
+     * Before a new attempt is minted for an order that already has unpaid ones,
+     * those are checked against the wallet, and a paid one refuses the mint as
+     * "already paid".
+     *
+     * Without it, an order paid moments ago could be handed a swap deposit
+     * address: the payer pays the invoice, the page reloads before the shop's
+     * next wallet scan (the gate waits 3 to 12 s between scans), the payer picks
+     * a coin, and the shop opens a provider order for an order already paid. The
+     * gated pass at the top of every request is skipped while the gate is
+     * closed, so it cannot be relied on here.
+     *
+     * Only a request that mints pays for this: one bounded wallet walk over the
+     * order's own pending attempts that this request's gated pass did not
+     * already check. Re-serving an attempt, status polls and prepare never do. A
+     * walk that cannot finish refuses the mint as retryable rather than minting
+     * blind: a payer told to try again in a moment is better off than one handed
+     * a second address to pay.
+     *
+     * @param array<string, mixed>|null $reconcilePass
+     */
+    private function assertEarlierAttemptsUnpaid(string $reference, ?array $reconcilePass): null
+    {
+        $now = $this->service->clock();
+        $checked = [];
+        if (($reconcilePass['reason'] ?? null) === 'ran') {
+            foreach ($reconcilePass['checks'] ?? [] as $check) {
+                $checked[strtolower((string) ($check['payment_hash'] ?? ''))] = true;
+            }
+        }
+        $earlier = [];
+        foreach ($this->repository->listForReference($reference) as $record) {
+            if ($record->status !== 'pending' || isset($checked[strtolower($record->paymentHash)])) {
+                continue;
+            }
+            // The invoice's own expiry, not a swap's provider deadline.
+            $expiresAt = SqlPaymentRepository::settlementExpiresAt($record->checkout, $record->paymentHash);
+            if ($expiresAt + self::EARLIER_ATTEMPT_LOOKBACK_SECONDS <= $now) {
+                continue;
+            }
+            $source = $record->checkout['created_at_source'] ?? 'host';
+            $earlier[] = [
+                'payment_hash' => $record->paymentHash,
+                'created_at' => $record->createdAt,
+                'created_at_source' => is_string($source) ? $source : 'host',
+                'expires_at' => $expiresAt,
+            ];
+        }
+        if ($earlier === []) {
+            return null;
+        }
+        // JS races the walk against a timer and lets it run on; PHP cannot, so
+        // the walk carries the request-path scan deadline itself.
+        $deadline = hrtime(true) / 1e9 + Reconciler::RECONCILE_SCAN_TIMEOUT_SECONDS;
+        try {
+            $pass = $this->reconciler()->reconcileAttempts($earlier, $deadline);
+            $paid = in_array('settled', array_column($pass['checks'], 'status'), true);
+            // A walk the deadline cut short that found no payment cannot rule one out.
+            if (!$paid && !$pass['complete'] && !$pass['stalled'] && hrtime(true) / 1e9 >= $deadline) {
+                throw new \RuntimeException('the wallet history walk did not finish within ' . Reconciler::RECONCILE_SCAN_TIMEOUT_SECONDS . ' s');
+            }
+        } catch (\Throwable $e) {
+            $this->logger?->warning("[openreceive] payment.reconcile.before_mint.failed: could not check an order's earlier attempts before a new one (refused as retryable): " . Reconciler::sanitizeFailureMessage($e));
+            throw new HttpError(503, 'INTERNAL', "Could not confirm this order's earlier payment attempt. Please try again in a moment.", retryable: true);
+        }
+        if ($paid) {
+            throw new ConflictError('This reference is already paid.');
+        }
+        return null;
     }
 
     public function reconciler(): Reconciler
@@ -224,24 +310,24 @@ final class Engine
     {
         $action = (string) $args['action'];
         $reference = (string) $args['reference'];
+        $attempts = [];
+        $paid = null;
         // Before the host is asked for a price: a host may well answer null for an
         // order it already knows is paid, and "unknown order" is the wrong thing to
         // tell the payer who paid it.
-        if (in_array($action, ['checkout.prepare', 'checkout.create', 'swap.create'], true)) {
-            foreach ($this->repository->listForReference($reference) as $record) {
-                if ($record->status !== 'settled') {
-                    continue;
+        if (in_array($action, ['checkout.prepare', 'checkout.create', 'swap.create', 'payment.check'], true)) {
+            $attempts = $this->repository->listForReference($reference);
+            foreach ($attempts as $record) {
+                if ($record->status === 'settled') {
+                    $paid = $record;
+                    break;
                 }
-                if ($action !== 'checkout.prepare') {
-                    throw new ConflictError('This reference is already paid.');
-                }
-                return Records::compact([
-                    'payment_hash' => $record->paymentHash,
-                    'checkout' => $record->checkout,
-                    'paid' => true,
-                    'paid_at' => $record->paidAt,
-                    'swap' => $record->swapData !== null,
-                ]);
+            }
+            if ($paid !== null && $action === 'checkout.prepare') {
+                return [...self::paidAttempt($paid), 'paid' => true];
+            }
+            if ($paid !== null && $action !== 'payment.check') {
+                throw new ConflictError('This reference is already paid.');
             }
         }
         $pricing = in_array($action, ['checkout.prepare', 'swap.quote', 'checkout.create', 'swap.create'], true);
@@ -256,7 +342,14 @@ final class Engine
             $description = is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
             unset($amount['description']);
         }
-        if (in_array($action, ['checkout.prepare', 'swap.quote'], true)) {
+        if ($action === 'checkout.prepare') {
+            return Records::compact([
+                'amount' => $amount,
+                'description' => $description,
+                'pending_payment_hash' => self::newestPending($attempts)?->paymentHash,
+            ]);
+        }
+        if ($action === 'swap.quote') {
             return Records::compact(['amount' => $amount, 'description' => $description]);
         }
         $input = Records::asArray($args['input'] ?? null);
@@ -273,6 +366,38 @@ final class Engine
             'payment_hash' => $payment?->paymentHash,
             'checkout' => $payment?->checkout,
             'swap_data' => $payment?->swapData,
+            // payments/check answers it as `paid` on EVERY attempt of a paid order.
+            'paid_attempt' => $paid === null ? null : self::paidAttempt($paid),
         ]);
+    }
+
+    /** @return array<string, mixed> the attempt that paid a reference, as RequestHandler builds `paid` from it */
+    private static function paidAttempt(PaymentRecord $record): array
+    {
+        return Records::compact([
+            'payment_hash' => $record->paymentHash,
+            'checkout' => $record->checkout,
+            'paid_at' => $record->paidAt,
+            'swap' => $record->swapData !== null,
+        ]);
+    }
+
+    /**
+     * The attempt a picker opened on this reference watches: the newest one
+     * still pending, superseded or not, since a superseded invoice can still be
+     * paid. Any pending attempt would do (`paid` answers for the whole order);
+     * the newest is the one most likely still on the payer's wallet screen.
+     *
+     * @param list<PaymentRecord> $records
+     */
+    private static function newestPending(array $records): ?PaymentRecord
+    {
+        $newest = null;
+        foreach ($records as $record) {
+            if ($record->status === 'pending' && ($newest === null || $record->createdAt > $newest->createdAt)) {
+                $newest = $record;
+            }
+        }
+        return $newest;
     }
 }
