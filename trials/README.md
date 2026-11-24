@@ -248,7 +248,9 @@ cannot apply to is left out, not passed. `--no-devtools` skips the phase.
   change, run with `docker run --network none` from the shop's image and
   environment. `own_tests_no_codes` (polish) repeats it with no codes set, as
   a merchant's CI has none. A shop that refuses to boot without a code (as
-  Express's `process.env.NWC_URI!` makes it) fails that one.
+  Express's `process.env.NWC_URI!` makes it) fails that one. FastAPI has no
+  no-codes run: its binding refuses to start without `NWC_URI` by design, so
+  its app always starts with a code, and `own_tests_offline` covers it.
 - `hot_reload_no_socket_leak`: the stack's dev server runs in the scratch copy
   (`next dev`, Nuxt, SvelteKit's Vite, `node --watch`, Django `runserver`, the
   Rails reloader) and 20 saves each trigger a reload and a fresh checkout. The
