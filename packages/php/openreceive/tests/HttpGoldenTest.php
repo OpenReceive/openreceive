@@ -6,7 +6,9 @@ namespace OpenReceive\Tests;
 
 use Nyholm\Psr7\Factory\Psr17Factory;
 use OpenReceive\Nwc\ReceiveNwcClient;
+use OpenReceive\Server\AuthorizeContext;
 use OpenReceive\Server\Errors\ConflictError;
+use OpenReceive\Server\Errors\RateLimitedError;
 use OpenReceive\Server\Psr15Handler;
 use OpenReceive\Server\RequestHandler;
 use OpenReceive\Server\Service;
@@ -224,6 +226,13 @@ final class HttpGoldenTest extends TestCase
             'default' => self::app($service, $priceOnly),
             'hook_refused' => self::app($service, $priceOnly, static function (): void { throw new \RuntimeException('synthetic hook refusal'); }),
             'rate_limited' => self::app($service, $priceOnly, null, static fn (): bool => false),
+            // A hook that refuses with its own message, as the rate-limiting guide shows.
+            'rate_limit_hook_message' => self::app($service, $priceOnly, null, static function (AuthorizeContext $context): bool {
+                if ($context->action !== 'checkout.create') {
+                    return true;
+                }
+                throw new RateLimitedError('You have several unpaid coin payments open. Pay one of them, or pay with Lightning.');
+            }),
             'settled_check' => self::app(
                 new Service($settledWallet, false, [], ['USD'], static fn (): int => 1000),
                 static fn (): array => ['amount' => ['sats' => 1], 'payment_hash' => $settledHash, 'checkout' => $settledCheckout],

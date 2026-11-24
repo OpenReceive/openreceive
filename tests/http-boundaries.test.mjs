@@ -4,7 +4,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
-import { createHttpHandler, createHost, hostError } from "../packages/js/http/src/index.ts";
+import {
+  createHttpHandler,
+  createHost,
+  HttpError,
+  hostError,
+} from "../packages/js/http/src/index.ts";
 import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
 import { FixedFloatApiError } from "../packages/js/node/src/swap/fixedfloat-transport.ts";
 import { FIXEDFLOAT_SWAP_PROVIDER_LIMITS } from "../packages/js/node/src/swap/weight-budget.ts";
@@ -760,6 +765,21 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       authorize: () => true,
       host,
       rateLimitHook: () => false,
+    }),
+    // A hook that refuses with its own message, as the rate-limiting guide shows.
+    rate_limit_hook_message: createHttpHandler({
+      service,
+      authorize: () => true,
+      host,
+      rateLimitHook: ({ action }) => {
+        if (action !== "checkout.create") return true;
+        throw new HttpError(
+          429,
+          "RATE_LIMITED",
+          "You have several unpaid coin payments open. Pay one of them, or pay with Lightning.",
+          { retryable: true },
+        );
+      },
     }),
     settled_check: createHttpHandler({
       service: settledService,

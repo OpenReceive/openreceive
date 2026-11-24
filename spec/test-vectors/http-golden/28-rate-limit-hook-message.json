@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "name": "a rate-limit hook refuses with its own retryable message",
+  "handler": "rate_limit_hook_message",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "reference": "order-limited" }
+  },
+  "expected": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "RATE_LIMITED",
+      "message": "You have several unpaid coin payments open. Pay one of them, or pay with Lightning.",
+      "retryable": true,
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "The host's hook (rateLimitHook, config.rate_limit, rate_limit=, rateLimit:) throws the engine's RATE_LIMITED error with a message of its own, as docs/guides/rate-limiting.md \"If you take coin payments\" shows for swap.create. The payer reads that message, and the checkout treats the refusal as retryable."
+}

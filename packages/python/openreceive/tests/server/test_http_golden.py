@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from openreceive.server.errors import ConflictError
-from openreceive.server.handler import HttpRequest, RequestHandler
+from openreceive.server.errors import ConflictError, RateLimitedError
+from openreceive.server.handler import HookContext, HttpRequest, RequestHandler
 from openreceive.server.service import Service
 from openreceive.swap.budget import FIXEDFLOAT_LIMITS
 from openreceive.swap.fixedfloat import FixedFloatApiError
@@ -146,6 +146,16 @@ def swap_failure_service(failure: str) -> Service:
     return service
 
 
+def refuse_with_own_message(context: HookContext) -> bool:
+    """A rate-limit hook that refuses with its own message, as the
+    rate-limiting guide shows."""
+    if context.action != "checkout.create":
+        return True
+    raise RateLimitedError(
+        "You have several unpaid coin payments open. Pay one of them, or pay with Lightning."
+    )
+
+
 def build_handler(service: Service, **overrides: Any) -> RequestHandler:
     options: dict[str, Any] = {
         "service": service,
@@ -181,6 +191,7 @@ def handlers() -> dict[str, RequestHandler]:
             on_checkout_created=lambda **_: (_ for _ in ()).throw(RuntimeError("host declined")),
         ),
         "rate_limited": build_handler(service, rate_limit=lambda context: False),
+        "rate_limit_hook_message": build_handler(service, rate_limit=refuse_with_own_message),
         "settled_check": build_handler(
             settled_service,
             resolve_checkout=lambda **context: {
