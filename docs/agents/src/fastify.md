@@ -238,17 +238,14 @@ itself, and they hold for every integration.
   the price from `amountFor` and both drop-ins render it above the amount.
   Without it the checkout is a QR and "$1.00" with no sign of what the dollar
   is for.
-- Show the payer the transaction record: `createTransactionDetails(...)` rows
-  (with no bundler use `renderTransactionDetailsHtml`: the standalone file has
-  no `createTransactionDetails`, and one bad import stops the whole page),
-  collapsed behind a caret, on the live checkout AND on the receipt. A payment
-  hash and a deposit txid are the only evidence a payer has that they paid you.
-  `<Checkout>` / `<openreceive-checkout>` already render this panel and the
-  `description` — these two rules cost you code only on a custom UI or your own
-  receipt page, never a reason to replace the drop-in. (It returns no rows
-  while the rail is `checkout_lock` — before the payer has chosen anything
-  there is no transaction — so render the caret only when the rows are
-  non-empty.)
+- Show the payer the transaction record, collapsed behind a caret, on the live
+  checkout AND on your own receipt page: a payment hash and a deposit txid are
+  their only evidence that they paid you. The drop-ins already render it and
+  the `description`, so this costs code only on a custom UI or a receipt page,
+  never a reason to replace the drop-in. Build it with
+  `createTransactionDetails(...)`, or `renderTransactionDetailsHtml` with no
+  bundler (the standalone file has no `createTransactionDetails`, and one bad
+  import stops the whole page), and render the caret only when it returns rows.
 - Pass the mount prefix AT `register()` — `fastify.register(openReceiveFastify,
   { …, prefix: "/openreceive" })` — so Fastify scopes the plugin's catch-all to
   it. Do not add a body parser: Fastify parses JSON itself. Behind a reverse
