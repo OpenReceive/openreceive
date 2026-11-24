@@ -8,11 +8,13 @@ Django views, the FastAPI router and the Flask recipe are thin adapters over
 Hooks (all callables the app layer wires from a `Host` + repository):
   authorize(context) -> bool          context.action / .request / .resource
   resolve_checkout(action=, request=, reference=, body=, pay_in_asset=) -> dict
-      {"amount": ..., "description"?, "payment_hash"?, "checkout"?, "swap_data"?}
+      {"amount": ..., "description"?, "payment_hash"?, "checkout"?, "swap_data"?,
+       "paid_attempt"?, "pending_payment_hash"?}
   on_checkout_created(reference=, payment_hash=, checkout=, swap_data=, client_ip=)
   on_paid({"payment_hash", "paid_at", "details"})
   rate_limit(context) -> bool         optional
   client_ip(request) -> str | None    optional; normalized into the shared bucket
+  before_mint(reference=, reconcile_pass=)   optional; raises to refuse a mint
 """
 
 from __future__ import annotations
@@ -152,6 +154,7 @@ class RequestHandler:
         client_ip: Callable[[Any], str | None] | None = None,
         prefix: str = "/openreceive",
         report_unexpected_error: Callable[[BaseException, str], None] | None = None,
+        before_mint: Callable[..., None] | None = None,
     ) -> None:
         if authorize is None:
             raise ValueError(
@@ -171,6 +174,7 @@ class RequestHandler:
         )
         self.prefix = prefix.rstrip("/")
         self._report_unexpected_error = report_unexpected_error
+        self._before_mint = before_mint
 
     # -------------------------------------------------------------- dispatch
 
@@ -184,7 +188,8 @@ class RequestHandler:
         """Route the wire request. Always server-generated request ids: a
         client-supplied X-Request-Id is unvalidated content and never reflected.
         The body is read only after a route matches. Storage-aware callers pass
-        `reconcile_pass` + `attempt_status` for payments/check (see check_payment)."""
+        `reconcile_pass` + `attempt_status` for payments/check (see check_payment);
+        the create routes hand `reconcile_pass` to `before_mint`."""
         request_id = f"req_{uuid.uuid4()}"
         try:
             path = request.path or ""
@@ -198,7 +203,9 @@ class RequestHandler:
             if route == ("POST", "/checkouts/prepare"):
                 return self.prepare_checkout(self._read_body(request), request, request_id)
             if route == ("POST", "/checkouts"):
-                return self.create_checkout(self._read_body(request), request, request_id)
+                return self.create_checkout(
+                    self._read_body(request), request, request_id, reconcile_pass=reconcile_pass
+                )
             if route == ("POST", "/payments/check"):
                 return self.check_payment(
                     self._read_body(request),
@@ -210,7 +217,9 @@ class RequestHandler:
             if route == ("POST", "/swaps/quote"):
                 return self.quote_swap(self._read_body(request), request, request_id)
             if route == ("POST", "/swaps"):
-                return self.create_swap(self._read_body(request), request, request_id)
+                return self.create_swap(
+                    self._read_body(request), request, request_id, reconcile_pass=reconcile_pass
+                )
             if route == ("POST", "/swaps/status"):
                 return self.get_swap(self._read_body(request), request, request_id)
             if route == ("POST", "/swaps/refunds"):
@@ -276,11 +285,24 @@ class RequestHandler:
             description = self._resolved_description(resolved)
             if description:
                 payload["description"] = description
+            # The newest attempt still unpaid: a page rebuilt from the reference
+            # alone (a reload) opens on the picker and polls this hash, so a
+            # payment made just before the reload still reaches the screen.
+            pending_hash = resolved.get("pending_payment_hash")
+            if isinstance(pending_hash, str):
+                payload["pending_payment_hash"] = pending_hash.lower()
             return self._success(200, payload, request_id)
         except Exception as error:
             return self.error_response(error, request_id)
 
-    def create_checkout(self, raw_body: str, request: Any, request_id: str) -> HttpResponse:
+    def create_checkout(
+        self,
+        raw_body: str,
+        request: Any,
+        request_id: str,
+        *,
+        reconcile_pass: dict[str, Any] | None = None,
+    ) -> HttpResponse:
         try:
             body = self._parse(raw_body, "checkout.create", request)
             reference = self._required_reference(body)
@@ -294,6 +316,7 @@ class RequestHandler:
             if reusing:
                 checkout = self._committed_checkout(reference, resolved)
             else:
+                self._check_before_mint(reference, reconcile_pass)
                 checkout = self._service.create_checkout(
                     {
                         "reference": reference,
@@ -347,10 +370,15 @@ class RequestHandler:
                 checked = self._checked_via_wallet(payment_hash, checkout)
             else:
                 checked = self._checked_from_pass(payment_hash, reconcile_pass, attempt_status)
-            payload = {
-                **checked,
-                "payment_methods": self._service.list_swap_options(checkout["amount_msats"]),
-            }
+            payload = dict(checked)
+            # The attempt that paid the order, on EVERY attempt of it: a payer
+            # looking at a swap deposit, or a second invoice, for an order paid
+            # some other way is shown the receipt instead of paying again. The
+            # built-in resolver supplies it; a custom one may not.
+            paid_attempt = resolved.get("paid_attempt")
+            if isinstance(paid_attempt, Mapping):
+                payload["paid"] = _paid_attempt_body(paid_attempt)
+            payload["payment_methods"] = self._service.list_swap_options(checkout["amount_msats"])
             return self._success(200, payload, request_id)
         except Exception as error:
             return self.error_response(error, request_id)
@@ -369,7 +397,14 @@ class RequestHandler:
         except Exception as error:
             return self.error_response(error, request_id)
 
-    def create_swap(self, raw_body: str, request: Any, request_id: str) -> HttpResponse:
+    def create_swap(
+        self,
+        raw_body: str,
+        request: Any,
+        request_id: str,
+        *,
+        reconcile_pass: dict[str, Any] | None = None,
+    ) -> HttpResponse:
         try:
             body = self._parse(raw_body, "swap.create", request)
             reference = self._required_reference(body)
@@ -390,6 +425,7 @@ class RequestHandler:
                     "swap_data": data,
                 }
             else:
+                self._check_before_mint(reference, reconcile_pass)
                 # Explicit, validated fields only: the raw payer body never
                 # reaches the service.
                 swap = self._service.create_swap(
@@ -675,6 +711,14 @@ class RequestHandler:
         ):
             raise RateLimitedError()
 
+    def _check_before_mint(self, reference: str, reconcile_pass: dict[str, Any] | None) -> None:
+        """Runs after authorize, resolve and the rate limit, immediately before
+        a create MINTS (never when it re-serves a committed attempt). The
+        storage-aware app refuses here a reference whose earlier attempt was
+        paid but not yet scanned; see `OpenReceiveApp._assert_earlier_attempts_unpaid`."""
+        if self._before_mint is not None:
+            self._before_mint(reference=reference, reconcile_pass=reconcile_pass)
+
     def _authorize_or_raise(self, action: str, request: Any, resource: dict[str, Any]) -> None:
         if self._authorize(
             HookContext(action=action, request=self.hook_request(request), resource=resource)
@@ -872,19 +916,25 @@ class RequestHandler:
 def _paid_prepare(reference: str, resolved: Mapping[str, Any]) -> dict[str, Any]:
     """The prepare answer for a reference that is already paid, built from its row."""
     checkout = resolved["checkout"]
-    swap = bool(resolved.get("swap"))
-    paid: dict[str, Any] = {
-        "payment_hash": resolved["payment_hash"],
-        "rail": "swap" if swap else "lightning",
-    }
-    if not swap:
-        paid["bolt11"] = checkout["bolt11"]
-    if resolved.get("paid_at") is not None:
-        paid["paid_at"] = resolved["paid_at"]
     return {
         "reference": reference,
         "amount_msats": checkout["amount_msats"],
         "fiat_quote": checkout.get("fiat_quote"),
         "payment_methods": [],
-        "paid": paid,
+        "paid": _paid_attempt_body(resolved),
     }
+
+
+def _paid_attempt_body(attempt: Mapping[str, Any]) -> dict[str, Any]:
+    """The `paid` object (OpenAPI `PaidAttempt`) for the attempt that paid a
+    reference, from {payment_hash, checkout, swap, paid_at}."""
+    swap = bool(attempt.get("swap"))
+    paid: dict[str, Any] = {
+        "payment_hash": str(attempt["payment_hash"]).lower(),
+        "rail": "swap" if swap else "lightning",
+    }
+    if not swap:
+        paid["bolt11"] = attempt["checkout"]["bolt11"]
+    if attempt.get("paid_at") is not None:
+        paid["paid_at"] = attempt["paid_at"]
+    return paid

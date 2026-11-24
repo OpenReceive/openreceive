@@ -281,6 +281,67 @@ class Reconciler:
             )
             return {"reason": "scan_failed"}
 
+    def reconcile_attempts(
+        self, attempts: list[ReconcilableAttempt], *, deadline: float | None = None
+    ) -> list[dict[str, Any]]:
+        """One UNGATED wallet walk over exactly `attempts` (the JS
+        reconcileHostPayments({attempts})): settlements go through `settle`,
+        other results get their terminal transition (closure still needs a scan
+        past expiry plus grace). At most RECONCILE_SCAN_MAX_PAGES per walk;
+        `deadline` is a monotonic instant each wallet call is bounded by. A hash
+        the walk could not decide is omitted, never not_found.
+
+        It spends wallet calls outside the gate, so only a caller with reason to
+        (a create about to mint) uses it. Unlike the gated pass it raises: one
+        failing delivery does not starve the rest, and the failures surface
+        together at the end."""
+        if not attempts:
+            return []
+        by_hash = {attempt.payment_hash.lower(): attempt for attempt in attempts}
+        scanned_at = self._clock()
+        payload: dict[str, Any] = {
+            "attempts": [attempt.as_dict() for attempt in attempts],
+            "max_pages": RECONCILE_SCAN_MAX_PAGES,
+        }
+        if deadline is not None:
+            payload["deadline"] = deadline
+        checks = self.service.reconcile_payments(payload)
+        failures: list[Exception] = []
+        for checked in checks:
+            try:
+                payment_hash = str(checked.get("payment_hash", "")).lower()
+                attempt = by_hash.get(payment_hash)
+                if attempt is None:
+                    continue
+                if checked.get("status") == "settled":
+                    # Our own service breaking its contract: loud, and the row
+                    # stays pending for the next pass.
+                    if not checked.get("paid_at"):
+                        failures.append(
+                            RuntimeError(
+                                f"settled reconcile result for {payment_hash} carried no paid_at; "
+                                "the attempt stays pending and will be retried"
+                            )
+                        )
+                        continue
+                    self.settle(
+                        {
+                            "payment_hash": payment_hash,
+                            "paid_at": checked["paid_at"],
+                            "details": checked.get("details"),
+                        }
+                    )
+                    continue
+                self._record_transition(attempt, checked, scanned_at)
+            except Exception as error:
+                failures.append(error)
+        if failures:
+            raise RuntimeError(
+                f"reconciliation failed for {len(failures)} of {len(checks)} checks: "
+                f"{sanitize_failure_message(failures[0])}"
+            ) from failures[0]
+        return checks
+
     def attempt_status(self, payment_hash: str) -> dict[str, Any] | None:
         """The persisted {status, paid_at?} for payments/check's row path."""
         record = self.repository.find_by_payment_hash(payment_hash.lower())

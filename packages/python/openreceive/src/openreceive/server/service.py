@@ -338,7 +338,8 @@ class Service:
         """One wallet-history pass over `attempts` ({payment_hash, created_at}):
         a settled walk, then an inclusive-unpaid walk for the misses, over one
         padded creation-time window. `max_pages` caps each walk and `deadline`
-        is a monotonic instant checked between page fetches. A hash the walk
+        is a monotonic instant checked between page fetches and passed to each
+        wallet call as its internal `_deadline`. A hash the walk
         could not decide is OMITTED (never not_found)."""
         data = stringify(payload)
         attempts = list(data.get("attempts") or [])
@@ -1032,7 +1033,10 @@ class _ScanClient:
     """Adapts the service's wallet call to the core walk and enforces the
     request-path deadline between page fetches: once the monotonic deadline
     passes, the previous page is replayed — the walk recognizes the repeat and
-    ends marked truncated, so a deadline-cut walk can never prove an invoice absent."""
+    ends marked truncated, so a deadline-cut walk can never prove an invoice absent.
+    Each wallet call also carries the deadline as the client's internal
+    `_deadline`, so a page still in flight when it passes fails the walk
+    instead of outliving it."""
 
     def __init__(self, service: Service, deadline: float | None) -> None:
         self._service = service
@@ -1040,13 +1044,14 @@ class _ScanClient:
         self._previous: Any = None
 
     def list_transactions(self, params: dict[str, Any]) -> Any:
-        if (
-            self._previous is not None
-            and self._deadline is not None
-            and time.monotonic() >= self._deadline
-        ):
+        if self._deadline is None:
+            self._previous = self._service._call_nwc("list_transactions", params)
             return self._previous
-        self._previous = self._service._call_nwc("list_transactions", params)
+        if self._previous is not None and time.monotonic() >= self._deadline:
+            return self._previous
+        self._previous = self._service._call_nwc(
+            "list_transactions", {**params, "_deadline": self._deadline}
+        )
         return self._previous
 
 
