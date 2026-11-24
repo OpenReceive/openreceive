@@ -1412,6 +1412,13 @@ class StorageFreeServerTest < Minitest::Test
       ),
       "default" => build_app.call(nil),
       "rate_limited" => build_app.call(->(_context) { false }),
+      # A hook that refuses with its own message, as the rate-limiting guide shows.
+      "rate_limit_hook_message" => build_app.call(lambda do |context|
+        return true unless context[:action] == "checkout.create"
+
+        raise OpenReceive::Server::RateLimitedError,
+              "You have several unpaid coin payments open. Pay one of them, or pay with Lightning."
+      end),
       "settled_check" => settled_app,
       "live_attempt_conflict" => live_conflict_app,
       "described" => described_app
