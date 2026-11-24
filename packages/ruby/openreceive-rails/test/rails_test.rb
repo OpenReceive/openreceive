@@ -2533,11 +2533,17 @@ class RepositoryHttpGoldenTest < Minitest::Test
   GOLDEN_DIR = File.expand_path("../../../../spec/test-vectors/http-golden", __dir__)
   RULES = JSON.parse(File.read(File.join(GOLDEN_DIR, "PLACEHOLDERS.json")))
   HASH = "7f" * 32
+  # The older invoice 7f..7f supersedes in the paid-elsewhere vector.
+  OLDER_HASH = "6e" * 32
   CHECKOUT = {
     "reference" => "order-golden-settled", "payment_hash" => HASH,
     "bolt11" => "lnbcgoldensettled", "amount_msats" => 1000,
     "created_at" => 900, "expires_at" => 1500, "fiat_quote" => nil
   }.freeze
+  # Handlers whose request-level gated pass is preclaimed, so it is skipped.
+  GATE_BUSY = %w[
+    repository_gate_busy repository_paid_elsewhere repository_pending_gate_busy repository_unseen_payment
+  ].freeze
 
   def setup
     OpenReceive.reset_config!
@@ -2551,7 +2557,13 @@ class RepositoryHttpGoldenTest < Minitest::Test
     OpenReceive.reset_config!
   end
 
-  Dir[File.join(GOLDEN_DIR, "*-repository-*.json")].sort.each do |path|
+  # Every vector whose handler is a real-repository one, by handler rather than
+  # file name: 27-30 drive repository handlers without "repository" in theirs.
+  # The server gem's Rack harness skips exactly these.
+  Dir[File.join(GOLDEN_DIR, "*.json")].sort.each do |path|
+    next if File.basename(path) == "PLACEHOLDERS.json"
+    next unless JSON.parse(File.read(path)).fetch("handler", "").start_with?("repository_")
+
     define_method("test_#{File.basename(path, '.json').tr('-', '_')}") do
       vector = JSON.parse(File.read(path))
       travel_to(Time.at(1000).utc) { run_vector(vector) }
@@ -2592,15 +2604,33 @@ class RepositoryHttpGoldenTest < Minitest::Test
     OpenReceive.config.instance_variable_set(:@service, OpenReceive::Server::Service.new(
       nwc_client: wallet, clock: -> { 1000 }, swap_providers: provider_order ? [provider] : []
     ))
+    if kind == "repository_paid_elsewhere"
+      # 28: 6e..6e is an older invoice, too close to expiry to re-serve, so
+      # committing 7f..7f supersedes it; it stays pending once 7f..7f is paid.
+      older = CHECKOUT.merge(
+        "payment_hash" => OLDER_HASH, "bolt11" => "lnbcgoldenolder", "created_at" => 870, "expires_at" => 1030
+      )
+      OpenReceivePayment.commit_attempt!(reference: CHECKOUT.fetch("reference"), payment_hash: OLDER_HASH, checkout: older)
+    end
+    # 30: an invoice too close to expiry to re-serve, so the create would mint.
+    checkout = kind == "repository_unseen_payment" ? CHECKOUT.merge("expires_at" => 1030) : CHECKOUT
     OpenReceivePayment.commit_attempt!(
-      reference: CHECKOUT.fetch("reference"), payment_hash: HASH, checkout: CHECKOUT,
+      reference: CHECKOUT.fetch("reference"), payment_hash: HASH, checkout: checkout,
       swap_data: provider_order ? { "version" => 1, "provider_order" => provider_order } : nil
     )
-    if kind == "repository_gate_busy"
+    if %w[repository_gate_busy repository_paid_elsewhere].include?(kind)
       OpenReceive.config.settlement_hook.call("payment_hash" => HASH, "paid_at" => 950)
+    end
+    if kind == "repository_gate_busy"
       extra = CHECKOUT.merge("reference" => "pending-gate", "payment_hash" => "8f" * 32)
       OpenReceivePayment.commit_attempt!(reference: "pending-gate", payment_hash: extra.fetch("payment_hash"), checkout: extra)
-      refute_nil OpenReceiveMeta.claim_reconcile_gate(now: 1000, interval_seconds: 2)
+    end
+    refute_nil OpenReceiveMeta.claim_reconcile_gate(now: 1000, interval_seconds: 2) if GATE_BUSY.include?(kind)
+    if kind == "repository_unseen_payment"
+      # The wallet holds the payment of 7f..7f, which no scan has recorded.
+      wallet.add_transaction(HASH, state: "settled", settled_at: 950)
+      wallet.define_singleton_method(:make_invoice) { |_request| raise "the unseen-payment handler mints nothing" }
+    elsif GATE_BUSY.include?(kind)
       wallet.define_singleton_method(:list_transactions) { |_request| raise "gate loser scanned" }
     end
     if kind == "repository_failed_create"
@@ -2634,6 +2664,14 @@ class RepositoryHttpGoldenTest < Minitest::Test
       assert_equal "pending", OpenReceivePayment.find_by!(payment_hash: HASH).status
       assert_equal "pending_payment", order.reload.status
     end
+    if kind == "repository_unseen_payment"
+      # The check before the mint recorded the settlement and fulfilled the
+      # order once; nothing was minted.
+      assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: HASH).status
+      assert_equal 950, OpenReceivePayment.find_by!(payment_hash: HASH).paid_at.to_i
+      assert_equal 1, OpenReceivePayment.where(reference: CHECKOUT.fetch("reference")).count
+      assert_equal "paid", order.reload.status
+    end
     if provider_order
       saved = OpenReceivePayment.find_by!(payment_hash: HASH).swap_data
       assert_equal provider_order.fetch("provider_token"), saved.dig("provider_order", "provider_token")
@@ -2659,6 +2697,157 @@ class RepositoryHttpGoldenTest < Minitest::Test
     else
       assert_equal expected, actual
     end
+  end
+end
+
+# A create that mints checks the reference's earlier unpaid attempts against
+# the wallet first (OpenReceive.check_earlier_attempts!). Golden vector 30
+# covers the refusal on the Lightning route; these cover the retryable
+# refusal, the swap route, and which attempts are checked at all.
+class EarlierAttemptCheckTest < Minitest::Test
+  include ActiveSupport::Testing::TimeHelpers
+
+  REFERENCE = "order-earlier"
+  HASH = "7f" * 32
+
+  def setup
+    OpenReceive.reset_config!
+    OpenReceivePayment.delete_all
+    OpenReceiveMeta.where.not(key: "schema_version").delete_all
+    Order.delete_all
+    travel_to(Time.at(1000).utc)
+    @previous_logger = ::Rails.logger
+    @log = StringIO.new
+    ::Rails.logger = Logger.new(@log)
+    @wallet = FakeWallet.new
+    @order = Order.create!(id: REFERENCE)
+    OpenReceive.configure do |config|
+      config.nwc_client = @wallet
+      config.authorize = ->(_context) { true }
+      config.amount_for = ->(_reference) { { "sats" => 1 } }
+      config.swap_providers = []
+      config.on_paid = ->(payment) { Order.find(payment.reference).mark_paid! }
+    end
+    OpenReceive.config.instance_variable_set(:@service, OpenReceive::Server::Service.new(
+      nwc_client: @wallet, clock: -> { 1000 }, swap_providers: []
+    ))
+    # Counts the ungated walks; the request-level gated pass never calls it.
+    @walks = walks = []
+    service = OpenReceive.config.service
+    service.define_singleton_method(:reconcile_payments) do |input|
+      walks << input.fetch("attempts").map { |attempt| attempt.fetch("payment_hash") }
+      super(input)
+    end
+  end
+
+  def teardown
+    travel_back
+    ::Rails.logger = @previous_logger
+    OpenReceive.reset_config!
+  end
+
+  def commit_unpaid(hash, expires_at:)
+    checkout = {
+      "reference" => REFERENCE, "payment_hash" => hash, "bolt11" => "lnbc-earlier",
+      "amount_msats" => 1000, "created_at" => 300, "expires_at" => expires_at
+    }
+    OpenReceivePayment.commit_attempt!(reference: REFERENCE, payment_hash: hash, checkout: checkout)
+  end
+
+  def close_gate!
+    refute_nil OpenReceiveMeta.claim_reconcile_gate(now: 1000, interval_seconds: 2)
+  end
+
+  def post(controller, action, path, body)
+    raw = JSON.generate(body)
+    status, _headers, response = controller.action(action).call(
+      "REQUEST_METHOD" => "POST", "PATH_INFO" => path,
+      "SCRIPT_NAME" => "", "QUERY_STRING" => "", "SERVER_NAME" => "example.org", "SERVER_PORT" => "80",
+      "rack.url_scheme" => "http", "rack.input" => StringIO.new(raw), "rack.errors" => StringIO.new,
+      "CONTENT_TYPE" => "application/json", "CONTENT_LENGTH" => raw.bytesize.to_s
+    )
+    payload = +""
+    response.each { |part| payload << part }
+    [status, JSON.parse(payload)]
+  end
+
+  def create_checkout
+    post(OpenReceive::CheckoutsController, :create, "/openreceive/checkouts", { "reference" => REFERENCE })
+  end
+
+  # A scan that cannot finish refuses the mint as retryable, says so in the
+  # log, and mints nothing: a payer told to try again is better off than one
+  # handed a second invoice for an order that may be paid.
+  def test_a_check_that_cannot_finish_refuses_the_mint_as_retryable
+    commit_unpaid(HASH, expires_at: 1030)
+    close_gate!
+    @wallet.define_singleton_method(:list_transactions) { |_request| raise "relay unreachable" }
+
+    status, body = create_checkout
+
+    assert_equal 503, status
+    assert_equal "INTERNAL", body.fetch("code")
+    assert_equal "Could not confirm this order's earlier payment attempt. Please try again in a moment.",
+                 body.fetch("message")
+    assert_equal true, body.fetch("retryable")
+    assert_equal [[HASH]], @walks
+    assert_equal 1, OpenReceivePayment.where(reference: REFERENCE).count
+    assert_empty @wallet.transactions, "nothing may be minted"
+    assert_includes @log.string, "payment.reconcile.before_mint.failed"
+  end
+
+  # The case the check exists for: the payer paid the invoice, reloaded
+  # inside the scan gate's interval and picked a coin. No deposit address.
+  def test_a_swap_create_is_refused_when_an_earlier_invoice_was_paid
+    commit_unpaid(HASH, expires_at: 1030)
+    close_gate!
+    @wallet.add_transaction(HASH, state: "settled", settled_at: 990)
+
+    status, body = post(OpenReceive::SwapsController, :create, "/openreceive/swaps",
+      { "reference" => REFERENCE, "pay_in_asset" => "USDT_TRON" })
+
+    assert_equal 409, status, body.inspect
+    assert_equal "This reference is already paid.", body.fetch("message")
+    assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: HASH).status
+    assert_equal "paid", @order.reload.status
+  end
+
+  # An attempt the request's own gated pass already checked is not walked a
+  # second time: the create mints after one scan, not two.
+  def test_attempts_the_gated_pass_checked_are_not_walked_again
+    commit_unpaid(HASH, expires_at: 1030)
+
+    status, body = create_checkout
+
+    assert_equal 201, status, body.inspect
+    assert_empty @walks
+    assert_equal 2, OpenReceivePayment.where(reference: REFERENCE).count
+  end
+
+  # Re-serving a committed attempt mints nothing, so it checks nothing.
+  def test_re_serving_an_attempt_checks_nothing
+    commit_unpaid(HASH, expires_at: 1500)
+    close_gate!
+    @wallet.define_singleton_method(:list_transactions) { |_request| raise "re-serving scanned the wallet" }
+
+    status, body = create_checkout
+
+    assert_equal 201, status, body.inspect
+    assert_equal HASH, body.dig("checkout", "payment_hash")
+    assert_empty @walks
+  end
+
+  # Only invoices that expired less than ten minutes ago are checked; an
+  # older one is left to the gated pass.
+  def test_an_invoice_expired_past_the_lookback_is_not_checked
+    commit_unpaid(HASH, expires_at: 1000 - OpenReceive::EARLIER_ATTEMPT_LOOKBACK_SECONDS)
+    close_gate!
+    @wallet.define_singleton_method(:list_transactions) { |_request| raise "an old invoice was scanned" }
+
+    status, body = create_checkout
+
+    assert_equal 201, status, body.inspect
+    assert_empty @walks
   end
 end
 

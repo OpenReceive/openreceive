@@ -71,11 +71,25 @@ module OpenReceive
           body = prepared.merge("reference" => reference)
           description = resolved_description(resolved)
           body["description"] = description if description
+          # The newest attempt still unpaid, when the host names one (the
+          # Rails engine does). A page rebuilt from the reference alone opens
+          # on the method picker and polls this hash, so a payment made just
+          # before a reload still reaches the screen (mirrors JS).
+          pending = resolved["pending_payment_hash"]
+          body["pending_payment_hash"] = pending.to_s.downcase unless pending.nil?
           success(200, body, request_id)
         end
       end
 
-      def create_checkout(raw_body:, request:, request_id:)
+      # Storage-aware callers (the Rails engine) pass `check_earlier_attempts`,
+      # a proc called with the reference right before a new attempt is minted.
+      # It checks the reference's earlier unpaid attempts against the wallet
+      # and returns those checks; a settled one refuses the mint as "already
+      # paid", and a check that cannot finish refuses it as retryable (see
+      # assert_earlier_attempts_unpaid!). Re-serving a committed attempt never
+      # calls it. Storage-agnostic callers (Server::RackApp) have no attempt
+      # rows to check and omit it.
+      def create_checkout(raw_body:, request:, request_id:, check_earlier_attempts: nil)
         handle(request_id) do
           body = parse(raw_body, "checkout.create", request: request)
           reference = required_reference(body)
@@ -85,6 +99,7 @@ module OpenReceive
           # attempt costs no wallet call, so a capped payer can still re-fetch
           # instructions they were already given (mirrors JS).
           enforce_rate_limit!("checkout.create", request, { reference: reference }) unless resolved["payment_hash"]
+          assert_earlier_attempts_unpaid!(reference, check_earlier_attempts) unless resolved["payment_hash"]
           checkout = if resolved["payment_hash"]
                        committed_checkout(reference, resolved)
                      else
@@ -119,6 +134,13 @@ module OpenReceive
       # information); the row path never emits `not_found`. Storage-agnostic
       # callers (Server::RackApp) omit both and run a one-attempt
       # reconcile_payments walk.
+      #
+      # When the host resolves `paid_attempt` (the attempt that paid this
+      # reference, whichever it was; the Rails engine does), the answer
+      # carries it as `paid` on EVERY attempt of the order, so a payer looking
+      # at a swap deposit, or at a second invoice, for an order paid some other
+      # way is shown the receipt instead of being left to pay again (mirrors
+      # JS). A custom resolve_checkout may omit it.
       def check_payment(raw_body:, request:, request_id:, reconcile_pass: nil, attempt_status: nil)
         handle(request_id) do
           body = parse(raw_body, "payment.check", request: request)
@@ -141,6 +163,8 @@ module OpenReceive
           # list). Amount-aware, like the JS handler: limits are evaluated
           # against this attempt's committed invoice amount.
           payment_methods = @service.list_swap_options(amount_msats: checkout["amount_msats"])
+          paid_attempt = resolved["paid_attempt"]
+          public_checked = public_checked.merge("paid" => paid_attempt_body(paid_attempt)) unless paid_attempt.nil?
           success(200, public_checked.merge("payment_methods" => payment_methods), request_id)
         end
       end
@@ -156,7 +180,8 @@ module OpenReceive
         end
       end
 
-      def create_swap(raw_body:, request:, request_id:)
+      # `check_earlier_attempts` as for create_checkout.
+      def create_swap(raw_body:, request:, request_id:, check_earlier_attempts: nil)
         handle(request_id) do
           body = parse(raw_body, "swap.create", request: request)
           reference = required_reference(body)
@@ -164,6 +189,7 @@ module OpenReceive
           authorize!("swap.create", request, { reference: reference })
           resolved = resolve_host("swap.create", request, reference, body, asset)
           enforce_rate_limit!("swap.create", request, { reference: reference }) unless resolved["payment_hash"]
+          assert_earlier_attempts_unpaid!(reference, check_earlier_attempts) unless resolved["payment_hash"]
           swap = if resolved["payment_hash"]
                    data = required_swap_data(resolved["swap_data"])
                    status = @service.get_swap(
@@ -276,14 +302,71 @@ module OpenReceive
       # The prepare answer for a reference that is already paid, built from its row.
       def paid_prepare(reference, resolved)
         checkout = resolved.fetch("checkout")
-        swap = resolved["swap"] == true
-        paid = { "payment_hash" => resolved.fetch("payment_hash"), "rail" => swap ? "swap" : "lightning" }
-        paid["bolt11"] = checkout.fetch("bolt11") unless swap
-        paid["paid_at"] = resolved["paid_at"] if resolved["paid_at"]
         {
           "reference" => reference, "amount_msats" => checkout.fetch("amount_msats"),
-          "fiat_quote" => checkout["fiat_quote"], "payment_methods" => [], "paid" => paid
+          "fiat_quote" => checkout["fiat_quote"], "payment_methods" => [],
+          "paid" => paid_attempt_body(resolved)
         }
+      end
+
+      # The `paid` object (OpenAPI PaidAttempt) for the attempt that paid a
+      # reference: { "payment_hash", "checkout", "paid_at"?, "swap"? } as the
+      # host resolved it.
+      def paid_attempt_body(attempt)
+        data = OpenReceive.stringify(attempt)
+        checkout = OpenReceive.stringify(data.fetch("checkout"))
+        swap = data["swap"] == true
+        paid = { "payment_hash" => data.fetch("payment_hash").to_s.downcase, "rail" => swap ? "swap" : "lightning" }
+        paid["bolt11"] = checkout.fetch("bolt11") unless swap
+        paid["paid_at"] = data["paid_at"] if data["paid_at"]
+        paid
+      end
+
+      # Before a new attempt is minted for an order that already has unpaid
+      # ones, those are checked against the wallet, and a paid one refuses the
+      # mint as "already paid" (mirrors the JS assertEarlierAttemptsUnpaid).
+      #
+      # Without it, an order paid moments ago could be handed a swap deposit
+      # address: the payer pays the invoice, the page reloads before the
+      # shop's next wallet scan (the scan gate waits 3 to 12 s between scans),
+      # the payer picks a coin, and the shop opens a provider order for an
+      # order that is already paid. The gated scan at the top of every request
+      # is skipped while the gate is closed, so it cannot be relied on here.
+      #
+      # Only a request that mints pays for this. A check that cannot finish
+      # refuses the mint as retryable rather than minting blind: a payer told
+      # to try again in a moment is better off than one handed a second
+      # address to pay.
+      def assert_earlier_attempts_unpaid!(reference, check_earlier_attempts)
+        return if check_earlier_attempts.nil?
+
+        checks = begin
+          Array(check_earlier_attempts.call(reference))
+        rescue StandardError => e
+          warn_failure(
+            "payment.reconcile.before_mint.failed",
+            "could not check an order's earlier attempts before a new one (refused as retryable)",
+            e
+          )
+          raise ServiceError.new(
+            503, "INTERNAL",
+            "Could not confirm this order's earlier payment attempt. Please try again in a moment.",
+            retryable: true
+          )
+        end
+        return unless checks.any? { |check| OpenReceive.stringify(check)["status"].to_s == "settled" }
+
+        raise ConflictError, "This reference is already paid."
+      end
+
+      # One operator line with credentials redacted (the JS warnFailure).
+      def warn_failure(event, prefix, error)
+        line = "[openreceive] #{event}: #{prefix}: " \
+               "#{OpenReceive::Nwc.redact_error_text("#{error.class}: #{error.message}")}"
+        logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
+        logger.nil? ? warn(line) : logger.warn(line)
+      rescue StandardError
+        nil
       end
 
       def public_checkout(checkout)

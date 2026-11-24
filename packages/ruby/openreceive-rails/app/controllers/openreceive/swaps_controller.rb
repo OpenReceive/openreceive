@@ -7,7 +7,7 @@ module OpenReceive
     end
 
     def create
-      respond_with(:create_swap)
+      respond_with(:create_swap, **openreceive_create_arguments)
     end
 
     def status
@@ -20,12 +20,13 @@ module OpenReceive
 
     private
 
-    def respond_with(method)
+    def respond_with(method, **arguments)
       openreceive_respond(openreceive_handler.public_send(
         method,
         raw_body: openreceive_raw_body,
         request: request,
-        request_id: openreceive_request_id
+        request_id: openreceive_request_id,
+        **arguments
       ))
     end
   end

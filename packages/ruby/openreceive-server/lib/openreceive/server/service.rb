@@ -268,8 +268,10 @@ module OpenReceive
       # Optional bounds for request-path passes: "max_pages" caps each
       # wallet-history walk (the gated opportunistic pass sends 50, mirroring
       # the JS OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES; default MAX_PAGES), and
-      # "deadline" is a monotonic-clock instant checked between page fetches —
-      # never mid-request — so a slow wallet cannot hang user-facing requests.
+      # "deadline" is a monotonic-clock instant checked between page fetches,
+      # so a slow wallet cannot hang user-facing requests. It also reaches the
+      # wallet adapter as `_deadline`, which bounds only the page in flight
+      # (the Rails engine's gated scan hands it over the same way).
       def reconcile_payments(input)
         data = stringify(input)
         attempts = Array(data.fetch("attempts"))
@@ -767,12 +769,14 @@ module OpenReceive
       end
 
       # Adapts call_nwc to the shared core walk's client contract and enforces
-      # the request-path deadline: checked only between page fetches, never
-      # mid-request, so a slow wallet bounds the scan instead of interrupting
-      # work already in flight. Once the monotonic deadline passes, the
-      # previous page is replayed instead of fetching another — the core walk
-      # recognizes the repeat and ends the scan marked truncated, so a
-      # deadline-cut walk can never prove an invoice absent.
+      # the request-path deadline. Between page fetches: once the monotonic
+      # deadline passes, the previous page is replayed instead of fetching
+      # another — the core walk recognizes the repeat and ends the scan marked
+      # truncated, so a deadline-cut walk can never prove an invoice absent.
+      # For the page in flight, the deadline rides the request as `_deadline`
+      # (the shape the Rails engine's gated scan sends), and an adapter that
+      # honors it (NwcRubyReceiveClient) bounds only that wallet I/O; a page
+      # it cuts fails the walk as a wallet error.
       class ScanClient
         def initialize(service, deadline)
           @service = service
@@ -785,6 +789,7 @@ module OpenReceive
              Process.clock_gettime(Process::CLOCK_MONOTONIC) >= @deadline
             return @previous
           end
+          request = request.merge("_deadline" => @deadline) unless @deadline.nil?
           @previous = @service.send(:call_nwc, :list_transactions, request)
         end
       end
