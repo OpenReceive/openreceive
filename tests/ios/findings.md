@@ -24,8 +24,9 @@ Fixed for the next release and re-checked in the lab on the iPhone SE (iOS
 autocorrect and spellcheck; the typed address now arrives as typed), **2**
 (the warning moved above the field; Review now sits at y 207–253 with the
 keyboard up, and the payer's first tap opens the review), and **7** (copy
-fields 44 pt on touch screens). **3** is a design question about the host page's
-history; see "Finding 3: the strategy" at the end. **4** to
+fields 44 pt on touch screens). **3** stays a known limitation (decided
+2026-11-23: the checkout does not touch the host page's history); the
+analysis is in "Finding 3: the strategy" at the end. **4** to
 **6** are left as they are.
 
 ## Product problems, most severe first
@@ -344,7 +345,7 @@ source; see the research notes):
 | (c) Entry by default where Back is not a close request (iOS/iPadOS WebKit), opt-out prop | fixed | the router effects above, once per walkthrough closed by Back or ✕ | one opt-out prop |
 | (d) The walkthrough inline on phones (expands in place, no overlay) | no modal, so no expectation that Back closes it; Back leaves the page as on any page | none | none; a design change |
 
-**Recommendation: (c).** The edge swipe is in the payment funnel, and losing
+**Decided 2026-11-23: (a), keep the limitation.** The recommendation was (c). The edge swipe is in the payment funnel, and losing
 the checkout mid-payment costs more than an extra loader run or page view on
 some routers. The measured behaviour in Safari is clean, and hosts with a
 router that minds have a switch.
