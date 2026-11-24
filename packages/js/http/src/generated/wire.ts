@@ -16,12 +16,16 @@ export type WirePrepareCheckoutResponse = {
   readonly description?: string;
   readonly fiat_quote?: null | WireFiatQuote;
   readonly payment_methods: readonly WirePaymentMethod[];
-  readonly paid?: {
-    readonly payment_hash: string;
-    readonly rail: "lightning" | "swap";
-    readonly bolt11?: string;
-    readonly paid_at?: number;
-  };
+  readonly paid?: WirePaidAttempt;
+  readonly pending_payment_hash?: string;
+};
+
+/** Wire shape of the OpenAPI `PaidAttempt` schema (snake_case JSON body). */
+export type WirePaidAttempt = {
+  readonly payment_hash: string;
+  readonly rail: "lightning" | "swap";
+  readonly bolt11?: string;
+  readonly paid_at?: number;
 };
 
 /** Wire shape of the OpenAPI `CreateCheckoutRequest` schema (snake_case JSON body). */
@@ -110,6 +114,7 @@ export type WirePaymentCheck = {
   readonly status: WirePaymentStatus;
   readonly paid_at?: number;
   readonly details?: WirePaymentDetails;
+  readonly paid?: WirePaidAttempt;
   readonly payment_methods: readonly WirePaymentMethod[];
 };
 

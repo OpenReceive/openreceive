@@ -959,6 +959,7 @@ ${[
 const WIRE_SCHEMA_NAMES = [
   "PrepareCheckoutRequest",
   "PrepareCheckoutResponse",
+  "PaidAttempt",
   "CreateCheckoutRequest",
   "Checkout",
   "CreateCheckoutResponse",

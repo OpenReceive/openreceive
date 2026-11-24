@@ -17,48 +17,10 @@
 // test you have not understood; a test that fails for a reason not listed
 // here is a new bug or a broken test, and both need a person.
 
-// #137, #132 and the reference-then-prefix order were fixed on 2026-11-11,
-// and the checks that tracked them now hold the fixes.
-export const KNOWN_OPEN = {
-  "reload-mid-create": {
-    tracked: "found by the browser lab on 2026-11-23, not filed",
-    summary:
-      "A payer who reloads while the shop is still waiting on its wallet or swap provider, " +
-      "and picks again, is told 'This payment changed while the page was open. Reload the " +
-      "page and try again.'; both requests minted, so the wallet holds an extra invoice and " +
-      "the swap provider an extra unpaid order.",
-  },
-  "reload-after-pay": {
-    tracked: "found by the browser lab on 2026-11-23, not filed",
-    summary:
-      "A payer who pays and whose page reloads before its next status poll (a phone " +
-      "reloading the tab it sent to the background) lands on 'Choose how you want to pay' " +
-      "while the shop's reconcile gate is busy. The method grid never polls, so the receipt " +
-      "never comes; picking Bitcoin again answers 'This payment changed while the page was " +
-      "open. Reload the page and try again.', and only a second reload shows the receipt.",
-  },
-  "swap-screen-misses-paid": {
-    tracked: "found by the browser lab on 2026-11-23, not filed",
-    summary:
-      "A swap deposit screen polls only its own attempt: when the order is paid on its " +
-      "Lightning invoice meanwhile, the shop records the payment but the screen keeps " +
-      "asking for the coin.",
-  },
-  "no-request-timeout": {
-    tracked: "found by the browser lab on 2026-11-23, not filed",
-    summary:
-      "A checkout request that never answers leaves the payer on a spinner with no way on " +
-      "(prepare, mint, swap start), or freezes status polling so a paid order never shows " +
-      "as paid: @openreceive/browser sets no time limit on its requests.",
-  },
-  "slow-after-outage": {
-    tracked: "found by the browser lab on 2026-11-23, not filed",
-    summary:
-      "After a connection outage of about a minute, a payer who paid meanwhile waits 20 s " +
-      "or more after the network is back before the paid screen shows: failed status polls " +
-      "back off 2, 4, 8, 16, 32, 60 s, and nothing polls when the browser comes back online.",
-  },
-};
+// #137, #132 and the reference-then-prefix order were fixed on 2026-11-11, and
+// the five the reload and bad-network cases found on 2026-11-23 a day after
+// they were listed; the checks that tracked them now hold the fixes.
+export const KNOWN_OPEN = {};
 
 const FAIL_KNOWN = process.env.OPENRECEIVE_KNOWN_ISSUES === "fail";
 
