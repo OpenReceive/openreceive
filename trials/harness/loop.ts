@@ -1,4 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, readFile, realpath, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentAdapter } from "./agents.ts";
@@ -26,7 +28,13 @@ import { debugPageChecks } from "./leaks.ts";
 import { donationWalkChecks, payerWalkChecks } from "./payer.ts";
 import { check, liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
-import { classify, GO_AHEAD, merchantReply, newMerchantMemory } from "./merchant.ts";
+import {
+  type CodeFileSave,
+  classify,
+  GO_AHEAD,
+  merchantTurn,
+  newMerchantMemory,
+} from "./merchant.ts";
 import { ownTestsUnderHouseRules, scenarioChecks, shopTree } from "./merchant-checks.ts";
 import { liveMedusaChecks } from "./medusa.ts";
 import { liveOdooChecks } from "./odoo.ts";
@@ -110,6 +118,110 @@ export async function openingFor(
     platform.opening?.replaceAll("{{directions_url}}", directionsUrl) ??
     `This is a ${platform.prompt_name}. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: ${directionsUrl}`
   );
+}
+
+/** Strictly below `root`. */
+function inside(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
+/**
+ * Where the merchant may save a code an agent asked for in a file: inside the
+ * shop copy (a relative path resolves against it and may not climb out), or,
+ * for an absolute path, under the OS temp directory. The file itself may not
+ * be a symlink, and the nearest folder that exists must really sit inside the
+ * same place, so a symlinked folder cannot lead out. Undefined when refused.
+ */
+export async function codeFileTarget(
+  directory: string,
+  requested: string,
+): Promise<string | undefined> {
+  if (requested.startsWith("~")) return undefined;
+  const target = path.resolve(directory, requested);
+  const shop = [path.resolve(directory), await realpath(directory)];
+  const temps = path.isAbsolute(requested)
+    ? [tmpdir(), "/tmp"].filter((each, index, all) => all.indexOf(each) === index)
+    : [];
+  const realTemps = (await Promise.all(temps.map((each) => realpath(each).catch(() => undefined))))
+    .filter((each): each is string => each !== undefined)
+    .filter((each) => each !== path.parse(each).root);
+  const roots = [...shop, ...realTemps, ...temps.filter((each) => each !== path.parse(each).root)];
+  if (!roots.some((root) => inside(root, target))) return undefined;
+  const stat = await lstat(target).catch(() => undefined);
+  if (stat !== undefined && !stat.isFile()) return undefined;
+  let nearest = path.dirname(target);
+  while ((await lstat(nearest).catch(() => undefined)) === undefined) {
+    nearest = path.dirname(nearest);
+  }
+  const real = await realpath(nearest);
+  const realRoots = [...shop, ...realTemps];
+  return realRoots.some((root) => real === root || inside(root, real)) ? target : undefined;
+}
+
+/** An env file's text with `NAME=value` set: the line replaced where it was, or added. */
+export function withEnvLine(text: string, variable: string, value: string): string {
+  const line = `${variable}=${value}`;
+  const named = new RegExp(`^\\s*(?:export\\s+)?${variable}\\s*=`);
+  const lines = text === "" ? [] : text.replace(/\r?\n$/, "").split(/\r?\n/);
+  const kept: string[] = [];
+  let placed = false;
+  for (const each of lines) {
+    if (!named.test(each)) kept.push(each);
+    else if (!placed) {
+      kept.push(line);
+      placed = true;
+    }
+  }
+  if (!placed) kept.push(line);
+  return `${kept.join("\n")}\n`;
+}
+
+/**
+ * The merchant saves a code where the agent asked: a `NAME=value` line in an
+ * env file, keeping its other lines, or the code alone with no newline. A new
+ * file is created 0600 and never through a symlink. Returns the absolute path
+ * written, or undefined when the path is refused or the write fails.
+ */
+export async function saveCodeFile(
+  directory: string,
+  save: Pick<CodeFileSave, "path" | "variable" | "value">,
+): Promise<string | undefined> {
+  try {
+    const target = await codeFileTarget(directory, save.path);
+    if (target === undefined) return undefined;
+    await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
+    const content =
+      save.variable === undefined
+        ? save.value
+        : withEnvLine(
+            await readFile(target, "utf8").catch((error: NodeJS.ErrnoException) => {
+              if (error.code === "ENOENT") return "";
+              throw error;
+            }),
+            save.variable,
+            save.value,
+          );
+    const file = await open(
+      target,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+      0o600,
+    );
+    try {
+      await file.writeFile(content);
+      if (save.variable === undefined) await file.chmod(0o600);
+    } finally {
+      await file.close();
+    }
+    return target;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Asked after the trial is checked; the answer goes to friction.md, never into a check. */
@@ -394,10 +506,22 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         reason = "a turn timed out";
         break;
       }
-      let reply = merchantReply(response.text, scenario, wallet, platformCodes, memory);
+      const answer = merchantTurn(response.text, scenario, wallet, platformCodes, memory);
+      let reply = answer.reply;
       if (reply === null || repeatedClosing(turns)) {
         done = true;
         break;
+      }
+      // Asked for a code in a file, the merchant saves it there; a file
+      // outside the shop and the temp directory gets the code in chat instead.
+      if (answer.save !== undefined) {
+        const saved = await saveCodeFile(directory, answer.save);
+        if (saved === undefined) {
+          console.log(`${sandbox.id} merchant would not save a code to ${answer.save.path}`);
+          reply = answer.save.refused;
+        } else {
+          console.log(`${sandbox.id} merchant saved a code to ${saved}`);
+        }
       }
       if (reply === scenario.followUp) treeAtFollowUp = await shopTree(directory);
       // BTCPay installs plugins only from its own UI, so the merchant does it when asked.

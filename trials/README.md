@@ -65,7 +65,12 @@ the stack once (`startTrialWallet`), and each shop's code reaches it the way a
 merchant's would: the NWC URI and the `lightning+swapconnect://` URI are what
 the merchant pastes, one at a time, only when the agent asks. Every trial gets
 the same throwaway codes; a backup swap code is answered with "I don't have a
-backup code". The shop's services that run OpenReceive join the
+backup code". An agent that will not take a code in chat may ask for it in a
+file instead ("Add `NWC_URI=<your code>` to `server/.env`, then reply saved",
+or "Save the code alone in `/tmp/openreceive-nwc`"): the merchant writes it
+there and replies `saved`, but only to a file inside the shop or the temp
+directory and never through a symlink; anywhere else, it pastes the code in
+chat. The shop's services that run OpenReceive join the
 `openreceive-trial` network and trust the private CA through a Compose
 override beside the shop (`<shop>.wallet.yml`, merged through `COMPOSE_FILE`).
 

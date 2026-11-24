@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { evaluate } from "../trials/harness/checks.ts";
 import {
+  CANNOT_SAVE,
+  classify,
+  codeFileAsks,
   MIGRATION_APPROVAL,
   merchantReply,
+  merchantTurn,
   NO_CODE_YET,
   newMerchantMemory,
+  PLATFORM_CODES_REPLY,
+  SAVED,
 } from "../trials/harness/merchant.ts";
 import {
   addedLines,
@@ -652,4 +661,236 @@ test("the Save checks fail on a notice that blames the codes", () => {
     ]).pass,
     true,
   );
+});
+
+// ------------------------------------------------- a code saved in a named file
+
+const NWC_WALK =
+  "To receive payments I need a receive-only wallet code. In Rizful: open the menu, tap NWC, choose Receive-only NWC code, and tap Copy (https://openreceive.org/get_a_nwc_code_to_receive_payments). If you would rather run your own wallet, Alby Hub works too: Connections → Add Connection → Read Only.";
+const LSC_WALK =
+  "Next, the swap provider. Go to https://lightning-swap.com, sign in for API keys, create a key, and copy the whole URI (https://openreceive.org/set_up_swap_provider).";
+// The directions' fallback lines, for an agent that will not take a code in chat.
+const FILE_NWC = `${NWC_WALK} Add \`NWC_URI=<your code>\` to \`server/.env\` in this project, then reply saved.`;
+const FILE_LSC = `${LSC_WALK} Add \`LSC_URI_PRIMARY=<your code>\` to \`server/.env\` in this project, then reply saved. Or say Bitcoin only.`;
+const PLUGIN_NWC = `${NWC_WALK} Save the code alone in \`/tmp/openreceive-nwc\`, then reply saved.`;
+const PLUGIN_LSC = `${LSC_WALK} Save the code alone in \`/tmp/openreceive-lsc\`, then reply saved. Or say Bitcoin only.`;
+// Codex on Vendure, 2026-11-23: answered "Yes, go ahead." for 30 turns.
+const VENDURE =
+  "Please configure the receive-only wallet credential as `NWC_URI` in `server/.env`. Get it in Rizful: open the menu, tap NWC, choose Receive-only NWC code, and tap Copy (https://openreceive.org/get_a_nwc_code_to_receive_payments). Keep the wallet URI out of chat; I will not print it. Let me know once it's configured.";
+
+test("the directions' code-file fallback is a file request naming the file, the line and the code", () => {
+  const cases = [
+    [FILE_NWC, { path: "server/.env", variable: "NWC_URI", code: "nwc" }],
+    [FILE_LSC, { path: "server/.env", variable: "LSC_URI_PRIMARY", code: "lsc" }],
+    [
+      "Add `NWC_URI=<your code>` to `.env` in this project, then reply saved.",
+      { path: ".env", variable: "NWC_URI", code: "nwc" },
+    ],
+    [PLUGIN_NWC, { path: "/tmp/openreceive-nwc", code: "nwc" }],
+    [PLUGIN_LSC, { path: "/tmp/openreceive-lsc", code: "lsc" }],
+    [
+      `${NWC_WALK} Save the code alone in \`/tmp/openreceive.AbC123/code\`, then reply saved.`,
+      { path: "/tmp/openreceive.AbC123/code", code: "nwc" },
+    ],
+    [VENDURE, { path: "server/.env", variable: "NWC_URI", code: "nwc" }],
+  ];
+  for (const [text, ask] of cases) {
+    assert.equal(classify(text), "file", text);
+    assert.deepEqual(codeFileAsks(text), [ask], text);
+  }
+  // After the first save, the next message reads that file and asks for the next one.
+  const next = `Thanks, I read \`/tmp/openreceive-nwc\`, stored it, and deleted the file. ${PLUGIN_LSC}`;
+  assert.deepEqual(codeFileAsks(next), [{ path: "/tmp/openreceive-lsc", code: "lsc" }]);
+});
+
+test("a code the agent stores itself, a closing, a command or another file is not a file request", () => {
+  // The agent writes the file: the merchant pastes in chat, as before.
+  const store =
+    "To receive payments I need a receive-only wallet code from Rizful. Paste the code here and I will store it in `server/.env` as `NWC_URI`.";
+  assert.equal(classify(store), "nwc");
+  assert.equal(merchantReply(store, SCENARIOS.canonical, CODES), NWC);
+  assert.equal(classify("I saved `NWC_URI` to `server/.env`. Setup is finished."), "done");
+  assert.equal(
+    classify("Setup is finished. In production, set `NWC_URI=<your code>` in the server's `.env`."),
+    "done",
+  );
+  // A rule quoted back is not a request.
+  assert.deepEqual(codeFileAsks("Never add `NWC_URI=<your code>` to `.env.example`."), []);
+  // Work that is not a wallet or swap code stays delegated.
+  const env =
+    "You will need to run the migration. Add `DATABASE_URL=<your database url>` to `server/.env`, then reply saved.";
+  assert.equal(classify(env), "delegate");
+  assert.equal(
+    merchantReply(env, SCENARIOS.canonical, CODES),
+    "I'd rather not run commands or edit files. Can you do it?",
+  );
+  assert.equal(
+    classify("Please run this in `server/`: `npm run migrate`, then reply done."),
+    "delegate",
+  );
+  // A code alone in a source file would break it.
+  assert.deepEqual(
+    codeFileAsks(`${NWC_WALK} Save the code alone in \`server.js\`, then reply saved.`),
+    [],
+  );
+});
+
+test("asked for a code in a file, the merchant saves that code there and says saved", () => {
+  const memory = newMerchantMemory();
+  const nwc = merchantTurn(FILE_NWC, SCENARIOS.canonical, CODES, false, memory);
+  assert.equal(nwc.reply, SAVED);
+  assert.equal(SAVED, "saved");
+  assert.deepEqual(
+    { path: nwc.save.path, variable: nwc.save.variable, value: nwc.save.value },
+    { path: "server/.env", variable: "NWC_URI", value: NWC },
+  );
+  // Refused (the file is out of bounds), the code goes in chat as on any paste.
+  assert.equal(nwc.save.refused, `${CANNOT_SAVE} ${NWC}`);
+  const lsc = merchantTurn(PLUGIN_LSC, SCENARIOS.canonical, CODES, false, memory);
+  assert.equal(lsc.reply, SAVED);
+  assert.deepEqual(
+    { path: lsc.save.path, variable: lsc.save.variable, value: lsc.save.value },
+    { path: "/tmp/openreceive-lsc", variable: undefined, value: LSC },
+  );
+  assert.equal(merchantReply(VENDURE, SCENARIOS.canonical, CODES), SAVED);
+  // The scenarios answer a file request as they answer a chat one.
+  const bitcoinOnly = merchantTurn(FILE_LSC, SCENARIOS["bitcoin-only"], CODES);
+  assert.equal(bitcoinOnly.reply, "Bitcoin only");
+  assert.equal(bitcoinOnly.save, undefined);
+  const noCode = newMerchantMemory();
+  assert.deepEqual(merchantTurn(PLUGIN_NWC, SCENARIOS["no-code-yet"], CODES, false, noCode), {
+    reply: NO_CODE_YET,
+  });
+  assert.equal(merchantReply(FILE_LSC, SCENARIOS["no-code-yet"], CODES, false, noCode), null);
+  assert.deepEqual(merchantTurn(FILE_NWC, SCENARIOS.canonical, CODES, true), {
+    reply: PLATFORM_CODES_REPLY,
+  });
+  const swapped = newMerchantMemory();
+  assert.equal(
+    merchantTurn(FILE_NWC, SCENARIOS["swapped-codes"], CODES, false, swapped).save.value,
+    LSC,
+  );
+  assert.equal(
+    merchantTurn(FILE_NWC, SCENARIOS["swapped-codes"], CODES, false, swapped).save.value,
+    NWC,
+  );
+  const spend = newMerchantMemory();
+  assert.equal(
+    merchantTurn(PLUGIN_NWC, SCENARIOS["spend-capable"], CODES, false, spend).save.value,
+    SPEND,
+  );
+  assert.equal(memory.nwcAsks, 1);
+  assert.equal(
+    merchantTurn(
+      "If you have a backup LSC code, save it alone in `/tmp/openreceive-lsc-backup`, then reply saved.",
+      SCENARIOS.canonical,
+      CODES,
+    ).reply,
+    "I don't have a backup code.",
+  );
+});
+
+test("the merchant writes a code file only inside the shop or the temp directory", async () => {
+  const { codeFileTarget, saveCodeFile, withEnvLine } = await import("../trials/harness/loop.ts");
+  const shop = await mkdtemp(path.join(tmpdir(), "ortrial-file-shop-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "ortrial-file-outside-"));
+  const mode = async (file) => (await stat(file)).mode & 0o777;
+  try {
+    // An env file keeps its other lines; the code's line is replaced in place.
+    await mkdir(path.join(shop, "server"));
+    await writeFile(path.join(shop, "server/.env"), "PORT=3000\nNWC_URI=old\nDEBUG=1\n");
+    const env = await saveCodeFile(shop, { path: "server/.env", variable: "NWC_URI", value: NWC });
+    assert.equal(env, path.join(shop, "server/.env"));
+    assert.equal(await readFile(env, "utf8"), `PORT=3000\nNWC_URI=${NWC}\nDEBUG=1\n`);
+    // A new one, and its folder, are created; the file is 0600.
+    const created = await saveCodeFile(shop, {
+      path: "backend/.env",
+      variable: "LSC_URI_PRIMARY",
+      value: LSC,
+    });
+    assert.equal(await readFile(created, "utf8"), `LSC_URI_PRIMARY=${LSC}\n`);
+    assert.equal(await mode(created), 0o600);
+    assert.equal(
+      withEnvLine("A=1\r\nexport NWC_URI=x\nNWC_URI=y\n", "NWC_URI", "z"),
+      "A=1\nNWC_URI=z\n",
+    );
+    // The code alone, no newline, under the temp directory.
+    const bare = path.join(outside, "openreceive-nwc");
+    assert.equal(await saveCodeFile(shop, { path: bare, value: NWC }), bare);
+    assert.equal(await readFile(bare, "utf8"), NWC);
+    assert.equal(await mode(bare), 0o600);
+    // Climbing out of the shop is refused, even into the temp directory.
+    assert.equal(
+      await saveCodeFile(shop, { path: "../escape.env", variable: "NWC_URI", value: NWC }),
+      undefined,
+    );
+    await assert.rejects(lstat(path.join(shop, "../escape.env")));
+    assert.equal(await codeFileTarget(shop, "~/openreceive-nwc"), undefined);
+    assert.equal(await codeFileTarget(shop, "/etc/openreceive-nwc"), undefined);
+    // So is a symlink: a folder that leads out, or the file itself.
+    await symlink(outside, path.join(shop, "link"));
+    assert.equal(await codeFileTarget(shop, "link/.env"), undefined);
+    await writeFile(path.join(outside, "target"), "untouched");
+    await symlink(path.join(outside, "target"), path.join(shop, ".env"));
+    assert.equal(
+      await saveCodeFile(shop, { path: ".env", variable: "NWC_URI", value: NWC }),
+      undefined,
+    );
+    await symlink(path.join(outside, "target"), path.join(outside, "linked-code"));
+    assert.equal(
+      await saveCodeFile(shop, { path: path.join(outside, "linked-code"), value: NWC }),
+      undefined,
+    );
+    assert.equal(await readFile(path.join(outside, "target"), "utf8"), "untouched");
+  } finally {
+    await rm(shop, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("a code-file request is the question, not work handed to the merchant", () => {
+  const platform = { slug: "node", credential_store: { kind: "dotenv" }, forbidden: [] };
+  const judge = (turns, scenario = SCENARIOS.canonical) =>
+    evaluate({ scenario, platform, turns, nwc: NWC, lsc: LSC });
+  const good = judge([
+    agent(FILE_NWC),
+    merchant(SAVED),
+    agent(FILE_LSC),
+    merchant(SAVED),
+    agent("Setup is finished."),
+  ]);
+  for (const id of [
+    "merchant_does_the_work",
+    "nwc_question",
+    "lsc_question",
+    "one_question",
+    "code_file_asked_once",
+  ]) {
+    assert.equal(pass(good, id), true, id);
+  }
+  const plugin = judge([agent(PLUGIN_NWC), merchant(SAVED), agent(PLUGIN_LSC), merchant(SAVED)]);
+  assert.equal(pass(plugin, "nwc_question"), true);
+  assert.equal(pass(plugin, "lsc_question"), true);
+  assert.equal(pass(judge([agent(VENDURE), merchant(SAVED)]), "merchant_does_the_work"), true);
+  // No walkthrough, both codes in one message, the same code asked twice.
+  const bare = judge([
+    agent("Add `NWC_URI=<your code>` to `.env` in this project, then reply saved."),
+  ]);
+  assert.equal(pass(bare, "nwc_question"), false);
+  const both = judge([
+    agent(
+      `${NWC_WALK} Add \`NWC_URI=<your code>\` and \`LSC_URI_PRIMARY=<your code>\` to \`.env\`, then reply saved.`,
+    ),
+  ]);
+  assert.equal(pass(both, "one_question"), false);
+  const twice = judge([agent(FILE_NWC), merchant(SAVED), agent(FILE_NWC), merchant(SAVED)]);
+  assert.equal(pass(twice, "code_file_asked_once"), false);
+  // A run with no file request carries no such check.
+  assert.equal(pass(judge([agent(ASK_NWC), merchant(NWC)]), "code_file_asked_once"), undefined);
+  // After "Bitcoin only", a swap code is not asked for in a file either.
+  const declined = judge(
+    [agent(FILE_NWC), merchant(SAVED), agent(FILE_LSC), merchant("Bitcoin only"), agent(FILE_LSC)],
+    SCENARIOS["bitcoin-only"],
+  );
+  assert.equal(pass(declined, "lsc_skipped"), false);
 });

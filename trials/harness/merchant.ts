@@ -83,18 +83,180 @@ function asksChoice(text: string): boolean {
   );
 }
 
-/** Classify the agent's latest message. Imperatives aimed at the merchant win over a code question. */
-export function classify(text: string): Intent {
-  const message = text.trim();
-  if (delegateRequest(message)) return "delegate";
+/** One of the merchant's codes. */
+export type CodeName = "nwc" | "lsc" | "lsc_backup";
+
+/** The code a message asks to have pasted in chat, if any. */
+function chatCode(message: string): CodeName | undefined {
   if (asksPrimaryLsc(message) && asksNwc(message) === false) return "lsc";
   if (asksBackup(message) && asksNwc(message) === false) return "lsc_backup";
   if (asksNwc(message)) return "nwc";
   if (asksPrimaryLsc(message)) return "lsc";
   if (asksBackup(message)) return "lsc_backup";
+  return undefined;
+}
+
+/**
+ * Classify the agent's latest message. A request to save a code in a named
+ * file wins; then imperatives aimed at the merchant win over a code question.
+ */
+export function classify(text: string): Intent {
+  const message = text.trim();
+  if (codeFileAsks(message).length > 0) return "file";
+  if (delegateRequest(message)) return "delegate";
+  const code = chatCode(message);
+  if (code !== undefined) return code;
   if (asksChoice(message)) return "bitcoin_choice";
   if (withoutUrls(message).includes("?") === false && DONE.test(message)) return "done";
   return "other";
+}
+
+// ------------------------------------------------------------ a code in a file
+//
+// An agent that will not take a code in chat asks for it in a file, as the
+// directions allow: "Add `NWC_URI=<your code>` to `.env` in this project,
+// then reply saved." or "Save the code alone in `/tmp/openreceive-nwc`, then
+// reply saved." On 2026-11-23 Codex asked this way and the merchant, who
+// only answered "Yes, go ahead.", kept a Vendure trial going for 30 turns.
+
+/** A code variable, prefix and all: `NWC_URI`, `OPENRECEIVE_LSC_URI_PRIMARY`. */
+const CODE_VARIABLE = /\b((?:[A-Z][A-Z0-9]*_)*(?:NWC_URI|LSC_URI_PRIMARY|LSC_URI_BACKUP))\b/g;
+const CODE_ASSIGNMENT = new RegExp(`${CODE_VARIABLE.source}=`);
+const BACKTICKED = /`([^`\s]+)`/g;
+/** A file to hold `NAME=value` lines; an example file is tracked, so never one. */
+const ENV_FILE =
+  /^(?:\.env(?:\.(?!example$|sample$|template$|dist$)[\w.-]+)?|[\w.-]+\.env|\.dev\.vars)$/i;
+/** A file of source or config, which a code on its own would break. */
+const SOURCE_FILE =
+  /\.(?:[cm]?[jt]sx?|php|py|rb|go|rs|java|cs|json|ya?ml|toml|xml|html?|css|scss|vue|svelte|astro|sh|ini|conf|cfg|lock|md|sql)$/i;
+const VERBS =
+  "add|put|save|write|set|store|place|configure|paste|enter|create|update|edit|insert|append|copy";
+const WRITE_VERB = new RegExp(`\\b(?:${VERBS})\\b`, "i");
+/** The clause opens with the verb: "Add …", "Then save …", "2. Put …". */
+const IMPERATIVE = new RegExp(
+  `^[\\s"'“‘*_>(•-]*(?:\\d+[.)]\\s*)?(?:(?:please|then|now|next|just|also|first|finally|instead|so|simply)\\b[\\s,]*)*(?:${VERBS})\\b`,
+  "i",
+);
+const POLITE = /\bplease\b|\b(?:can|could|would|will) you\b|\byou (?:can|could)\b/i;
+/** "I will store it in `.env`": the agent does the writing. */
+const FIRST_PERSON = /\bI\b|\b[Ww]e\b/;
+const PROHIBITION = /\b(?:do not|don't|never)\b/i;
+const REPLY_CUE = /\b(?:reply|respond|let me know|tell me|ping me)\b/i;
+const CLAUSE = /[,;]\s+|\s+(?:and|or|then)\s+|\s+[—–]\s+/i;
+const ALONE =
+  /\b(?:alone|by itself|on its own|nothing else)\b|\b(?:only|just) the (?:code|uri|value)\b/i;
+const CODE_WORD = /\b(?:code|uri|connection|secret|key|credential)\b/i;
+const NWC_WORDS =
+  /\bnwc\b|nostr wallet connect|nostr\+walletconnect|receive-only|\bwallet\b|rizful|alby/i;
+const LSC_WORDS = /\blsc\b|swap|lightning-swap\.com|lightning\+swapconnect/i;
+
+/** URLs out of the way, keeping the period that ends their sentence. */
+function maskUrls(text: string): string {
+  return text.replace(/\bhttps?:\/\/\S+?(?=[).,;:!?'"]*(?:\s|$))/gi, "<url>");
+}
+
+/**
+ * A sentence's clauses. One with no verb and no subject of its own goes on
+ * with the clause before it: "Add `A` and `B` to `.env`" is one request, while
+ * "Paste it here and I will store it in `.env`" is two.
+ */
+function clauses(sentence: string): string[] {
+  const out: string[] = [];
+  for (const part of sentence.split(CLAUSE)) {
+    const previous = out.at(-1);
+    if (previous !== undefined && !WRITE_VERB.test(part) && !FIRST_PERSON.test(part)) {
+      out[out.length - 1] = `${previous} ${part}`;
+    } else {
+      out.push(part);
+    }
+  }
+  return out;
+}
+
+function pathLike(token: string): boolean {
+  return (
+    /^[~\w.@+\-/]+$/.test(token) &&
+    /\w/.test(token) &&
+    !token.endsWith("/") &&
+    (token.includes("/") || token.startsWith(".") || /\.\w+$/.test(token))
+  );
+}
+
+function variableCode(variable: string): CodeName {
+  if (variable.endsWith("NWC_URI")) return "nwc";
+  return variable.endsWith("BACKUP") ? "lsc_backup" : "lsc";
+}
+
+/** The code some words name, when they name only one kind. */
+function codeNamed(text: string): CodeName | undefined {
+  const nwc = NWC_WORDS.test(text);
+  const lsc = LSC_WORDS.test(text);
+  if (lsc && !nwc) return /backup/i.test(text) ? "lsc_backup" : "lsc";
+  return nwc && !lsc ? "nwc" : undefined;
+}
+
+/** A file the agent asked the merchant to put a code in. */
+export interface CodeFileAsk {
+  /** As the agent wrote it: relative to the shop, or absolute. */
+  readonly path: string;
+  /** The `NAME=value` line to set, or undefined for a file that holds the code alone. */
+  readonly variable?: string;
+  /** Undefined when nothing in the message says which code. */
+  readonly code?: CodeName;
+}
+
+/**
+ * Every request in a message to save a code in a backticked file: a code
+ * variable (`NWC_URI=<your code>`) for an env file, or the code alone in any
+ * other file that is not source. The clause naming the file asks the merchant
+ * to write it ("Add …", "Please configure …"), not the agent ("I will store
+ * it in `.env`"), and is not a rule ("never …"). A closing is not a request.
+ */
+export function codeFileAsks(text: string): CodeFileAsk[] {
+  const message = maskUrls(text.trim());
+  if (DONE.test(message) && !message.includes("?") && !REPLY_CUE.test(message)) return [];
+  const replyAsked = REPLY_CUE.test(message);
+  const context = NWC_WORDS.test(message) || LSC_WORDS.test(message);
+  const asks: CodeFileAsk[] = [];
+  for (const sentence of sentences(message)) {
+    const variables = [...new Set([...sentence.matchAll(CODE_VARIABLE)].map((m) => m[1] ?? ""))];
+    const assigned = CODE_ASSIGNMENT.test(sentence);
+    for (const clause of clauses(sentence)) {
+      if (!WRITE_VERB.test(clause) || FIRST_PERSON.test(clause) || PROHIBITION.test(clause)) {
+        continue;
+      }
+      const addressed =
+        POLITE.test(clause) || (IMPERATIVE.test(clause) && (assigned || replyAsked));
+      if (!addressed) continue;
+      for (const [, file = ""] of clause.matchAll(BACKTICKED)) {
+        if (!pathLike(file)) continue;
+        const name = file.split("/").at(-1) ?? file;
+        if (ENV_FILE.test(name)) {
+          for (const variable of variables) {
+            asks.push({ path: file, variable, code: variableCode(variable) });
+          }
+        } else if (
+          !SOURCE_FILE.test(name) &&
+          context &&
+          (ALONE.test(sentence) || (CODE_WORD.test(sentence) && codeNamed(sentence) !== undefined))
+        ) {
+          const hinted = variables.length === 1 ? variableCode(variables[0] ?? "") : undefined;
+          asks.push({
+            path: file,
+            code: codeNamed(sentence) ?? codeNamed(name) ?? hinted ?? chatCode(text),
+          });
+        }
+      }
+    }
+  }
+  return asks;
+}
+
+/** Every code a message asks for in a file. */
+export function fileCodes(text: string): CodeName[] {
+  return [
+    ...new Set(codeFileAsks(text).flatMap((ask) => (ask.code === undefined ? [] : [ask.code]))),
+  ];
 }
 
 /** The request and the code name have to be in the same sentence. */
@@ -169,6 +331,59 @@ function lscCode(scenario: Scenario, codes: MerchantCodes, memory: MerchantMemor
   return scenario.firstPaste?.startsWith("swapped") && memory.lscAsks === 1 ? codes.nwc : codes.lsc;
 }
 
+/** The merchant's whole answer after saving a code where the agent asked. */
+export const SAVED = "saved";
+
+/** Before the code, when the file the agent named is outside the shop and the temp directory. */
+export const CANNOT_SAVE = "I can only save files in this project. Here it is:";
+
+/** A code the merchant saves to a file; loop.ts writes it, or sends `refused` instead. */
+export interface CodeFileSave {
+  readonly path: string;
+  /** Set this `NAME=value` line; undefined writes the code alone. */
+  readonly variable?: string;
+  readonly value: string;
+  /** The reply in place of SAVED when the file may not be written: the code, in chat. */
+  readonly refused: string;
+}
+
+export interface MerchantTurn {
+  /** Null when the agent said it is done. */
+  readonly reply: string | null;
+  readonly save?: CodeFileSave;
+}
+
+function fileTurn(
+  text: string,
+  scenario: Scenario,
+  codes: MerchantCodes,
+  memory: MerchantMemory,
+): MerchantTurn {
+  const asks = codeFileAsks(text);
+  const ask = asks.find((each) => each.code !== undefined) ?? asks[0];
+  if (ask === undefined) return { reply: GO_AHEAD };
+  // Nothing says which code: the one the merchant has not given yet.
+  const code = ask.code ?? (memory.nwcAsks === 0 ? "nwc" : "lsc");
+  if (code !== "nwc" && scenario.swaps === false) return { reply: "Bitcoin only" };
+  const value =
+    code === "nwc"
+      ? nwcCode(scenario, codes, memory)
+      : code === "lsc"
+        ? lscCode(scenario, codes, memory)
+        : codes.lscBackup;
+  if (value === undefined || value.length === 0) return { reply: "I don't have a backup code." };
+  return {
+    reply: SAVED,
+    save: {
+      path: ask.path,
+      ...(ask.variable === undefined ? {} : { variable: ask.variable }),
+      value,
+      refused: `${CANNOT_SAVE} ${pasted(value, scenario)}`,
+    },
+  };
+}
+
+/** The merchant's next line, as a string; merchantTurn also says what to save. */
 export function merchantReply(
   text: string,
   scenario: Scenario,
@@ -176,9 +391,38 @@ export function merchantReply(
   platformCodes = false,
   memory: MerchantMemory = newMerchantMemory(),
 ): string | null {
+  return merchantTurn(text, scenario, codes, platformCodes, memory).reply;
+}
+
+export function merchantTurn(
+  text: string,
+  scenario: Scenario,
+  codes: MerchantCodes,
+  platformCodes = false,
+  memory: MerchantMemory = newMerchantMemory(),
+): MerchantTurn {
+  const intent = classify(text);
+  if (intent === "file" && !memory.toldNoCode && !memory.followedUp) {
+    if (scenario.noCodeYet === true) {
+      memory.toldNoCode = true;
+      return { reply: NO_CODE_YET };
+    }
+    if (platformCodes) return { reply: PLATFORM_CODES_REPLY };
+    return fileTurn(text, scenario, codes, memory);
+  }
+  return { reply: chatReply(text, intent, scenario, codes, platformCodes, memory) };
+}
+
+function chatReply(
+  text: string,
+  intent: Intent,
+  scenario: Scenario,
+  codes: MerchantCodes,
+  platformCodes: boolean,
+  memory: MerchantMemory,
+): string | null {
   // A scenario's last word: the merchant stopped, or asked the one follow-up.
   if (memory.toldNoCode || memory.followedUp) return null;
-  const intent = classify(text);
   if (scenario.noCodeYet === true) {
     if (intent === "done") return null;
     if (intent === "nwc" || intent === "lsc" || intent === "lsc_backup" || intent === "delegate") {
