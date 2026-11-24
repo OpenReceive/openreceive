@@ -752,6 +752,7 @@
         "WireCreateSwapResponse",
         "WireError",
         "WireFiatQuote",
+        "WirePaidAttempt",
         "WirePaymentCheck",
         "WirePaymentCheckRequest",
         "WirePaymentDetails",

@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A paid order is never handed a new invoice or a swap deposit address.**
+  Before minting a new attempt for an order that already has unpaid ones, the
+  server checks those with the wallet and answers 409 "already paid" if one
+  was paid. A payer who paid, had the page reload before the shop's next
+  wallet scan, and picked a coin was given a deposit address for a paid order.
+  All four server engines (Node, Python, PHP, Ruby).
+- **A swap deposit screen shows the receipt when the order is paid by
+  Lightning.** `payments/check` now answers `paid` (the attempt that paid the
+  order) on every attempt of a paid order, and the checkout switches to the
+  receipt on it.
+- **A page reloaded after paying shows the receipt without another pick.**
+  `checkouts/prepare` names the order's newest unpaid attempt as
+  `pending_payment_hash`, and the method picker watches it.
+- **A reload while an invoice or swap is being created no longer shows
+  "This payment changed".** The second request may mint too; it is refused
+  with 409 and the checkout asks once more, getting the attempt that won. The
+  extra invoice or provider order is never shown and expires unused.
+- **Checkout requests have time limits** (25 s, status polls 15 s), so a
+  request that never answers offers Try again instead of a spinner forever,
+  and a stuck poll no longer stops polling.
+- **After an outage the receipt comes within seconds**: a failed status poll
+  waits at most 6 s, not 60 s.
+- **Phones:** Android's Back closes the wallet walkthrough (Chromium 126 and
+  later), the walkthrough opens on screen on older Chromium, buttons are at
+  least 44 px on touch screens, Copy invoice no longer jumps when the
+  countdown ticks, the wrong-network warning reads at full contrast on any
+  theme, and wallet names wrap instead of being cut off.
+
+### Added
+
+- `openCheckoutModal` in `@openreceive/browser/headless`, the walkthrough
+  behaviour above for a custom checkout's own modal.
+- `paid` on `POST /payments/check` and `pending_payment_hash` on
+  `POST /checkouts/prepare`. Both are optional fields; older clients ignore
+  them.
+
 ## 0.5.0 - 2026-11-16
 
 **This release has breaking changes.** They are in the API a custom
