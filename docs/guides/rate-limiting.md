@@ -257,42 +257,247 @@ is 100 requests per tab every 5 minutes.
 
 If orders are free to make on your site, limit how many one user can make.
 Each new order is a new reference, and a reference may hold one open swap per
-coin and network.
+coin and network. For swap starts, [If you take coin
+payments](#if-you-take-coin-payments) has a recipe.
 
 ## The swap provider's own limits
 
-Your swap provider limits how many swaps your API account may start, across
-all your payers together. When one visitor starts swaps in a loop, the account
-reaches that limit and swaps stop for everyone until it clears. Lightning
-keeps working.
+Your swap provider limits your API account, across all your payers together.
+A swap start opens an order on that account, and the provider allows only so
+many new orders a minute and only so many unpaid orders at once. When one
+visitor starts swaps in a loop, the account reaches those limits and swaps
+stop for everyone until they clear. Lightning keeps working.
 
-OpenReceive keeps each server process inside the provider's limit. This guard
-is always on and is not the `rateLimiting` option:
+Those limits are the provider's. OpenReceive does not count calls for a
+provider, with one exception (FixedFloat, below). It obeys the provider's
+answer instead. Lightning Swap is an example. It limits each account, gives a
+new account lower limits that rise as it completes swaps, and answers a call
+over a limit with HTTP `429` and a `Retry-After` header. It counts new swaps
+apart from its other calls. So when a provider answers `429`:
 
-| Provider | New swaps a minute | What happens over the limit |
-| --- | --- | --- |
-| Lightning Swap (`lightning-swap.com`) | 30 per process, and 400 API calls | the provider answers 429 with a wait; OpenReceive stops starting swaps for that long, 5 minutes at most, then tries again. Swaps already started keep updating |
-| FixedFloat, and any other provider | 3 per process | the provider blocks the key for longer each time, so OpenReceive stops every call to it for at least a minute |
+- to a new swap, OpenReceive starts no new swaps with it for the wait the
+  provider named: at least 1 second, at most 5 minutes, and 1 minute when it
+  named none. Swaps already started keep updating, and refunds keep working.
+- to any other call, OpenReceive makes no call to that provider for the wait.
 
-The provider is picked from the host in your `LSC_URI_*` code. A new Lightning
-Swap account has lower limits until its first completed swap; the provider
-enforces them and OpenReceive obeys its answer.
+While new swaps are stopped, a payer's new swap is refused before an invoice
+is made for it.
+
+**FixedFloat** (`ff.io`) is the one provider OpenReceive counts calls for,
+because FixedFloat blocks an API key for longer each time it goes over: 250
+weight a minute per key, and a new swap costs 50. Each server process keeps
+its calls to at most 200 weight a minute. Status and refund calls may use only 50
+of that between them, so open swap screens cannot use up the room for new
+swaps: at least three new swaps a minute always fit, four when nothing else
+ran. A FixedFloat `429` stops every call for at least a minute.
+
+The provider is picked from the host in your `LSC_URI_*` code.
 
 Plain PHP and WordPress start a new process for each request, so they keep no
 per-minute count. They remember only a provider's 429 wait, in the cache the
 engine already uses for prices, and refuse new swaps until it is over.
 
-A payer who asks for a swap past the limit gets a retryable `503` with *"The
+A payer who asks for a swap past a limit gets a retryable `503` with *"The
 swap provider is rate limited. Please try again shortly."* No swap is started
 for that request. The server log has one `swap.provider.rate_limited` warning
-a minute, saying whether OpenReceive's own guard refused or the provider did.
+a minute. It says whether the provider answered 429, or OpenReceive refused
+the call itself while it waits out a 429 (or, with FixedFloat, because the
+minute's count was used up), and until when.
 
-Two things keep ordinary payers far from these numbers. The checkout shows the
+Two things keep ordinary payers far from these limits. The checkout shows the
 amount for a coin before it starts a swap, so looking at several coins starts
 none. And choosing a coin again reopens the swap the payer already has.
 
-If you see the warning in normal traffic, add a per-user limit on
-`POST {prefix}/swaps` as described above.
+If you see the warning in normal traffic, limit swaps per payer as described
+in [If you take coin payments](#if-you-take-coin-payments).
+
+## If you take coin payments
+
+This section applies only if you configured a swap provider (an `LSC_URI_*`
+code). If your shop takes Lightning only, skip it.
+
+Limits per payer on coin payments are your app's job. OpenReceive cannot tell
+who a payer is: it sees an order reference, and anyone who can open one
+checkout can usually open another. But every swap start opens an order on
+your provider account, and the provider allows only so many unpaid orders at
+once, for all your payers together. One visitor who starts swap after swap
+without paying can fill that allowance and stop coin payments for everyone
+until those orders expire.
+
+One production shop runs the two limits below. Its numbers are five times the
+real peak of its busiest paying customer. Measure your own customers' peaks
+before you copy them.
+
+### 1. Cap the open swaps of one payer
+
+In OpenReceive's rate-limit hook, refuse a new swap when the signed-in
+account, or the guest session, already has about 8 unpaid, unexpired swap
+attempts across its orders.
+
+- Count only pending swap attempts: rows in `openreceive_payments` with
+  `swap_data` set, `status` `pending`, and `expires_at` still in the future.
+  Never count paid swaps, and never count Lightning attempts. A refused payer
+  can then still pay with Lightning.
+- Fail open. If the count itself fails, for example on a database error,
+  allow the swap.
+- Refuse with the engine's `RATE_LIMITED` error. The payer reads your message,
+  and the checkout treats the refusal as one to try again later.
+
+The hook is called for every route, so return `true` for every action except
+`swap.create`. It is called for `swap.create` only when a new swap would be
+started, not when a payer reopens a swap they already have.
+
+Express (Fastify, Next.js and `createHttpHandler` take the same
+`rateLimitHook`):
+
+```ts
+import { HttpError, openReceiveExpress, type RateLimit } from "@openreceive/express";
+import { amountFor, authorize, db, onPaid, query, sessions } from "./app.ts"; // your existing code
+
+const MAX_OPEN_SWAPS = 8;
+
+// Unpaid swap attempts across every order this payer owns. Lightning attempts
+// have no swap_data. expires_at is in unix seconds. Use $1, $2 on Postgres.
+const OPEN_SWAPS_SQL = `
+  SELECT COUNT(*) AS n
+    FROM openreceive_payments p
+    JOIN orders o ON o.id = p.reference
+   WHERE o.owner_key = ?
+     AND p.swap_data IS NOT NULL
+     AND p.status = 'pending'
+     AND p.expires_at > ?`;
+
+const rateLimitHook: RateLimit = async ({ action, native }) => {
+  if (action !== "swap.create") return true;
+  let open: number;
+  try {
+    // Your own lookup: the account id, or the guest session's id.
+    const owner = await sessions.ownerKey(native);
+    const [row] = await query(OPEN_SWAPS_SQL, [owner, Math.floor(Date.now() / 1000)]);
+    open = Number(row.n);
+  } catch (error) {
+    console.warn("open swap count failed; allowing the swap", error);
+    return true;
+  }
+  if (open < MAX_OPEN_SWAPS) return true;
+  throw new HttpError(
+    429,
+    "RATE_LIMITED",
+    "You have several unpaid coin payments open. Pay one of them, or pay with Lightning.",
+    { retryable: true },
+  );
+};
+
+app.use(
+  openReceiveExpress({
+    wallet: { nwc: process.env.NWC_URI! },
+    storage: { db, onPaid },
+    amountFor,
+    authorize,
+    rateLimitHook,
+  }),
+);
+```
+
+Rails, in `config/initializers/openreceive.rb`:
+
+```ruby
+MAX_OPEN_SWAPS = 8
+
+OpenReceive.configure do |config|
+  config.rate_limit = lambda do |context|
+    return true unless context[:action] == "swap.create"
+
+    open_swaps =
+      begin
+        # Your own scope: the orders of the signed-in account, or of the guest session.
+        orders = Order.owned_by(context[:request].session)
+        OpenReceivePayment.pending
+                          .where.not(swap_data: nil)
+                          .where("expires_at > ?", Time.current)
+                          .where(reference: orders.pluck(:id).map(&:to_s))
+                          .count
+      rescue StandardError => e
+        Rails.logger.warn("open swap count failed; allowing the swap: #{e.class}")
+        return true
+      end
+    return true if open_swaps < MAX_OPEN_SWAPS
+
+    raise OpenReceive::Server::RateLimitedError,
+          "You have several unpaid coin payments open. Pay one of them, or pay with Lightning."
+  end
+end
+```
+
+The other engines take the same hook under their own names:
+
+| Engine | Hook | Refuse with |
+| --- | --- | --- |
+| Node | `rateLimitHook` | `throw new HttpError(429, "RATE_LIMITED", message, { retryable: true })` |
+| Rails | `config.rate_limit` | `raise OpenReceive::Server::RateLimitedError, message` |
+| FastAPI | `openreceive_router(..., rate_limit=hook)` | `raise RateLimitedError(message)`, from `openreceive.server.errors` |
+| Flask | `OpenReceiveApp(..., rate_limit=hook)` | the same |
+| Plain PHP | `new Engine(..., rateLimit: $hook)` | `throw new \OpenReceive\Server\Errors\RateLimitedError($message)` |
+
+Every hook gets the same context as `authorize`: the action (`swap.create`
+for a swap start), your framework's request, and the order reference.
+Returning `false` refuses too, with the generic message *"Too many
+requests."* A custom hook replaces the built-in `rateLimiting`: the two cannot
+be combined. Django settings and the Laravel config have no key for a custom
+hook. There, run the same count in your own middleware in front of
+`POST {prefix}/swaps`, next to the limit in step 2.
+
+### 2. Cap swap starts per hour
+
+In your app's own middleware, in front of `POST {prefix}/swaps`, cap swap
+starts per account and per client address: about 20 an hour each. That route
+starts swaps; leave `/swaps/quote`, `/swaps/status` and `/swaps/refunds`
+alone. Count the payer's own address, never your proxy's or load balancer's.
+See [Getting the client IP right](#getting-the-client-ip-right). Answer with
+the JSON the checkout shows: `code`, `message` and `retryable`.
+
+Express, with `express-rate-limit` (after `app.set("trust proxy", ...)` when
+you run behind a proxy):
+
+```ts
+import { rateLimit } from "express-rate-limit";
+
+const refused = {
+  code: "RATE_LIMITED",
+  message: "Too many coin payments started. Please try again later.",
+  retryable: true,
+};
+const hour = 60 * 60 * 1000;
+const swapStartsPerAccount = rateLimit({
+  windowMs: hour,
+  limit: 20,
+  message: refused,
+  skip: (req) => req.session?.userId === undefined,
+  keyGenerator: (req) => `account:${req.session.userId}`,
+});
+const swapStartsPerAddress = rateLimit({ windowMs: hour, limit: 20, message: refused });
+
+app.post("/openreceive/swaps", swapStartsPerAccount, swapStartsPerAddress);
+app.use(openreceive);
+```
+
+Rails, with `rack-attack`, in `config/initializers/rack_attack.rb`:
+
+```ruby
+swap_start = ->(request) { request.post? && request.path == "/openreceive/swaps" }
+
+Rack::Attack.throttle("swap starts per account", limit: 20, period: 1.hour) do |request|
+  request.env["rack.session"]&.[]("user_id") if swap_start.call(request)
+end
+
+Rack::Attack.throttle("swap starts per address", limit: 20, period: 1.hour) do |request|
+  # remote_ip follows config.action_dispatch.trusted_proxies, so a proxy is not the payer.
+  ActionDispatch::Request.new(request.env).remote_ip if swap_start.call(request)
+end
+```
+
+Give `Rack::Attack.throttled_responder` a JSON body with `code`, `message`
+and `retryable` too, or the checkout shows its own generic message.
 
 ## Custom policies
 
