@@ -47,7 +47,7 @@
   "author": "OpenReceive <info@openreceive.org>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openreceive/openreceive.git",
+    "url": "git+https://github.com/OpenReceive/openreceive.git",
     "directory": "packages/js/next"
   },
   "bugs": {

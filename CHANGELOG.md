@@ -92,6 +92,9 @@ exported from a package entry point.
   `PROVIDER_ONLY_LIMITS`, PHP `SwapProviderLimits::providerOnly()`, Ruby
   `PROVIDER_ONLY_SWAP_PROVIDER_LIMITS`. A provider that states no limits is
   no longer held to FixedFloat's; it is not counted at all.
+- **npm packages are published from GitHub Actions** with npm Trusted
+  Publishing, so every version from 0.6.0 on carries a provenance statement
+  linking it to the commit and workflow run that built it.
 
 ## 0.5.0 - 2026-11-16
 

@@ -105,9 +105,9 @@ does not authorize submitting a Plugin Builder build or publishing the plugin;
 do either only when the user explicitly requests a BTCPay release.
 
 ALWAYS GIVE THE MAINTAINER THE APPROVAL LINKS. Pushing a release tag starts
-`Publish Gems`, `Publish PyPI` and `Publish Composer`, and each waits for a
-maintainer's click in the browser. Gems, PyPI, Packagist and the GitHub
-release all stall until then. As soon as the runs exist, list all three
+`Publish npm`, `Publish Gems`, `Publish PyPI` and `Publish Composer`, and each
+waits for a maintainer's click in the browser. npm, Gems, PyPI, Packagist and
+the GitHub release all stall until then. As soon as the runs exist, list all four
 labelled run URLs (`https://github.com/OpenReceive/openreceive/actions/runs/<id>`)
 from:
 

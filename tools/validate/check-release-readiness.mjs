@@ -216,8 +216,8 @@ for (const { relativePath, manifest } of packages) {
       `${relativePath}: a package with a build script must also build on prepack`,
     );
     expect(
-      manifest.repository?.url === "git+https://github.com/openreceive/openreceive.git",
-      `${relativePath}: repository.url must be git+https://github.com/openreceive/openreceive.git`,
+      manifest.repository?.url === "git+https://github.com/OpenReceive/openreceive.git",
+      `${relativePath}: repository.url must be git+https://github.com/OpenReceive/openreceive.git`,
     );
     for (const requiredFile of [
       "README.md",
@@ -484,6 +484,7 @@ for (const phrase of [
   "Workflow safety validation passes through `npm run check:workflows`.",
   "Package artifact dry run passes through `npm run build:packages`.",
   ".github/workflows/release.yml",
+  ".github/workflows/publish-npm.yml",
   ".github/workflows/publish-gems.yml",
   ".github/workflows/publish-pypi.yml",
   "Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.",

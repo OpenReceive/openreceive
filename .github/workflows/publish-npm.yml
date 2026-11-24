@@ -1,0 +1,95 @@
+name: Publish npm
+
+# Publishes the 16 public npm packages with Trusted Publishing: the job proves
+# its identity with a GitHub OIDC token and npm accepts the upload without any
+# stored token, and attaches a provenance statement to every version. npm
+# trusts exactly this repository + this filename + the `npm` environment (one
+# trusted-publisher entry per package), and the environment admits only v*
+# tags after a human approval. Treat edits to this file like edits to a
+# signing key.
+#
+# A published npm version can never be replaced, so the job first waits for
+# CI and Release Dry Run on the same commit and refuses to publish unless both
+# passed. The publisher is the same tools/release/npm-release.mjs the
+# maintainer ran locally: exact tarballs, the tarball smoke, dependency order,
+# versions npm already holds are refused before anything is built.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-npm:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: npm
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # A v* tag that does not match the prepared workspace version is a
+      # mis-tag; fail before anything is built.
+      - name: Assert tag matches package.json version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version v${version}." >&2
+            exit 1
+          fi
+      # Together CI and Release Dry Run run every step of `npm run test:ci`.
+      # Wait while either is still running on this commit; publish only when
+      # both passed.
+      - name: Require green CI and Release Dry Run on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            pending=0
+            for workflow in ci.yml release.yml; do
+              runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" --commit "$GITHUB_SHA" --limit 20 --json status,conclusion,url)"
+              if [ "$(jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length' <<<"$runs")" -gt 0 ]; then
+                echo "$workflow passed: $(jq -r '[.[] | select(.conclusion == "success")][0].url' <<<"$runs")"
+              elif [ "$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")" -gt 0 ]; then
+                pending=1
+              else
+                echo "$workflow has no passing run on $GITHUB_SHA; refusing to publish." >&2
+                jq -r '.[] | "  \(.status)/\(.conclusion) \(.url)"' <<<"$runs" >&2
+                exit 1
+              fi
+            done
+            [ "$pending" -eq 0 ] && exit 0
+            echo "waiting for CI and Release Dry Run on $GITHUB_SHA (check $attempt)"
+            sleep 30
+          done
+          echo "CI or Release Dry Run did not finish within an hour; re-run this job once they pass." >&2
+          exit 1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - name: Install npm 11
+        run: npm install --global npm@11.21.3
+      - run: npm ci
+      # Prereleases go to the `next` dist-tag so `latest` never moves to one.
+      # --skip-tests: the step above proved the suite on this exact commit.
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag=latest
+          case "$version" in *-*) tag=next ;; esac
+          node tools/release/npm-release.mjs publish --tag "$tag" --skip-tests

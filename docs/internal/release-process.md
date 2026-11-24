@@ -53,7 +53,7 @@ Six destinations, six publishers:
 
 | Registry | Who publishes | Credential |
 | --- | --- | --- |
-| npm (16 packages) | the maintainer's machine, `npm run release:publish` | granular token with "Bypass 2FA", loaded from `.env.release` |
+| npm (16 packages) | GitHub Actions, `.github/workflows/publish-npm.yml`, through `tools/release/npm-release.mjs publish` | none stored: OIDC Trusted Publishing, approved per run in the `npm` environment |
 | RubyGems (3 gems) | GitHub Actions, `.github/workflows/publish-gems.yml` | none stored: OIDC Trusted Publishing, approved per run in the `rubygems` environment |
 | PyPI (1 distribution) | GitHub Actions, `.github/workflows/publish-pypi.yml` | none stored: OIDC Trusted Publishing, approved per run in the `pypi` environment |
 | Packagist (2 packages) | GitHub Actions, `.github/workflows/publish-composer.yml`. It pushes the split repositories that Packagist watches. | separate write-enabled deploy keys: `COMPOSER_OPENRECEIVE_SSH_KEY` for `OpenReceive/openreceive-php`, `COMPOSER_LARAVEL_SSH_KEY` for `OpenReceive/openreceive-laravel`, both in the protected `packagist` environment |
@@ -70,6 +70,23 @@ create accounts or enforce environment reviewer settings.
   userconfig, the `gh` config directory and `GH_REPO` for the OpenReceive
   identity. It also exports a push-scoped `GEM_HOST_API_KEY`, which only the
   manual gem fallback uses. Source it first in every release shell.
+- On npmjs.com, each of the 16 public packages has one trusted publisher:
+  GitHub Actions, repository `OpenReceive/openreceive`, workflow
+  `publish-npm.yml`, environment `npm`. Set them all from a shell logged in as
+  `openreceive` (npm 11.10 or later):
+
+  ```sh
+  for p in $(node --input-type=module -e "import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES as n } from './tools/package/public-packages.mjs'; console.log(n.join(' '))"); do
+    npx -y npm@11 trust github "$p" --repo OpenReceive/openreceive --file publish-npm.yml --env npm --allow-publish -y
+  done
+  ```
+
+  `npm trust list <package>` shows an entry. On GitHub, the `npm` environment
+  is set up like `rubygems`: a required reviewer, no administrator bypass, and
+  `v*` tags only. Every `repository.url` names `OpenReceive/openreceive` in that
+  exact case, because npm checks it against the provenance the workflow signs.
+  A new public package must exist on npm before it can have a trusted
+  publisher, so its first version goes up by hand (step 8's fallback).
 - On rubygems.org, each of the three gems has one entry under "Trusted
   publishers" with these values:
   - repository owner `OpenReceive` (case-sensitive)
@@ -232,11 +249,11 @@ Run from the repo root on a clean, current `master`.
    git push origin master && git push origin v<x.y.z>
    ```
 
-   The push starts five workflows: `CI` on master, and `Release Dry Run`,
-   `Publish Gems`, `Publish PyPI` and `Publish Composer` on the tag. If the tag
-   does not match `package.json`, `Release Dry Run` fails first.
+   The push starts six workflows: `CI` on master, and `Release Dry Run`,
+   `Publish npm`, `Publish Gems`, `Publish PyPI` and `Publish Composer` on the
+   tag. If the tag does not match `package.json`, `Release Dry Run` fails first.
 
-   Inspect all three protected publishing runs immediately. Submit their normal
+   Inspect all four protected publishing runs immediately. Submit their normal
    environment approvals only when publication is authorized and GitHub reports
    `current_user_can_approve: true` for the authenticated release identity.
    Otherwise give the maintainer the run URLs and request an authorized review;
@@ -247,9 +264,9 @@ Run from the repo root on a clean, current `master`.
    gh run list --repo OpenReceive/openreceive --branch v<x.y.z> --json workflowName,status,url
    ```
 
-   **Always hand the maintainer all three approval links.** This has been
+   **Always hand the maintainer all four approval links.** This has been
    missed before. An agent cutting the release lists the labelled URLs
-   (Gems / `rubygems`, PyPI / `pypi`, Composer / `packagist`) in the final
+   (npm / `npm`, Gems / `rubygems`, PyPI / `pypi`, Composer / `packagist`) in the final
    message of the turn that pushed the tag. A line between tool calls does not
    count. It repeats them at the end of every later release message until each
    run is approved, and names any stale run from an older tag that must not be
@@ -313,8 +330,20 @@ Run from the repo root on a clean, current `master`.
    `composer-openreceive` / `composer-laravel` git remotes (or `--remote-<pkg>`
    URLs). It needs a clean tree and waits for Packagist the same way.
 
-8. Publish to npm once `CI` and `Release Dry Run` are green on the release
-   commit. Rehearse first:
+8. Approve the npm publish the same way. `Publish npm` waits at the `npm`
+   environment. Approve it once `CI` and `Release Dry Run` are green on the
+   release commit; the job checks that itself too, waiting up to an hour while
+   either still runs and refusing to publish if either failed. It then installs
+   npm 11 and runs `node tools/release/npm-release.mjs publish --skip-tests`
+   (dist-tag `latest`, or `next` for a prerelease). npm takes the upload on the
+   job's OIDC identity, with no stored token, and records a provenance
+   statement for every version. Verify with `npm view @openreceive/core
+   version` from outside the workspace.
+
+   If the workflow cannot run, the manual fallback publishes from the
+   maintainer's machine with a granular token ("Bypass 2FA", read and write)
+   in the npm userconfig that `.env.release` names. npm revokes such tokens in
+   January 2027. Rehearse first:
 
    ```sh
    npm run release:publish -- --tag latest --dry-run
@@ -682,6 +711,10 @@ the publisher already does. Do not weaken or skip release coverage.
 - `.github/workflows/release.yml` is a release dry run on every `v*` tag.
   Together with `ci.yml` it covers every `test:ci` step. `release:publish`
   relies on that to skip the local suite.
+- `.github/workflows/publish-npm.yml` publishes the 16 npm packages on a `v*`
+  tag through npm Trusted Publishing, once `CI` and `Release Dry Run` passed on
+  the same commit. The `npm` environment's required approval gates it. It is
+  the only workflow allowed to run `npm-release.mjs publish`.
 - `.github/workflows/publish-gems.yml` publishes the gems on a `v*` tag through
   RubyGems Trusted Publishing. The `rubygems` environment's required approval
   gates it. It is the only workflow allowed to run `gem push`.

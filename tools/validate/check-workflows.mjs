@@ -104,6 +104,15 @@ const requiredWorkflows = {
     "npm run build:standalone",
     "uv publish",
   ],
+  // The npm twin: trusted publishing through the `npm` environment, after CI
+  // and Release Dry Run passed on the same commit, through the same publisher
+  // the maintainer runs locally.
+  "publish-npm.yml": [
+    "does not match package.json version",
+    '--commit "$GITHUB_SHA"',
+    "npm ci",
+    "tools/release/npm-release.mjs publish",
+  ],
   // The Composer twin: no registry token exists — Packagist reads tags on the
   // two read-only split repositories, so the workflow builds the splits and
   // pushes them with deploy keys released by the `packagist` environment.
@@ -133,6 +142,11 @@ const gemPublishEnvironment = "rubygems";
 const pypiPublishWorkflow = "publish-pypi.yml";
 const pypiPublishEnvironment = "pypi";
 const pypiPushTexts = ["uv publish", "twine upload"];
+// npm's trusted-publisher entries (one per package) name this file and this
+// environment; the release script's publish command runs here and nowhere else.
+const npmPublishWorkflow = "publish-npm.yml";
+const npmPublishEnvironment = "npm";
+const npmPushText = "npm-release.mjs publish";
 // The split-repository push for Packagist: the deploy keys live in the
 // `packagist` environment and only this workflow may run the publish command.
 const composerPublishWorkflow = "publish-composer.yml";
@@ -366,6 +380,55 @@ function checkPypiPublishWorkflow(relativePath, workflow) {
   }
 }
 
+// The npm trusted-publisher contract: every job runs in the gated environment
+// and only a v* tag can start it, also by hand. The job requests the OIDC token
+// and may read Actions runs (to see CI and Release Dry Run pass on its commit),
+// nothing more, and its publish step is handed no token: npm must take the
+// upload on the OIDC identity alone.
+function checkNpmPublishWorkflow(relativePath, workflow) {
+  const tags = workflow.on?.push?.tags;
+  expect(
+    Array.isArray(tags) && tags.length === 1 && tags[0] === "v*",
+    `${relativePath}: push trigger must be exactly the v* tags`,
+  );
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    expect(
+      job.if === "startsWith(github.ref, 'refs/tags/v')",
+      `${relativePath}: ${jobName} must restrict manual dispatch to v* tags too`,
+    );
+    expect(
+      job.environment === npmPublishEnvironment,
+      `${relativePath}: ${jobName} must run in the ${npmPublishEnvironment} environment`,
+    );
+    const permissions = job.permissions === undefined ? {} : job.permissions;
+    expect(
+      permissions.contents === "read" &&
+        permissions["id-token"] === "write" &&
+        permissions.actions === "read" &&
+        Object.keys(permissions).length === 3,
+      `${relativePath}: ${jobName} permissions must be exactly contents: read + id-token: write + actions: read`,
+    );
+    const steps = job.steps ?? [];
+    const publishAt = steps.findIndex((step) => step.run?.includes(npmPushText));
+    const gateAt = steps.findIndex((step) =>
+      step.name?.includes("Require green CI and Release Dry Run"),
+    );
+    expect(
+      publishAt === -1 || (gateAt !== -1 && gateAt < publishAt),
+      `${relativePath}: ${jobName} must check CI and Release Dry Run before it publishes`,
+    );
+    for (const step of steps) {
+      expect(
+        step.env?.NODE_AUTH_TOKEN === undefined &&
+          step.env?.NPM_TOKEN === undefined &&
+          step.with?.["registry-url"] === undefined,
+        `${relativePath}: ${jobName} must publish on the OIDC identity alone (no npm token, no registry-url)`,
+      );
+    }
+  }
+}
+
 // The Composer split-push contract: every job runs in the gated environment
 // with read-only contents (the deploy keys, not GITHUB_TOKEN, are what push),
 // and only a v* tag can start it. The keys are secrets the environment releases
@@ -582,6 +645,14 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
     expect(
       !text.includes(wordpressPushText),
       `${relativePath}: forbidden workflow text ${wordpressPushText} (only ${wordpressPublishWorkflow} commits to WordPress.org)`,
+    );
+  }
+  if (fileName === npmPublishWorkflow) {
+    checkNpmPublishWorkflow(relativePath, workflow);
+  } else {
+    expect(
+      !text.includes(npmPushText),
+      `${relativePath}: forbidden workflow text ${npmPushText} (only ${npmPublishWorkflow} publishes to npm)`,
     );
   }
   if (fileName === pypiPublishWorkflow) {
