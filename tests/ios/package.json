@@ -1,0 +1,10 @@
+{
+  "name": "openreceive-ios-lab",
+  "private": true,
+  "description": "Payer journeys in real Safari on the iOS simulator. Not part of the build; see README.md.",
+  "type": "module",
+  "dependencies": {
+    "appium": "^3",
+    "appium-remote-debugger": "^19"
+  }
+}

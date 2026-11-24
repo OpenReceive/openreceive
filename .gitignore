@@ -65,6 +65,10 @@ tools/live-nwc-test/expected_capabilities.json
 tests/e2e/test-results/
 # Android Chrome lab screenshots and reports
 tests/android/results/
+# iOS Safari lab screenshots and reports, its own dependencies and Appium home
+tests/ios/results/
+tests/ios/node_modules/
+tests/ios/.appium/
 
 # Agent trial reports. A transcript can contain a pasted wallet code.
 trials/reports/
