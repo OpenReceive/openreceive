@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Next.js)
 
 ```sh
-# READ THIS FIRST: this file is 47 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 48 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/next/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/next/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -196,6 +196,10 @@ the message on a question.
 - Name the methods it offers: Bitcoin, plus USDT, USDC, ETH and SOL when
   `LSC_URI_PRIMARY` is saved. Do not mention minimums, and never say a coin
   will not work or will not be offered.
+- When an `LSC_URI_*` code is saved, one line sends the user to
+  https://openreceive.org/guides/rate-limiting#if-you-take-coin-payments:
+  limits per payer on coin payments are their app's to add from it. Do not
+  build them.
 
 ## Non-negotiables
 
