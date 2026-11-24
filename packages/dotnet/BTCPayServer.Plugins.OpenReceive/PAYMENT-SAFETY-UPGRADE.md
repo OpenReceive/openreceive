@@ -123,14 +123,17 @@ leases prevent concurrent workers from polling the same row; abandoned claims
 become eligible after expiry. A local weight-budget refusal does not advance
 last-polled order or pretend the provider was contacted. Refused rows wait until
 the relevant budget/backoff boundary and retain priority over recently served
-rows. With 400 due orders, no other traffic and a 200-request window (the
-FixedFloat sizing; Lightning Swap allows 400), each receives an actual
-observation within two 60-second windows. Sustained arrivals queue
+rows. Only FixedFloat's own host is counted locally: its window allows 50 status
+calls, so with 100 due orders and no other traffic each receives an actual
+observation within two 60-second windows. Any other provider is polled as fast
+as the cadence asks until its own 429 starts a stand-off. Sustained arrivals queue
 behind older attempts; network errors consume capacity and retain the normal
 backoff. No finite latency bound is promised when arrival rate exceeds capacity.
 
 The request-weight guard is **per process and configured provider connection**,
-shared by that connection's quote/create/status/refund requests. Restart resets
+shared by that connection's quote/create/status/refund requests. It counts calls
+only for FixedFloat's own host (ff.io); for every other provider it only keeps
+the stand-off that provider's 429 asked for. Restart resets
 it and replicas multiply its local capacity. Database row leases do not create a
 cluster-wide account quota. The provider remains the global rate-limit authority;
 HTTP 429 imposes backoff. Separate configured accounts continue independently.

@@ -1,4 +1,4 @@
-"""The request guard is sized by the provider's host: the profile numbers, the
+"""Only FixedFloat's own host is counted locally: the profile numbers, the
 host that picks each profile, and every guard scenario of the shared family,
 run through the production guard."""
 
@@ -14,7 +14,7 @@ VECTOR = load_vector("swap-provider-limits.json")
 
 PROFILES = {
     "fixedfloat": budget.FIXEDFLOAT_LIMITS,
-    "lightning-swap": budget.LIGHTNING_SWAP_LIMITS,
+    "provider-only": budget.PROVIDER_ONLY_LIMITS,
 }
 
 

@@ -70,8 +70,8 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime, Gua
             throw new \InvalidArgumentException('FixedFloat-compatible API secret must not be empty.');
         }
         $this->baseUrl = rtrim($baseUrl ?? self::DEFAULT_BASE_URL, '/');
-        // The host names the provider, and the provider sets the limits: the
-        // same wire contract is served at very different rates.
+        // The host names the provider: only FixedFloat's own host is counted
+        // locally; every other provider limits its own accounts with a 429.
         $this->limits = SwapProviderLimits::forBaseUrl($this->baseUrl);
         $this->lightningCcy = trim((string) $lightningCcy) === '' ? null : trim((string) $lightningCcy);
         $this->http = $http ?? new StreamTransport();

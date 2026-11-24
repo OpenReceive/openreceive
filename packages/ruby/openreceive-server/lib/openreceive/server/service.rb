@@ -617,8 +617,8 @@ module OpenReceive
 
       # Mirrors the JS createOpenReceive provider wiring: one shared transient
       # cache and one per-provider weight budget, attached to every provider
-      # that supports them (host-supplied or auto-built). The budget is sized
-      # by the provider's own limits.
+      # that supports them (host-supplied or auto-built). The budget follows
+      # the provider's own limits.
       def attach_swap_provider_runtime!
         return if @swap_providers.empty?
 
@@ -633,11 +633,11 @@ module OpenReceive
         end
       end
 
-      # A provider that names no limits (a custom provider, a test double)
-      # gets the FixedFloat ones, the stricter of the two.
+      # A provider that names no limits (a custom provider, a test double) is
+      # never counted locally and only obeys its 429.
       def swap_provider_limits(provider)
         limits = provider.respond_to?(:limits) ? provider.limits : nil
-        limits.is_a?(Swap::SwapProviderLimits) ? limits : Swap::FIXEDFLOAT_SWAP_PROVIDER_LIMITS
+        limits.is_a?(Swap::SwapProviderLimits) ? limits : Swap::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS
       end
 
       # Use exactly one live provider's catalog: primary when healthy,
@@ -961,10 +961,9 @@ module OpenReceive
       end
 
       # The Logger sink takes one string, so the fields the JS line carries
-      # (provider, path, reason, used, gate, creates, create_limit,
-      # backoff_until) follow the sentence as key=value, in parentheses. A
-      # provider's 429 carries no denial; its own words follow instead,
-      # redacted.
+      # (provider, path, reason, used, gate, backoff_until) follow the
+      # sentence as key=value, in parentheses. A provider's 429 carries no
+      # denial; its own words follow instead, redacted.
       def swap_provider_rate_limit_line(denial, error)
         if denial.nil?
           return "The swap provider answered 429 (rate limited); new calls stand off until its " \
@@ -975,9 +974,9 @@ module OpenReceive
           if denial["reason"] == "backoff"
             "Swap provider call refused locally: standing off after the provider's 429."
           else
-            "Swap provider call refused locally: this process reached the provider's per-minute limit."
+            "Swap provider call refused locally: this process reached the per-minute limit it keeps for FixedFloat."
           end
-        fields = %w[provider path reason used gate creates create_limit backoff_until].filter_map do |key|
+        fields = %w[provider path reason used gate backoff_until].filter_map do |key|
           "#{key}=#{denial[key]}" unless denial[key].nil?
         end
         fields.empty? ? sentence : "#{sentence} (#{fields.join(' ')})"

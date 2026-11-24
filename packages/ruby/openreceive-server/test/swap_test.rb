@@ -753,10 +753,11 @@ class FixedFloatProviderTest < Minitest::Test
     assert_equal "rate_limited", assert_raises(SWAP::FixedFloatApiError) { create.call }.kind
   end
 
-  def test_the_providers_host_picks_its_limits
+  def test_only_fixedfloats_own_host_is_counted_locally
     lightning_swap = make_provider({}, base_url: "https://api.lightning-swap.com/v1/").first
-    assert_same SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS, lightning_swap.limits
-    assert_same SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS, make_provider({}).first.limits
+    assert_same SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS, lightning_swap.limits
+    assert_same SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS, make_provider({}, base_url: "https://evil-ff.io").first.limits
+    assert_same SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS, make_provider({}, base_url: "https://api.FF.io/v2/").first.limits
     default_host = SWAP::FixedFloatProvider.new(key: "k", secret: "s", http: ->(**_r) {}, now: -> { NOW })
     assert_equal "fixedfloat", default_host.limits.profile
     # Asking is harmless before a guard is attached, and with one that
@@ -893,15 +894,13 @@ end
 class SwapWeightBudgetTest < Minitest::Test
   def test_budget_meters_create_weight_and_backs_off_on_rate_limits
     now = 1_000
-    budget = SWAP::SwapProviderWeightBudget.new("fixedfloat", -> { now })
-    # create weighs 50 against a 150 gate: the fourth create exhausts it.
-    3.times { budget.reserve("create") }
+    budget = SWAP::SwapProviderWeightBudget.new("fixedfloat", -> { now }, SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS)
+    # create weighs 50 against the 200 soft cap: the fifth create exhausts it.
+    4.times { budget.reserve("create") }
     error = assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
     assert SWAP.weight_budget_error?(error)
     assert_equal "exhausted", error.denial.fetch("reason")
-    # Small calls still fit under the 200 soft cap...
-    budget.reserve("order")
-    # ...until a provider 429 marks the budget rate limited, late in the window.
+    # A provider 429 marks the budget rate limited, late in the window.
     now = 1_059
     budget.mark_rate_limited
     assert_raises(SWAP::WeightBudgetError) { budget.reserve("order") }
@@ -920,19 +919,22 @@ class SwapWeightBudgetTest < Minitest::Test
   )
   PROFILES = {
     "fixedfloat" => SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
-    "lightning-swap" => SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS
+    "provider-only" => SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS
   }.freeze
 
-  # Twin of "swap-provider-limits: the request guard is sized by the
-  # provider's host" in tests/crosslang.test.mjs.
+  # Twin of "swap-provider-limits: only FixedFloat's own host is counted
+  # locally" in tests/crosslang.test.mjs.
   def test_swap_provider_limits_vector_profiles_carry_the_shared_numbers
     assert_equal LIMITS_VECTOR.fetch("window_seconds"), SWAP::SwapProviderWeightBudget::WINDOW_SECONDS
     assert_equal LIMITS_VECTOR.fetch("profiles").keys.sort, PROFILES.keys.sort
     LIMITS_VECTOR.fetch("profiles").each do |name, expected|
       limits = PROFILES.fetch(name)
       assert_equal name, limits.profile
-      assert_equal expected, limits.to_h.transform_keys(&:to_s).except("profile"), name
+      actual = limits.to_h.transform_keys(&:to_s).except("profile")
+      actual["local_budget"] = actual.fetch("local_budget")&.to_h&.transform_keys(&:to_s)
+      assert_equal expected, actual, name
       assert limits.frozen?, "#{name} limits must not be editable in place"
+      assert limits.local_budget.frozen?, "#{name} budget must not be editable in place" unless limits.local_budget.nil?
     end
   end
 
@@ -974,39 +976,45 @@ class SwapWeightBudgetTest < Minitest::Test
     end
   end
 
-  def test_a_lightning_swap_denial_says_which_limit_was_reached
-    now = 1_000
-    budget = SWAP::SwapProviderWeightBudget.new(
-      "lightning-swap-com", -> { now }, SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS
-    )
-    30.times { budget.reserve("create") }
-    denied = assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
-    assert_match(/create budget exhausted \(30\+1 > 30\)/, denied.message)
-    assert_equal ["exhausted", 30, 30, 30, 400],
-                 denied.denial.values_at("reason", "creates", "create_limit", "used", "gate")
+  def test_a_fixedfloat_denial_says_which_limit_was_reached
+    budget = SWAP::SwapProviderWeightBudget.new("fixedfloat", -> { 1_000 }, SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS)
+    # Fifty status polls spend the share the calls that are not creates have...
+    50.times { budget.reserve("order") }
+    denied = assert_raises(SWAP::WeightBudgetError) { budget.reserve("order") }
+    assert_match(/calls other than creates exhausted \(50\+1 > 50\)/, denied.message)
+    assert_equal ["exhausted", 50, 50], denied.denial.values_at("reason", "used", "gate")
     refute denied.denial.key?("backoff_until")
-    # The swaps that exist can still be read and refunded.
-    budget.reserve("order")
-    budget.reserve("emergency")
-    # A provider that does not count creates on their own reports no count.
-    fixedfloat = SWAP::SwapProviderWeightBudget.new("fixedfloat", -> { now })
-    3.times { fixedfloat.reserve("create") }
-    denied = assert_raises(SWAP::WeightBudgetError) { fixedfloat.assert_available("create") }
-    assert_match(/weight budget exhausted \(150\+50 > 150\)/, denied.message)
-    refute denied.denial.key?("creates")
-    refute denied.denial.key?("create_limit")
+    # ...and three payers can still start a swap this minute.
+    3.times { budget.reserve("create") }
+    denied = assert_raises(SWAP::WeightBudgetError) { budget.assert_available("create") }
+    assert_match(/weight budget exhausted \(200\+50 > 200\)/, denied.message)
+    assert_equal ["exhausted", 200, 200], denied.denial.values_at("reason", "used", "gate")
+  end
+
+  def test_the_guard_counts_nothing_for_any_other_provider
+    [nil, SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS].each do |limits|
+      budget = SWAP::SwapProviderWeightBudget.new("ls", -> { 1_000 }, *[limits].compact)
+      500.times { budget.reserve("create") }
+      2_000.times { budget.reserve("order") }
+      assert_nil budget.assert_available("create")
+      # A guard that counts nothing reports no counts when it stands off.
+      budget.mark_rate_limited(path: "create", retry_after_seconds: 12)
+      denied = assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
+      assert_equal({ "reason" => "backoff", "backoff_until" => 1_012 }, denied.denial.slice("reason", "backoff_until", "used", "gate"))
+      budget.reserve("order")
+    end
   end
 
   def test_a_wait_that_is_not_a_positive_number_means_the_profiles_own_backoff
     [nil, 0, -5, Float::NAN, Float::INFINITY, "12", true].each do |wait|
-      budget = SWAP::SwapProviderWeightBudget.new("ls", -> { 1_000 }, SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS)
+      budget = SWAP::SwapProviderWeightBudget.new("ls", -> { 1_000 }, SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS)
       budget.mark_rate_limited(path: "create", retry_after_seconds: wait)
       denied = assert_raises(SWAP::WeightBudgetError) { budget.assert_available("create") }
       assert_equal 1_060, denied.denial.fetch("backoff_until"), wait.inspect
     end
     # A fraction is rounded up; a number past any clock is the longest wait.
     { 0.2 => 1_001, 12.01 => 1_013, 10**400 => 1_300 }.each do |wait, standoff_end|
-      budget = SWAP::SwapProviderWeightBudget.new("ls", -> { 1_000 }, SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS)
+      budget = SWAP::SwapProviderWeightBudget.new("ls", -> { 1_000 }, SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS)
       budget.mark_rate_limited(path: "create", retry_after_seconds: wait)
       denied = assert_raises(SWAP::WeightBudgetError) { budget.assert_available("create") }
       assert_equal standoff_end, denied.denial.fetch("backoff_until"), wait.inspect
@@ -1015,18 +1023,18 @@ class SwapWeightBudgetTest < Minitest::Test
 
   def test_a_429_with_no_path_stops_every_call_and_restarts_the_window
     now = 1_000
-    budget = SWAP::SwapProviderWeightBudget.new("ls", -> { now }, SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS)
-    30.times { budget.reserve("create") }
-    budget.mark_rate_limited(retry_after_seconds: 30)
+    budget = SWAP::SwapProviderWeightBudget.new("fixedfloat", -> { now }, SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS)
+    4.times { budget.reserve("create") }
+    budget.mark_rate_limited(retry_after_seconds: 90)
     assert_raises(SWAP::WeightBudgetError) { budget.reserve("order") }
     # The provider's window is fresh once the stand-off ends: the creates
     # counted before it are not held against the next minute.
-    now = 1_030
-    30.times { budget.reserve("create") }
-    assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
-    now = 1_089
-    assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
     now = 1_090
+    4.times { budget.reserve("create") }
+    assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
+    now = 1_149
+    assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
+    now = 1_150
     budget.reserve("create")
   end
 end
@@ -1489,9 +1497,15 @@ class SwapProviderFailureTest < Minitest::Test
 
   def test_the_weight_budget_after_a_few_try_agains_is_a_retryable_503
     @routes["create"] = REFUSED
-    # /ccies spent 1 and each Try again spends a create weight (50) before the
-    # provider answers, so the third press would pass the 150 create gate.
-    2.times { assert_equal 502, assert_raises(OpenReceive::Server::ServiceError) { create_swap }.status }
+    # On FixedFloat's own host, the one the guard counts for, /ccies spent 1
+    # and each Try again spends a create weight (50) before the provider
+    # answers, so the fourth press would pass the 200 soft cap.
+    @provider, @calls = make_provider(@routes, base_url: "https://ff.io")
+    @service = OpenReceive::Server::Service.new(
+      nwc_client: SwapServiceIntegrationTest::Wallet.new, swap_providers: [@provider],
+      price_provider: false, clock: -> { NOW }, logger: @log
+    )
+    3.times { assert_equal 502, assert_raises(OpenReceive::Server::ServiceError) { create_swap }.status }
     creates = @calls.count { |call| call[:path] == "create" }
     error = assert_raises(OpenReceive::Server::ServiceError) { create_swap }
     assert_equal [503, "INTERNAL", "The swap provider is rate limited. Please try again shortly.", true],
@@ -1544,9 +1558,9 @@ class SwapProviderFailureTest < Minitest::Test
   end
 end
 
-# The service sizes each provider's guard by the provider's own limits, asks
-# the guard before the invoice is made, and says in the log why a swap call was
-# refused for rate. Mirrors "a create the guard would refuse is refused before
+# The service builds each provider's guard from the provider's own limits,
+# asks the guard before the invoice is made, and says in the log why a swap
+# call was refused for rate. Mirrors "a create the guard would refuse is refused before
 # an invoice is made" in tests/fixedfloat.test.mjs.
 class SwapProviderGuardServiceTest < Minitest::Test
   RATE_LIMITED = [503, "INTERNAL", "The swap provider is rate limited. Please try again shortly.", true].freeze
@@ -1567,6 +1581,7 @@ class SwapProviderGuardServiceTest < Minitest::Test
 
   # A provider the way a host writes one: no HTTP, the guard handed in by the
   # service. `create_swap` and `get_status` reserve, as the real transport does.
+  # It states FixedFloat's limits, the only ones the guard counts for.
   class GuardedProvider
     attr_reader :budget, :creates
 
@@ -1575,6 +1590,7 @@ class SwapProviderGuardServiceTest < Minitest::Test
     end
 
     def name = "fixedfloat"
+    def limits = SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS
     def supported_pay_in_assets = ["USDT_TRON"]
     def invoice_expiry_seconds(pay_in_asset: nil) = 1800
 
@@ -1631,31 +1647,50 @@ class SwapProviderGuardServiceTest < Minitest::Test
   def test_a_create_the_guard_would_refuse_is_refused_before_an_invoice_is_made
     provider = AskingProvider.new
     service = service_for(provider)
-    3.times { provider.budget.reserve("create") }
+    4.times { provider.budget.reserve("create") }
     2.times { refused(service) }
     assert_equal 0, @wallet.invoices
     assert_equal 0, provider.creates
     # Two refusals, one log line: status polls must not bury the log.
     assert_equal 1, rate_limit_lines.length
     assert_equal "swap.provider.rate_limited: Swap provider call refused locally: this process " \
-                 "reached the provider's per-minute limit. (provider=fixedfloat path=create " \
-                 "reason=exhausted used=150 gate=150)",
+                 "reached the per-minute limit it keeps for FixedFloat. (provider=fixedfloat " \
+                 "path=create reason=exhausted used=200 gate=200)",
                  rate_limit_lines.first
+  end
+
+  def test_another_providers_create_stand_off_is_refused_before_an_invoice_is_made
+    provider = Class.new(AskingProvider) { undef_method :limits }.new
+    service = service_for(provider)
+    # A provider that names no limits is never counted locally...
+    500.times { provider.budget.reserve("create") }
+    2_000.times { provider.budget.reserve("order") }
+    # ...but its 429 on a create stops new swaps, before an invoice is made.
+    provider.budget.mark_rate_limited(path: "create", retry_after_seconds: 20)
+    refused(service)
+    assert_equal [0, 0], [@wallet.invoices, provider.creates]
+    assert_equal ["swap.provider.rate_limited: Swap provider call refused locally: standing off after " \
+                  "the provider's 429. (provider=fixedfloat path=create reason=backoff " \
+                  "backoff_until=#{NOW + 20})"],
+                 rate_limit_lines
+    # Status and refund calls for swaps that already exist keep going.
+    provider.budget.reserve("order")
+    provider.budget.reserve("emergency")
   end
 
   def test_asking_uses_no_budget_and_the_create_itself_still_reserves
     provider = AskingProvider.new
     service = service_for(provider)
-    3.times { |index| assert_equal "fixedfloat", create_swap(service, "order-#{index}").fetch("provider") }
-    assert_equal [3, 3], [@wallet.invoices, provider.creates]
-    refused(service, "order-3")
-    assert_equal [3, 3], [@wallet.invoices, provider.creates]
+    4.times { |index| assert_equal "fixedfloat", create_swap(service, "order-#{index}").fetch("provider") }
+    assert_equal [4, 4], [@wallet.invoices, provider.creates]
+    refused(service, "order-4")
+    assert_equal [4, 4], [@wallet.invoices, provider.creates]
   end
 
   def test_a_provider_without_the_check_is_not_asked
     provider = GuardedProvider.new
     service = service_for(provider)
-    3.times { provider.budget.reserve("create") }
+    4.times { provider.budget.reserve("create") }
     # Not asked, so the request went on to its create. That still meets the
     # guard, and the payer reads the same answer.
     refused(service)
@@ -1664,42 +1699,49 @@ class SwapProviderGuardServiceTest < Minitest::Test
 
   def test_the_real_provider_is_asked_before_the_invoice_is_made
     routes = { "ccies" => { "ccies" => SAMPLE_CCIES }, "create" => SwapProviderFailureTest::REFUSED }
-    provider, calls = make_provider(routes)
+    provider, calls = make_provider(routes, base_url: "https://ff.io")
     service = service_for(provider)
-    # /ccies spent 1 and each refused create 50: the third would pass the gate.
-    2.times { assert_equal 502, assert_raises(OpenReceive::Server::ServiceError) { create_swap(service) }.status }
-    assert_equal 2, @wallet.invoices
+    # /ccies spent 1 and each refused create 50: the fourth would pass the
+    # 200 soft cap.
+    3.times { assert_equal 502, assert_raises(OpenReceive::Server::ServiceError) { create_swap(service) }.status }
+    assert_equal 3, @wallet.invoices
     refused(service)
-    assert_equal 2, @wallet.invoices
-    assert_equal 2, calls.count { |call| call[:path] == "create" }
+    assert_equal 3, @wallet.invoices
+    assert_equal 3, calls.count { |call| call[:path] == "create" }
   end
 
-  def test_the_guard_is_sized_by_the_providers_own_limits
-    lightning_swap = AskingProvider.new
-    lightning_swap.define_singleton_method(:limits) { SWAP::LIGHTNING_SWAP_PROVIDER_LIMITS }
-    service_for(lightning_swap)
-    30.times { lightning_swap.budget.reserve("create") }
-    denied = assert_raises(SWAP::WeightBudgetError) { lightning_swap.budget.reserve("create") }
-    assert_equal 30, denied.denial.fetch("create_limit")
+  def test_the_guard_follows_the_providers_own_limits
+    fixedfloat = AskingProvider.new
+    service_for(fixedfloat)
+    assert_same SWAP::FIXEDFLOAT_SWAP_PROVIDER_LIMITS, fixedfloat.budget.limits
+    4.times { fixedfloat.budget.reserve("create") }
+    denied = assert_raises(SWAP::WeightBudgetError) { fixedfloat.budget.reserve("create") }
+    assert_equal 200, denied.denial.fetch("gate")
 
     # A provider that names no limits, or whose `limits` is something else
-    # altogether, gets the FixedFloat ones.
+    # altogether, is never counted locally.
+    no_limits = Class.new(AskingProvider) { undef_method :limits }.new
     amount_limits = AskingProvider.new
     amount_limits.define_singleton_method(:limits) { { "minimum_pay_amount" => "10" } }
-    [AskingProvider.new, amount_limits].each do |provider|
+    [no_limits, amount_limits].each do |provider|
       service_for(provider)
-      3.times { provider.budget.reserve("create") }
-      denied = assert_raises(SWAP::WeightBudgetError) { provider.budget.reserve("create") }
-      assert_equal 150, denied.denial.fetch("gate")
+      assert_same SWAP::PROVIDER_ONLY_SWAP_PROVIDER_LIMITS, provider.budget.limits
+      500.times { provider.budget.reserve("create") }
+      assert_nil provider.budget.assert_available("create")
     end
   end
 
-  def test_a_lightning_swap_site_starts_more_than_three_swaps_a_minute
-    routes = { "ccies" => { "ccies" => SAMPLE_CCIES }, "create" => CREATE_DATA }
-    provider, calls = make_provider(routes, base_url: "https://lightning-swap.com")
-    service = service_for(provider)
-    6.times { |index| create_swap(service, "order-#{index}") }
-    assert_equal 6, calls.count { |call| call[:path] == "create" }
+  def test_a_site_on_any_other_provider_is_never_refused_locally
+    routes = { "ccies" => { "ccies" => SAMPLE_CCIES }, "create" => CREATE_DATA, "order" => { "status" => "NEW" } }
+    [BASE_URL, "https://lightning-swap.com"].each do |base_url|
+      provider, calls = make_provider(routes, base_url: base_url)
+      service = service_for(provider)
+      40.times { |index| create_swap(service, "order-#{index}") }
+      swap_data = { "version" => 1, "provider_order" => BASE_ORDER.dup }
+      100.times { service.get_swap(reference: "x", payment_hash: "7f" * 32, swap_data: swap_data) }
+      assert_equal 40, calls.count { |call| call[:path] == "create" }, base_url
+      assert_equal 100, calls.count { |call| call[:path] == "order" }, base_url
+    end
     assert_empty rate_limit_lines
   end
 
@@ -1717,13 +1759,13 @@ class SwapProviderGuardServiceTest < Minitest::Test
 
     3.times { refused(service) }
     assert_equal ["swap.provider.rate_limited: Swap provider call refused locally: standing off after " \
-                  "the provider's 429. (provider=fixedfloat path=create reason=backoff used=0 gate=150 " \
+                  "the provider's 429. (provider=fixedfloat path=create reason=backoff used=0 gate=200 " \
                   "backoff_until=#{NOW + 600})"],
                  rate_limit_lines
     # A status poll is another cause, with its own line.
     3.times { poll.call }
     assert_equal 2, rate_limit_lines.length
-    assert_includes rate_limit_lines.last, "path=order reason=backoff used=0 gate=200"
+    assert_includes rate_limit_lines.last, "path=order reason=backoff used=0 gate=50"
 
     @now = NOW + 59
     refused(service)
@@ -1761,7 +1803,7 @@ class SwapProviderGuardServiceTest < Minitest::Test
     service = OpenReceive::Server::Service.new(
       nwc_client: @wallet, swap_providers: [provider], price_provider: false, clock: -> { @now }
     )
-    3.times { provider.budget.reserve("create") }
+    4.times { provider.budget.reserve("create") }
     refused(service)
   end
 end

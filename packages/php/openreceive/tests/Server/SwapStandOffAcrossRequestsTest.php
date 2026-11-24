@@ -24,7 +24,8 @@ use Psr\Log\AbstractLogger;
 final class SwapStandOffAcrossRequestsTest extends TestCase
 {
     private const LIGHTNING_SWAP = 'https://lightning-swap.com';
-    private const FIXEDFLOAT = 'https://ff.test';
+    private const FIXEDFLOAT = 'https://ff.io';
+    private const UNKNOWN = 'https://swap.example';
     private const KEY = 'openreceive:swap_backoff:swap';
     private const RATE_LIMITED = 'The swap provider is rate limited. Please try again shortly.';
     // Both sides' USD values are present, so a create needs no /price call.
@@ -204,25 +205,48 @@ final class SwapStandOffAcrossRequestsTest extends TestCase
         self::assertSame([...$calls, 'order', 'create'], $this->calls);
     }
 
-    public function testThreeCreatesInOneRequestDoNotCountAgainstTheNext(): void
+    public function testFourFixedFloatCreatesInOneRequestDoNotCountAgainstTheNext(): void
     {
         // The catalog is already in the shared cache, so the creates are the only weight spent.
         $this->request(self::FIXEDFLOAT)->swapProviders()[0]->supportedPayInAssets();
         $busy = $this->request(self::FIXEDFLOAT);
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             self::assertNull($this->createSwap($busy), "create {$i}");
         }
-        // The fourth is this process's own per-minute limit...
+        // The fifth is this process's own per-minute limit for FixedFloat...
         self::assertRateLimited($this->createSwap($busy));
         self::assertSame('exhausted', end($this->warnings)['context']['reason']);
-        self::assertSame(['ccies', 'create', 'create', 'create'], $this->calls);
+        self::assertSame(['ccies', 'create', 'create', 'create', 'create'], $this->calls);
         self::assertArrayNotHasKey(self::KEY, $this->cache->entries, 'which is not a stand-off and is never stored');
         self::assertSame(['openreceive:swap_limits:swap'], array_keys($this->cache->entries));
         // ...and not the next request's: counts are not shared.
         $next = $this->request(self::FIXEDFLOAT);
         self::assertNull($this->createSwap($next));
         self::assertNull($this->createSwap($next));
-        self::assertSame(['ccies', 'create', 'create', 'create', 'create', 'create'], $this->calls);
+        self::assertSame(['ccies', 'create', 'create', 'create', 'create', 'create', 'create'], $this->calls);
+    }
+
+    public function testAnotherProviderIsNeverRefusedLocallyButItsCreateStandOffIsShared(): void
+    {
+        $this->request(self::UNKNOWN)->swapProviders()[0]->supportedPayInAssets();
+        $busy = $this->request(self::UNKNOWN);
+        for ($i = 0; $i < 12; $i++) {
+            self::assertNull($this->createSwap($busy), "create {$i}");
+        }
+        self::assertSame([], $this->warnings, 'nothing was refused locally');
+        self::assertSame(12, count(array_keys($this->calls, 'create', true)), 'every create reached the provider');
+        // Its 429 on a create stops new swaps in the next request, before an invoice is made.
+        $this->replies['create'] = self::tooManyRequests(20);
+        self::assertRateLimited($this->createSwap($busy));
+        self::assertSame(['create_backoff_until' => $this->now + 20], $this->storedStandOff());
+        $this->replies['create'] = self::api(self::ORDER);
+        $next = $this->request(self::UNKNOWN);
+        $invoices = count($this->wallet->listInvoices());
+        self::assertRateLimited($this->createSwap($next));
+        self::assertSame($invoices, count($this->wallet->listInvoices()), 'no invoice for a refused swap');
+        // A swap that exists still gets its status.
+        self::assertNull($this->swapStatus($next));
+        self::assertSame(13, count(array_keys($this->calls, 'create', true)));
     }
 
     public function testACacheThatThrowsChangesNothing(): void

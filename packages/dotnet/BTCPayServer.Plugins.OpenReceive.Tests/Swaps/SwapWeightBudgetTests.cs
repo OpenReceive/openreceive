@@ -4,42 +4,43 @@ namespace BTCPayServer.Plugins.OpenReceive.Tests.Swaps;
 
 public class SwapWeightBudgetTests
 {
-    [Fact]
-    public void Create_costs_fifty_against_a_gate_of_one_hundred_fifty()
-    {
-        var budget = new SwapProviderWeightBudget("ff", () => 1_000);
+    private static SwapProviderWeightBudget FixedFloat(Func<long> now) => new("ff", now, SwapProviderLimits.FixedFloat);
 
-        budget.Reserve("create");
-        budget.Reserve("create");
-        budget.Reserve("create");
+    [Fact]
+    public void On_FixedFloat_a_create_costs_fifty_and_may_fill_the_soft_cap_of_two_hundred()
+    {
+        var budget = FixedFloat(() => 1_000);
+
+        for (var i = 0; i < 4; i += 1) budget.Reserve("create");
         var error = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("create"));
 
         Assert.Equal("ff", error.Provider);
         Assert.Equal("create", error.Path);
         Assert.Equal(SwapProviderWeightBudget.ReasonExhausted, error.Reason);
-        Assert.Equal(150, error.Used);
+        Assert.Equal(200, error.Used);
         Assert.Equal(50, error.Cost);
-        Assert.Equal(150, error.Gate);
+        Assert.Equal(200, error.Gate);
         Assert.Equal(1_000, error.WindowStart);
         Assert.Null(error.BackoffUntil);
-        Assert.Equal("Swap provider API weight budget exhausted (150+50 > 150).", error.Message);
+        Assert.Equal("Swap provider API weight budget exhausted (200+50 > 200).", error.Message);
+        // The soft cap counts every call: a full window refuses status calls too.
+        Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("order"));
     }
 
     [Fact]
-    public void Other_paths_cost_one_against_the_soft_cap_of_two_hundred()
+    public void On_FixedFloat_status_calls_can_no_longer_starve_new_swaps()
     {
-        var budget = new SwapProviderWeightBudget("ff", () => 1_000);
-        for (var i = 0; i < 3; i += 1) budget.Reserve("create");
+        var budget = FixedFloat(() => 1_000);
 
         for (var i = 0; i < 50; i += 1) budget.Reserve("order");
         var error = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("price"));
 
-        Assert.Equal(200, error.Used);
+        Assert.Equal(50, error.Used);
         Assert.Equal(1, error.Cost);
-        Assert.Equal(200, error.Gate);
-        Assert.Equal("Swap provider API weight budget exhausted (200+1 > 200).", error.Message);
-        // The create gate sits below the soft cap: the budget is not exhausted for
-        // status polls just because creates are gated.
+        Assert.Equal(50, error.Gate);
+        Assert.Equal("Swap provider API weight budget for calls other than creates exhausted (50+1 > 50).", error.Message);
+        // Three payers can still start a swap this minute.
+        for (var i = 0; i < 3; i += 1) budget.Reserve("create");
         Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("create"));
     }
 
@@ -47,8 +48,8 @@ public class SwapWeightBudgetTests
     public void Window_rolls_after_sixty_seconds()
     {
         var clock = 1_000L;
-        var budget = new SwapProviderWeightBudget("ff", () => clock);
-        for (var i = 0; i < 200; i += 1) budget.Reserve("order");
+        var budget = FixedFloat(() => clock);
+        for (var i = 0; i < 50; i += 1) budget.Reserve("order");
         Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("order"));
 
         clock = 1_059;
@@ -63,7 +64,7 @@ public class SwapWeightBudgetTests
     public void Backoff_expires_on_its_own_clock_not_the_window()
     {
         var clock = 1_000L;
-        var budget = new SwapProviderWeightBudget("ff", () => clock);
+        var budget = FixedFloat(() => clock);
 
         clock = 1_059;
         budget.MarkRateLimited();
@@ -86,8 +87,8 @@ public class SwapWeightBudgetTests
     public void A_429_restarts_the_window_when_the_stand_off_ends()
     {
         var clock = 1_000L;
-        var budget = new SwapProviderWeightBudget("ff", () => clock);
-        for (var i = 0; i < 200; i += 1) budget.Reserve("order"); // the window is spent
+        var budget = FixedFloat(() => clock);
+        for (var i = 0; i < 4; i += 1) budget.Reserve("create"); // the window is spent
 
         clock = 1_030;
         budget.MarkRateLimited();
@@ -101,19 +102,19 @@ public class SwapWeightBudgetTests
         Assert.Equal(1_090, error.RetryAt);
 
         clock = 1_090; // stand-off over: a fresh window, not the spent one
-        for (var i = 0; i < 200; i += 1) budget.Reserve("order");
-        var spent = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("order"));
+        for (var i = 0; i < 4; i += 1) budget.Reserve("create");
+        var spent = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("create"));
         Assert.Equal(SwapProviderWeightBudget.ReasonExhausted, spent.Reason);
         Assert.Equal(1_150, spent.RetryAt); // an exhausted window is tried again when it rolls
     }
 
-    // ---- Provider limits: the guard is sized by who the provider is ----
+    // ---- Provider limits: only FixedFloat's own host is counted locally ----
 
     [Fact]
-    public void A_guard_with_no_limits_gets_the_FixedFloat_ones()
+    public void A_guard_with_no_limits_counts_nothing()
     {
-        Assert.Same(SwapProviderLimits.FixedFloat, new SwapProviderWeightBudget("custom", () => 1_000).Limits);
-        Assert.Same(SwapProviderLimits.LightningSwap, new SwapProviderWeightBudget("ls", () => 1_000, SwapProviderLimits.LightningSwap).Limits);
+        Assert.Same(SwapProviderLimits.ProviderOnly, new SwapProviderWeightBudget("custom", () => 1_000).Limits);
+        Assert.Same(SwapProviderLimits.FixedFloat, FixedFloat(() => 1_000).Limits);
     }
 
     /// <summary>A custom provider that implements only what <see cref="ISwapProvider"/> requires.</summary>
@@ -134,66 +135,53 @@ public class SwapWeightBudgetTests
     }
 
     [Fact]
-    public void A_provider_that_names_no_limits_gets_the_FixedFloat_ones_and_is_not_asked()
+    public void A_provider_that_names_no_limits_is_never_counted_and_is_not_asked()
     {
         ISwapProvider provider = new BareProvider();
 
         Assert.Null(provider.Limits);
-        Assert.Same(SwapProviderLimits.FixedFloat, new SwapProviderWeightBudget(provider.Name, () => 1_000, provider.Limits).Limits);
+        Assert.Same(SwapProviderLimits.ProviderOnly, new SwapProviderWeightBudget(provider.Name, () => 1_000, provider.Limits).Limits);
         provider.AssertCreateAvailable(); // a provider without the check is simply not asked
     }
 
     [Fact]
-    public void A_Lightning_Swap_guard_allows_thirty_creates_a_minute_and_keeps_status_calls_going()
+    public void Any_other_provider_is_never_refused_locally_however_many_calls()
     {
-        var clock = 1_000L;
-        var budget = new SwapProviderWeightBudget("lightning-swap-com", () => clock, SwapProviderLimits.LightningSwap);
-        for (var i = 0; i < 30; i += 1) budget.Reserve("create");
-
-        var denied = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("create"));
-
-        Assert.Equal("Swap provider create budget exhausted (30+1 > 30).", denied.Message);
-        Assert.Equal(SwapProviderWeightBudget.ReasonExhausted, denied.Reason);
-        Assert.Equal(30, denied.Creates);
-        Assert.Equal(30, denied.CreateLimit);
-        Assert.Equal(30, denied.Used);
-        Assert.Equal(400, denied.Gate);
-        // The swaps that exist can still be read and refunded.
-        budget.Reserve("order");
-        budget.Reserve("emergency");
-        clock += 60;
-        budget.Reserve("create");
+        var budget = new SwapProviderWeightBudget("lightning-swap-com", () => 1_000, SwapProviderLimits.ProviderOnly);
+        for (var i = 0; i < 500; i += 1) budget.Reserve("create");
+        for (var i = 0; i < 2_000; i += 1) budget.Reserve("order");
+        budget.AssertAvailable("create");
     }
 
     [Fact]
     public void Asking_whether_a_create_is_available_uses_no_budget()
     {
-        var budget = new SwapProviderWeightBudget("ff", () => 1_000);
+        var budget = FixedFloat(() => 1_000);
         for (var i = 0; i < 10; i += 1) budget.AssertAvailable("create");
-        for (var i = 0; i < 3; i += 1) budget.Reserve("create");
+        for (var i = 0; i < 4; i += 1) budget.Reserve("create");
 
         var asked = Assert.Throws<SwapWeightBudgetException>(() => budget.AssertAvailable("create"));
         var reserved = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("create"));
 
-        Assert.Equal("Swap provider API weight budget exhausted (150+50 > 150).", asked.Message);
+        Assert.Equal("Swap provider API weight budget exhausted (200+50 > 200).", asked.Message);
         Assert.Equal(reserved.Denial, asked.Denial); // the check throws exactly what the reserve would
-        Assert.Null(asked.Creates); // FixedFloat counts weight, not creates
-        Assert.Null(asked.CreateLimit);
-        budget.AssertAvailable("order");
     }
 
     [Fact]
-    public void A_Lightning_Swap_429_on_a_create_stops_creates_for_the_wait_it_names_and_nothing_else()
+    public void Another_providers_429_on_a_create_stops_creates_for_the_wait_it_names_and_nothing_else()
     {
         var clock = 1_000L;
-        var budget = new SwapProviderWeightBudget("lightning-swap-com", () => clock, SwapProviderLimits.LightningSwap);
+        var budget = new SwapProviderWeightBudget("lightning-swap-com", () => clock, SwapProviderLimits.ProviderOnly);
 
         budget.MarkRateLimited("create", 12);
         var denied = Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("create"));
         Assert.Equal(SwapProviderWeightBudget.ReasonBackoff, denied.Reason);
         Assert.Equal(1_012, denied.BackoffUntil);
         Assert.Equal(1_012, denied.RetryAt);
-        Assert.Equal(1_000, denied.WindowStart); // the window did not restart: other calls go on
+        // A guard that counts nothing reports no counts.
+        Assert.Null(denied.Used);
+        Assert.Null(denied.Gate);
+        Assert.Null(denied.WindowStart);
         budget.Reserve("order");
         clock = 1_012;
         budget.Reserve("create");
@@ -220,7 +208,7 @@ public class SwapWeightBudgetTests
     public void A_FixedFloat_429_stops_every_call_for_at_least_a_minute_longer_when_it_says_so()
     {
         var clock = 1_000L;
-        var budget = new SwapProviderWeightBudget("ff", () => clock);
+        var budget = FixedFloat(() => clock);
 
         budget.MarkRateLimited("create", 5);
         Assert.Equal("Swap provider API is in backoff until 1060.", Assert.Throws<SwapWeightBudgetException>(() => budget.Reserve("order")).Message);

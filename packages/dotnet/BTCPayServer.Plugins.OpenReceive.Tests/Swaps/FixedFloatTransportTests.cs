@@ -135,7 +135,7 @@ public class FixedFloatTransportTests
         });
         var transport = Transport(handler);
         var clock = 1_000L;
-        transport.AttachWeightBudget(new SwapProviderWeightBudget("ls-test", () => clock, SwapProviderLimits.LightningSwap));
+        transport.AttachWeightBudget(new SwapProviderWeightBudget("ls-test", () => clock, SwapProviderLimits.ProviderOnly));
 
         await Assert.ThrowsAsync<FixedFloatApiException>(() => transport.PostAsync("create", new JsonObject(), CancellationToken.None));
 

@@ -271,18 +271,17 @@ final class FixedFloatProviderTest extends TestCase
         $now = 0;
         $budget = new WeightBudget('p', static function () use (&$now): int {
             return $now;
-        });
-        for ($i = 0; $i < 3; $i++) {
+        }, SwapProviderLimits::fixedFloat());
+        for ($i = 0; $i < 4; $i++) {
             $budget->reserve('create');
         }
         try {
             $budget->reserve('create');
-            self::fail('the create gate did not hold');
+            self::fail('the soft cap did not hold');
         } catch (WeightBudgetError $e) {
             self::assertSame('exhausted', $e->denial['reason']);
-            self::assertSame(150, $e->denial['gate']);
+            self::assertSame(200, $e->denial['gate']);
         }
-        $budget->reserve('order');
         $now = 60;
         $budget->reserve('create');
         $budget->markRateLimited();
@@ -296,9 +295,9 @@ final class FixedFloatProviderTest extends TestCase
         }
     }
 
-    // --- provider limits: the guard is sized by who the provider is ----------
+    // --- provider limits: only FixedFloat's own host is counted locally ------
 
-    /** @return array{reason: string, message: string, backoff_until?: int, creates?: int, create_limit?: int}|null the denial, or null when the guard allows it */
+    /** @return array{reason: string, message: string, backoff_until?: int, used?: int, gate?: int}|null the denial, or null when the guard allows it */
     private static function denial(callable $call): ?array
     {
         try {
@@ -309,53 +308,62 @@ final class FixedFloatProviderTest extends TestCase
         }
     }
 
-    public function testTheProvidersHostPicksItsLimits(): void
+    public function testOnlyFixedFloatsOwnHostIsCountedLocally(): void
     {
-        self::assertSame('lightning-swap', (new FixedFloatProvider('k', 's', 'ls', 'https://lightning-swap.com'))->limits()->profile);
-        self::assertSame('lightning-swap', (new FixedFloatProvider('k', 's', 'ls', 'https://api.LIGHTNING-SWAP.com/v1/'))->limits()->profile);
         self::assertSame('fixedfloat', (new FixedFloatProvider('k', 's'))->limits()->profile, 'the default base URL is FixedFloat');
-        // An unknown host, and a look-alike, get the stricter FixedFloat limits.
-        self::assertSame('fixedfloat', $this->provider([])->limits()->profile);
-        self::assertSame('fixedfloat', (new FixedFloatProvider('k', 's', 'x', 'https://evil-lightning-swap.com'))->limits()->profile);
-        // A guard built with no limits is the FixedFloat one.
-        self::assertSame('fixedfloat', (new WeightBudget('p', static fn (): int => 0))->limits()->profile);
+        self::assertSame('fixedfloat', (new FixedFloatProvider('k', 's', 'ff', 'https://api.FF.io/v2/'))->limits()->profile);
+        self::assertSame('provider-only', (new FixedFloatProvider('k', 's', 'ls', 'https://lightning-swap.com'))->limits()->profile);
+        // An unknown host, and a look-alike, only obey the provider's 429.
+        self::assertSame('provider-only', $this->provider([])->limits()->profile);
+        self::assertSame('provider-only', (new FixedFloatProvider('k', 's', 'x', 'https://evil-ff.io'))->limits()->profile);
+        // A guard built with no limits counts nothing.
+        self::assertSame('provider-only', (new WeightBudget('p', static fn (): int => 0))->limits()->profile);
+        self::assertNull((new WeightBudget('p', static fn (): int => 0))->limits()->localBudget);
     }
 
-    public function testALightningSwapGuardAllowsThirtyCreatesAMinuteAndKeepsStatusCallsGoing(): void
+    public function testOnFixedFloatStatusCallsCanNoLongerStarveNewSwaps(): void
     {
-        $now = 1_000;
-        $budget = new WeightBudget('lightning-swap-com', static function () use (&$now): int {
-            return $now;
-        }, SwapProviderLimits::lightningSwap());
-        for ($i = 0; $i < 30; $i++) {
+        $budget = new WeightBudget('fixedfloat', static fn (): int => 1_000, SwapProviderLimits::fixedFloat());
+        // Fifty status polls spend the share the calls that are not creates have.
+        for ($i = 0; $i < 50; $i++) {
+            $budget->reserve('order');
+        }
+        $denied = self::denial(static fn () => $budget->reserve('order'));
+        self::assertNotNull($denied);
+        self::assertSame('Swap provider API weight budget for calls other than creates exhausted (50+1 > 50).', $denied['message']);
+        self::assertSame(['exhausted', 50, 50], [$denied['reason'], $denied['used'] ?? null, $denied['gate'] ?? null]);
+        // Three payers can still start a swap this minute.
+        for ($i = 0; $i < 3; $i++) {
             $budget->reserve('create');
         }
-        $denied = self::denial(static fn () => $budget->reserve('create'));
-        self::assertNotNull($denied);
-        self::assertSame('exhausted', $denied['reason']);
-        self::assertSame('Swap provider create budget exhausted (30+1 > 30).', $denied['message']);
-        self::assertSame(30, $denied['creates']);
-        self::assertSame(30, $denied['create_limit']);
-        // The swaps that exist can still be read and refunded.
-        $budget->reserve('order');
-        $budget->reserve('emergency');
-        $now += 60;
-        $budget->reserve('create');
+        self::assertSame('exhausted', self::denial(static fn () => $budget->reserve('create'))['reason'] ?? null);
+    }
+
+    public function testTheGuardCountsNothingForAnyOtherProvider(): void
+    {
+        foreach ([null, SwapProviderLimits::providerOnly()] as $limits) {
+            $budget = new WeightBudget('lightning-swap-com', static fn (): int => 1_000, $limits);
+            $refused = 0;
+            for ($i = 0; $i < 2_500; $i++) {
+                $refused += self::denial(static fn () => $budget->reserve($i < 500 ? 'create' : 'order')) === null ? 0 : 1;
+            }
+            self::assertSame(0, $refused);
+            self::assertNull(self::denial(static fn () => $budget->assertAvailable('create')));
+        }
     }
 
     public function testAskingWhetherACreateIsAvailableUsesNoBudget(): void
     {
-        $budget = new WeightBudget('fixedfloat', static fn (): int => 1_000);
+        $budget = new WeightBudget('fixedfloat', static fn (): int => 1_000, SwapProviderLimits::fixedFloat());
         for ($i = 0; $i < 10; $i++) {
             $budget->assertAvailable('create');
         }
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $budget->reserve('create');
         }
         $denied = self::denial(static fn () => $budget->assertAvailable('create'));
         self::assertSame('exhausted', $denied['reason'] ?? null);
-        self::assertSame('Swap provider API weight budget exhausted (150+50 > 150).', $denied['message'] ?? null);
-        self::assertArrayNotHasKey('create_limit', $denied ?? [], 'FixedFloat counts weight, not creates');
+        self::assertSame('Swap provider API weight budget exhausted (200+50 > 200).', $denied['message'] ?? null);
         // The provider asks the guard the service attached, and is not refused without one.
         $provider = $this->provider([], null, $budget);
         self::assertSame('exhausted', self::denial(static fn () => $provider->assertCreateAvailable())['reason'] ?? null);
@@ -371,15 +379,15 @@ final class FixedFloatProviderTest extends TestCase
         };
         $until = static fn (WeightBudget $budget, string $path): ?int => self::denial(static fn () => $budget->reserve($path))['backoff_until'] ?? null;
         // FixedFloat: every call stops, for at least a minute and at most an hour.
-        $fixedFloat = new WeightBudget('fixedfloat', $clock);
+        $fixedFloat = new WeightBudget('fixedfloat', $clock, SwapProviderLimits::fixedFloat());
         $fixedFloat->markRateLimited('create', 5);
         self::assertSame(1_060, $until($fixedFloat, 'order'));
         $now = 2_000;
         $fixedFloat->markRateLimited(retryAfterSeconds: 999_999);
         self::assertSame(5_600, $until($fixedFloat, 'order'), 'no path named: every call stands off');
-        // Lightning Swap: a 429 on a create stops creates only.
+        // Any other provider: a 429 on a create stops creates only.
         $now = 1_000;
-        $lightning = new WeightBudget('lightning-swap-com', $clock, SwapProviderLimits::lightningSwap());
+        $lightning = new WeightBudget('lightning-swap-com', $clock, SwapProviderLimits::providerOnly());
         $lightning->markRateLimited('create', 12.2);
         self::assertSame(1_013, $until($lightning, 'create'), 'a fractional wait is rounded up');
         $lightning->reserve('order');
@@ -402,9 +410,9 @@ final class FixedFloatProviderTest extends TestCase
     public function testA429HandsTheGuardThePathAndTheProvidersOwnWait(): void
     {
         $stored = ['provider' => 'ff-test', 'provider_order_id' => 'ORD1', 'provider_token' => 'tok', 'pay_in_asset' => 'USDT_TRON', 'deposit_address' => 'T1', 'deposit_amount' => '1', 'expires_at' => 9, 'state' => 'awaiting_deposit'];
-        // The helper's clock stands at 5,000; the Lightning Swap limits honor a wait from one second up.
+        // The helper's clock stands at 5,000; any other provider's wait is honored from one second up.
         $standOff = function (array $reply) use ($stored): ?int {
-            $budget = new WeightBudget('ff-test', static fn (): int => 5_000, SwapProviderLimits::lightningSwap());
+            $budget = new WeightBudget('ff-test', static fn (): int => 5_000, SwapProviderLimits::providerOnly());
             $provider = $this->provider(['/api/v2/order' => $reply], null, $budget);
             try {
                 $provider->getStatus($stored);
@@ -423,7 +431,7 @@ final class FixedFloatProviderTest extends TestCase
         self::assertSame(5_041, $standOff(['status' => 429, 'headers' => ['retry-after' => 'Wed, 21 Oct 2026 07:28:00 GMT'], 'body' => '{"code":429,"data":{"retry_after":41}}']));
 
         // The path reaches the guard too: a 429 on a create stops creates only.
-        $budget = new WeightBudget('ff-test', static fn (): int => 5_000, SwapProviderLimits::lightningSwap());
+        $budget = new WeightBudget('ff-test', static fn (): int => 5_000, SwapProviderLimits::providerOnly());
         $provider = $this->provider([
             ...self::catalogReplies(),
             '/api/v2/create' => ['status' => 429, 'headers' => ['retry-after' => '12'], 'body' => '{"code":429,"msg":"Rate limit","data":null}'],

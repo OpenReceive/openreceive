@@ -18,7 +18,7 @@ from sqlalchemy import create_engine
 from openreceive.server import Host, HttpRequest, OpenReceiveApp, Service
 from openreceive.server.errors import ServiceError
 from openreceive.storage.sql import SqlPaymentRepository
-from openreceive.swap.budget import SwapProviderLimits, WeightBudgetError
+from openreceive.swap.budget import FIXEDFLOAT_LIMITS, SwapProviderLimits, WeightBudgetError
 from openreceive.swap.fixedfloat import (
     FixedFloatApiError,
     FixedFloatProvider,
@@ -125,9 +125,11 @@ def test_a_refused_create_is_a_502_with_the_payer_sentence(
 
 def test_the_weight_budget_after_a_few_try_agains_is_a_retryable_503(shop: Shop) -> None:
     shop.answers["create"] = REFUSED
-    # Each Try again spends a create weight (50) before the provider answers:
-    # three refusals fill the 150 gate, and the fourth press never reaches it.
-    for _ in range(3):
+    # The provider is FixedFloat's own host, the one the guard counts for. Each
+    # Try again spends a create weight (50) before the provider answers: four
+    # refusals fill the 200 soft cap, and the fifth press never reaches it.
+    assert shop.provider.limits.profile == "fixedfloat"
+    for _ in range(4):
         assert shop.create_swap()[0] == 502
     creates = shop.calls.count("create")
     status, body = shop.create_swap()
@@ -219,9 +221,11 @@ SWAP_REQUEST = {
 
 class UncheckedProvider:
     """A provider double that keeps the guard the service attaches and reserves
-    a create from it, like a provider written before the check existed."""
+    a create from it, like a provider written before the check existed. It
+    states FixedFloat's limits, the only ones the guard counts for."""
 
     name = "fixedfloat"
+    limits = FIXEDFLOAT_LIMITS
 
     def __init__(self) -> None:
         self.budget: Any = None
@@ -284,7 +288,7 @@ def test_a_create_the_guard_would_refuse_is_refused_before_an_invoice_is_made(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     busy = Busy(caplog)
-    for _ in range(3):
+    for _ in range(4):
         busy.provider.budget.reserve("create")
     for _ in range(2):
         error = busy.refused_create()
@@ -295,8 +299,34 @@ def test_a_create_the_guard_would_refuse_is_refused_before_an_invoice_is_made(
     # Two refusals, one log line: status polls must not bury the log.
     lines = busy.rate_limit_lines()
     assert len(lines) == 1
-    assert "this process reached the provider's per-minute limit" in lines[0]
-    assert "provider=fixedfloat path=create reason=exhausted used=150 gate=150" in lines[0]
+    assert "this process reached the per-minute limit it keeps for FixedFloat" in lines[0]
+    assert "provider=fixedfloat path=create reason=exhausted used=200 gate=200" in lines[0]
+
+
+def test_another_providers_create_stand_off_is_refused_before_an_invoice_is_made(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    provider = GuardedProvider()
+    provider.limits = None  # type: ignore[assignment]
+    busy = Busy(caplog, provider)
+    # A provider that states no limits is never counted locally...
+    for _ in range(500):
+        provider.budget.reserve("create")
+    for _ in range(2_000):
+        provider.budget.reserve("order")
+    # ...but its 429 on a create stops new swaps, before an invoice is made.
+    provider.budget.mark_rate_limited(path="create", retry_after_seconds=20)
+    error = busy.refused_create()
+    assert error.status == 503 and str(error) == RATE_LIMITED_MESSAGE
+    assert busy.wallet.list_invoices() == []
+    assert provider.creates == 0
+    lines = busy.rate_limit_lines()
+    assert len(lines) == 1
+    assert f"reason=backoff backoff_until={busy.now + 20}" in lines[0]
+    assert "used=" not in lines[0]
+    # Status and refund calls for swaps that already exist keep going.
+    provider.budget.reserve("order")
+    provider.budget.reserve("emergency")
 
 
 def test_a_rate_refusal_is_logged_once_a_minute_per_cause(
@@ -315,7 +345,7 @@ def test_a_rate_refusal_is_logged_once_a_minute_per_cause(
     lines = busy.rate_limit_lines()
     assert len(lines) == 2
     assert "standing off after the provider's 429" in lines[0]
-    assert f"reason=backoff used=0 gate=150 backoff_until={start + 600}" in lines[0]
+    assert f"reason=backoff used=0 gate=200 backoff_until={start + 600}" in lines[0]
     assert busy.wallet.list_invoices() == []
 
 
@@ -352,7 +382,7 @@ def test_a_provider_429_is_logged_once_a_minute_with_the_providers_own_words(
     assert f"backoff_until={shop.now + 600}" in lines[1]
 
 
-def test_the_service_sizes_the_guard_by_the_limits_the_provider_exposes(
+def test_the_service_builds_the_guard_from_the_limits_the_provider_exposes(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     lightning_swap = FixedFloatProvider(
@@ -360,22 +390,25 @@ def test_the_service_sizes_the_guard_by_the_limits_the_provider_exposes(
     )
     Busy(caplog, lightning_swap)
     assert lightning_swap._weight_budget is not None
-    assert lightning_swap._weight_budget.limits.profile == "lightning-swap"
+    assert lightning_swap._weight_budget.limits.profile == "provider-only"
+    fixedfloat = FixedFloatProvider(key="synthetic-key", secret="synthetic-secret")
+    Busy(caplog, fixedfloat)
+    assert fixedfloat._weight_budget is not None
+    assert fixedfloat._weight_budget.limits.profile == "fixedfloat"
     # A provider that exposes no limits, or something that is not limits, is
-    # guarded with the FixedFloat ones.
-    for limits in (None, {"create_limit": 9_999}):
+    # never counted locally.
+    for limits in (None, {"local_budget": {"soft_cap": 1}}):
         double = GuardedProvider()
-        if limits is not None:
-            double.limits = limits  # type: ignore[attr-defined]
+        double.limits = limits  # type: ignore[assignment]
         Busy(caplog, double)
         assert isinstance(double.budget.limits, SwapProviderLimits)
-        assert double.budget.limits.profile == "fixedfloat"
+        assert double.budget.limits.profile == "provider-only"
 
 
 def test_a_provider_without_the_check_is_not_asked(caplog: pytest.LogCaptureFixture) -> None:
     provider = UncheckedProvider()
     busy = Busy(caplog, provider)
-    for _ in range(3):
+    for _ in range(4):
         provider.budget.reserve("create")
     error = busy.refused_create()
     assert error.status == 503 and str(error) == RATE_LIMITED_MESSAGE

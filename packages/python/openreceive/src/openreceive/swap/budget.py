@@ -1,8 +1,8 @@
 """A disposable per-process request guard for the provider API; the provider
-remains the global rate-limit authority and its 429 always wins. The guard is
-sized by who the provider is: the same wire contract is served at very
-different rates. Twin of Ruby `Swap::SwapProviderWeightBudget` (JS
-weight-budget.ts)."""
+remains the global rate-limit authority and its 429 always wins. Only
+FixedFloat's own host is counted locally: every other provider limits its own
+accounts and says so with a 429, which the guard obeys. Twin of Ruby
+`Swap::SwapProviderWeightBudget` (JS weight-budget.ts)."""
 
 from __future__ import annotations
 
@@ -14,28 +14,34 @@ from typing import Any
 from urllib.parse import urlsplit
 
 WINDOW_SECONDS = 60
-SOFT_CAP = 200
-CREATE_GATE = 150
-CREATE_WEIGHT = 50
-DEFAULT_WEIGHT = 1
 BACKOFF_SECONDS = 60
 
 
 @dataclass(frozen=True)
-class SwapProviderLimits:
-    """What one provider allows an API key per window, as far as the guard
-    needs to know it."""
+class LocalBudget:
+    """The per-window count the guard keeps for a provider that needs one.
+    Every call adds its weight to the window; a create may bring the window up
+    to the whole soft cap, and the calls that are not creates (status, refund,
+    catalog) may use only `non_create_cap` of it between them, so open swap
+    screens polling their status never starve new swaps."""
 
-    # Whose published limits these are.
-    profile: str
     # Weight every call in one window may add up to.
     soft_cap: int
-    # Weight a create may bring the window up to.
-    create_gate: int
+    # Weight the calls that are not creates may use between them in one window.
+    non_create_cap: int
     create_weight: int
     default_weight: int
-    # Creates per window, for a provider that counts them on their own.
-    create_limit: int | None
+
+
+@dataclass(frozen=True)
+class SwapProviderLimits:
+    """How the request guard treats one provider."""
+
+    # "fixedfloat" for FixedFloat's own host; "provider-only" for every other.
+    profile: str
+    # The per-window count, or None when the guard keeps none and only obeys
+    # the provider's 429.
+    local_budget: LocalBudget | None
     # Stand-off after a 429 that names no wait.
     backoff_seconds: int
     # Shortest and longest stand-off a 429's own wait is honored for.
@@ -48,57 +54,52 @@ class SwapProviderLimits:
 
 
 # FixedFloat: 250 weight a minute per key, a create costs 50, and going over
-# blocks the key for longer each time. The guard stops well short: three
-# creates a minute, 200 weight in all. Also the default for a provider this
-# library does not know, because it is the stricter of the two.
+# blocks the key for longer each time. So the guard counts: 200 weight a
+# minute in all, of which the calls that are not creates may use 50. At least
+# three creates a minute always fit, four when nothing else ran. A 429 stops
+# every call for at least a minute.
 FIXEDFLOAT_LIMITS = SwapProviderLimits(
     profile="fixedfloat",
-    soft_cap=SOFT_CAP,
-    create_gate=CREATE_GATE,
-    create_weight=CREATE_WEIGHT,
-    default_weight=DEFAULT_WEIGHT,
-    create_limit=None,
+    local_budget=LocalBudget(soft_cap=200, non_create_cap=50, create_weight=50, default_weight=1),
     backoff_seconds=BACKOFF_SECONDS,
     min_backoff_seconds=BACKOFF_SECONDS,
     max_backoff_seconds=3_600,
     create_backoff_only=False,
 )
 
-# Lightning Swap: per account, 30 new swaps and 400 API calls a minute once
-# the account has completed a swap, every call counting as one. It refuses
-# with a 429 that says how long to wait and never blocks a key for going over,
-# so the guard sits at the limit itself. An account on lower limits (one that
-# has not completed a swap yet) is held to them by the provider's own 429,
-# which this guard then obeys.
-LIGHTNING_SWAP_LIMITS = SwapProviderLimits(
-    profile="lightning-swap",
-    soft_cap=400,
-    create_gate=400,
-    create_weight=1,
-    default_weight=1,
-    create_limit=30,
+# Every other provider (Lightning Swap, one this library does not know, a test
+# fake): no local count. The provider limits its own accounts and says so with
+# a 429; a count of this library's own could only refuse payers the provider
+# would have accepted. A 429 that answered a create stops creates only, for the
+# wait it names (1 to 300 seconds; a minute when it names none). Lightning Swap
+# answers this way: it counts new swaps apart from its other calls, per
+# account, and names the wait in Retry-After.
+PROVIDER_ONLY_LIMITS = SwapProviderLimits(
+    profile="provider-only",
+    local_budget=None,
     backoff_seconds=60,
     min_backoff_seconds=1,
     max_backoff_seconds=300,
     create_backoff_only=True,
 )
 
-LIGHTNING_SWAP_HOST = "lightning-swap.com"
+FIXEDFLOAT_HOST = "ff.io"
 
 
 def limits_for_base_url(base_url: object) -> SwapProviderLimits:
     """The limits to guard a provider API with, chosen by its HTTPS host:
-    Lightning Swap's own host or a subdomain of it, otherwise (an unknown
-    host, a look-alike, a value that is not a URL) the FixedFloat limits."""
+    FixedFloat's own host or a subdomain of it is counted locally; every other
+    host (Lightning Swap, an unknown host, a look-alike, a value that is not a
+    URL) only obeys the provider's 429."""
     try:
         parts = urlsplit(str(base_url))
         hostname = (parts.hostname or "").lower()
         _ = parts.port  # Raises on a port that is not one: the value is not a URL.
     except ValueError:
+        return PROVIDER_ONLY_LIMITS
+    if hostname == FIXEDFLOAT_HOST or hostname.endswith(f".{FIXEDFLOAT_HOST}"):
         return FIXEDFLOAT_LIMITS
-    if hostname == LIGHTNING_SWAP_HOST or hostname.endswith(f".{LIGHTNING_SWAP_HOST}"):
-        return LIGHTNING_SWAP_LIMITS
-    return FIXEDFLOAT_LIMITS
+    return PROVIDER_ONLY_LIMITS
 
 
 class WeightBudgetError(RuntimeError):
@@ -130,10 +131,10 @@ class SwapProviderWeightBudget:
     ) -> None:
         self._provider_id = provider_id
         self._clock = clock
-        self._limits = FIXEDFLOAT_LIMITS if limits is None else limits
+        self._limits = PROVIDER_ONLY_LIMITS if limits is None else limits
         self._window_start = clock()
         self._used = 0
-        self._creates = 0
+        self._non_create_used = 0
         self._backoff_until: int | None = None
         self._create_backoff_until: int | None = None
         self._lock = threading.Lock()
@@ -141,9 +142,6 @@ class SwapProviderWeightBudget:
     @property
     def limits(self) -> SwapProviderLimits:
         return self._limits
-
-    def weight_for_path(self, path: str) -> int:
-        return self._limits.create_weight if path == "create" else self._limits.default_weight
 
     def assert_available(self, path: str) -> None:
         """Raise the same denial `reserve` would, without using any budget.
@@ -153,9 +151,12 @@ class SwapProviderWeightBudget:
 
     def reserve(self, path: str) -> None:
         with self._lock:
-            self._used += self._check(path)
-            if path == "create":
-                self._creates += 1
+            cost = self._check(path)
+            if cost is None:
+                return
+            self._used += cost
+            if path != "create":
+                self._non_create_used += cost
 
     def mark_rate_limited(
         self, *, path: str | None = None, retry_after_seconds: float | None = None
@@ -175,42 +176,47 @@ class SwapProviderWeightBudget:
             # accepting.
             self._window_start = self._backoff_until
             self._used = 0
-            self._creates = 0
+            self._non_create_used = 0
 
-    def _check(self, path: str) -> int:
-        """Deny `path` or return what reserving it costs. Under the lock."""
+    def _check(self, path: str) -> int | None:
+        """Deny `path` or return what reserving it costs (None: nothing is
+        counted). Under the lock."""
         self._roll_window()
-        now = self._clock()
-        cost = self.weight_for_path(path)
-        gate = self._limits.create_gate if path == "create" else self._limits.soft_cap
-        backoff_until = self._active_backoff(path, now)
+        budget = self._limits.local_budget
+        backoff_until = self._active_backoff(path, self._clock())
         if backoff_until is not None:
             self._deny(
                 path,
                 "backoff",
-                cost,
-                gate,
                 f"Swap provider API is in backoff until {backoff_until}.",
+                None if budget is None else self._weigh(path, budget),
                 backoff_until,
             )
-        if self._used + cost > gate:
+        if budget is None:
+            return None
+        cost = budget.create_weight if path == "create" else budget.default_weight
+        if self._used + cost > budget.soft_cap:
             self._deny(
                 path,
                 "exhausted",
-                cost,
-                gate,
-                f"Swap provider API weight budget exhausted ({self._used}+{cost} > {gate}).",
+                f"Swap provider API weight budget exhausted ({self._used}+{cost} > {budget.soft_cap}).",
+                (self._used, cost, budget.soft_cap),
             )
-        create_limit = self._limits.create_limit
-        if path == "create" and create_limit is not None and self._creates + 1 > create_limit:
+        if path != "create" and self._non_create_used + cost > budget.non_create_cap:
             self._deny(
                 path,
                 "exhausted",
-                cost,
-                gate,
-                f"Swap provider create budget exhausted ({self._creates}+1 > {create_limit}).",
+                "Swap provider API weight budget for calls other than creates exhausted "
+                f"({self._non_create_used}+{cost} > {budget.non_create_cap}).",
+                (self._non_create_used, cost, budget.non_create_cap),
             )
         return cost
+
+    def _weigh(self, path: str, budget: LocalBudget) -> tuple[int, int, int]:
+        """(used, cost, gate) for the cap `path` is counted against."""
+        if path == "create":
+            return (self._used, budget.create_weight, budget.soft_cap)
+        return (self._non_create_used, budget.default_weight, budget.non_create_cap)
 
     def _backoff_seconds(self, retry_after_seconds: object) -> int:
         limits = self._limits
@@ -245,15 +251,14 @@ class SwapProviderWeightBudget:
             return
         self._window_start = now
         self._used = 0
-        self._creates = 0
+        self._non_create_used = 0
 
     def _deny(
         self,
         path: str,
         reason: str,
-        cost: int,
-        gate: int,
         message: str,
+        weight: tuple[int, int, int] | None = None,
         backoff_until: int | None = None,
     ) -> None:
         denial: dict[str, Any] = {
@@ -261,15 +266,12 @@ class SwapProviderWeightBudget:
             "path": path,
             "reason": reason,
             "message": message,
-            "used": self._used,
-            "cost": cost,
-            "gate": gate,
-            "window_start": self._window_start,
         }
+        if weight is not None:
+            denial["used"], denial["cost"], denial["gate"] = weight
+        if self._limits.local_budget is not None:
+            denial["window_start"] = self._window_start
         until = self._backoff_until if backoff_until is None else backoff_until
         if until is not None:
             denial["backoff_until"] = until
-        if self._limits.create_limit is not None:
-            denial["creates"] = self._creates
-            denial["create_limit"] = self._limits.create_limit
         raise WeightBudgetError(message, denial)

@@ -144,8 +144,8 @@ class FixedFloatProvider implements SwapProvider {
       fetch: fetcher,
       requestTimeoutMs,
     });
-    // The host names the provider, and the provider sets the limits: the same
-    // wire contract is served at very different rates.
+    // The host names the provider: only FixedFloat's own host is counted
+    // locally; every other provider limits its own accounts with a 429.
     this.limits = swapProviderLimitsForBaseUrl(this.transport.baseUrl);
     const depositWindowSeconds =
       options.depositWindowSeconds ?? DEFAULT_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS;

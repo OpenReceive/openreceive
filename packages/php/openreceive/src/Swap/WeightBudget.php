@@ -10,9 +10,10 @@ use Psr\Log\LoggerInterface;
 /**
  * A disposable per-process request guard for one provider's API; the provider
  * remains the global rate-limit authority. Port of the JS weight-budget.ts.
- * It is sized by the provider's limits (SwapProviderLimits; the FixedFloat
- * ones when none are given). The 60 s window rolls; a 429 stand-off expires
- * on its own clock and does NOT ride along with the window.
+ * It follows the provider's limits (SwapProviderLimits; no local count when
+ * none are given): only FixedFloat's own host is counted in a 60 s window
+ * that rolls; every provider's 429 starts a stand-off that expires on its own
+ * clock and does NOT ride along with the window.
  *
  * The counts and the window are this object's memory and nothing else. PHP
  * builds the service again for every request, so each request starts with
@@ -28,10 +29,6 @@ use Psr\Log\LoggerInterface;
 final class WeightBudget
 {
     public const WINDOW_SECONDS = 60;
-    public const SOFT_CAP = 200;
-    public const CREATE_GATE = 150;
-    public const CREATE_WEIGHT = 50;
-    public const DEFAULT_WEIGHT = 1;
     public const BACKOFF_SECONDS = 60;
     /** The shared entry outlives the stand-off by this much: a cache that counts in whole seconds must not drop it early. */
     public const SHARED_TTL_MARGIN_SECONDS = 1;
@@ -41,12 +38,13 @@ final class WeightBudget
     private readonly SwapProviderLimits $limits;
     private int $windowStart;
     private int $used = 0;
-    private int $creates = 0;
+    private int $nonCreateUsed = 0;
     private ?int $backoffUntil = null;
     private ?int $createBackoffUntil = null;
 
     /**
      * @param callable(): int $clock
+     * @param SwapProviderLimits|null $limits null: no local count, only the provider's 429
      * @param SharedCache|null $shared where a 429 stand-off is kept for the requests that follow; null keeps it in this process
      */
     public function __construct(
@@ -57,7 +55,7 @@ final class WeightBudget
         private readonly ?LoggerInterface $logger = null,
     ) {
         $this->clock = $clock;
-        $this->limits = $limits ?? SwapProviderLimits::fixedFloat();
+        $this->limits = $limits ?? SwapProviderLimits::providerOnly();
         $this->windowStart = $clock();
     }
 
@@ -72,11 +70,6 @@ final class WeightBudget
         return $this->limits;
     }
 
-    public function weightForPath(string $path): int
-    {
-        return $path === 'create' ? $this->limits->createWeight : $this->limits->defaultWeight;
-    }
-
     /**
      * Throw the same denial `reserve` would, without using any budget. Lets a
      * caller refuse a new swap before it does any other work for it.
@@ -85,30 +78,19 @@ final class WeightBudget
      */
     public function assertAvailable(string $path): void
     {
-        $this->rollWindow();
-        $now = ($this->clock)();
-        $cost = $this->weightForPath($path);
-        $gate = $path === 'create' ? $this->limits->createGate : $this->limits->softCap;
-        $backoffUntil = $this->activeBackoff($path, $now);
-        if ($backoffUntil !== null) {
-            $this->deny($path, 'backoff', $cost, $gate, "Swap provider API is in backoff until {$backoffUntil}.", $backoffUntil);
-        }
-        if ($this->used + $cost > $gate) {
-            $this->deny($path, 'exhausted', $cost, $gate, "Swap provider API weight budget exhausted ({$this->used}+{$cost} > {$gate}).");
-        }
-        $createLimit = $this->limits->createLimit;
-        if ($path === 'create' && $createLimit !== null && $this->creates + 1 > $createLimit) {
-            $this->deny($path, 'exhausted', $cost, $gate, "Swap provider create budget exhausted ({$this->creates}+1 > {$createLimit}).");
-        }
+        $this->check($path);
     }
 
     /** @throws WeightBudgetError */
     public function reserve(string $path): void
     {
-        $this->assertAvailable($path);
-        $this->used += $this->weightForPath($path);
-        if ($path === 'create') {
-            $this->creates++;
+        $cost = $this->check($path);
+        if ($cost === null) {
+            return;
+        }
+        $this->used += $cost;
+        if ($path !== 'create') {
+            $this->nonCreateUsed += $cost;
         }
     }
 
@@ -132,8 +114,47 @@ final class WeightBudget
         // count would go on refusing calls the provider has started accepting.
         $this->windowStart = $this->backoffUntil;
         $this->used = 0;
-        $this->creates = 0;
+        $this->nonCreateUsed = 0;
         $this->shareBackoffs($now);
+    }
+
+    /**
+     * Deny `$path`, or return what reserving it costs (null: nothing is counted).
+     *
+     * @throws WeightBudgetError
+     */
+    private function check(string $path): ?int
+    {
+        $this->rollWindow();
+        $budget = $this->limits->localBudget;
+        $backoffUntil = $this->activeBackoff($path, ($this->clock)());
+        if ($backoffUntil !== null) {
+            $this->deny($path, 'backoff', "Swap provider API is in backoff until {$backoffUntil}.", $budget === null ? null : $this->weigh($path, $budget), $backoffUntil);
+        }
+        if ($budget === null) {
+            return null;
+        }
+        $cost = $path === 'create' ? $budget->createWeight : $budget->defaultWeight;
+        if ($this->used + $cost > $budget->softCap) {
+            $this->deny($path, 'exhausted', "Swap provider API weight budget exhausted ({$this->used}+{$cost} > {$budget->softCap}).", [$this->used, $cost, $budget->softCap]);
+        }
+        if ($path !== 'create' && $this->nonCreateUsed + $cost > $budget->nonCreateCap) {
+            $this->deny(
+                $path,
+                'exhausted',
+                "Swap provider API weight budget for calls other than creates exhausted ({$this->nonCreateUsed}+{$cost} > {$budget->nonCreateCap}).",
+                [$this->nonCreateUsed, $cost, $budget->nonCreateCap],
+            );
+        }
+        return $cost;
+    }
+
+    /** @return array{int, int, int} used, cost and gate for the cap `$path` is counted against */
+    private function weigh(string $path, SwapProviderLocalBudget $budget): array
+    {
+        return $path === 'create'
+            ? [$this->used, $budget->createWeight, $budget->softCap]
+            : [$this->nonCreateUsed, $budget->defaultWeight, $budget->nonCreateCap];
     }
 
     private function backoffSeconds(int|float|null $retryAfterSeconds): int
@@ -227,7 +248,7 @@ final class WeightBudget
 
     // The window rolls; the 429 stand-off does NOT ride along with it. Clearing
     // it here cut a stand-off arbitrarily short, so it expires on its own
-    // clock, checked in assertAvailable().
+    // clock, checked in check().
     private function rollWindow(): void
     {
         $now = ($this->clock)();
@@ -236,22 +257,22 @@ final class WeightBudget
         }
         $this->windowStart = $now;
         $this->used = 0;
-        $this->creates = 0;
+        $this->nonCreateUsed = 0;
     }
 
-    private function deny(string $path, string $reason, int $cost, int $gate, string $message, ?int $backoffUntil = null): never
+    /** @param array{int, int, int}|null $weight used, cost and gate, for a guard that counts */
+    private function deny(string $path, string $reason, string $message, ?array $weight = null, ?int $backoffUntil = null): never
     {
-        $denial = [
-            'provider' => $this->providerId, 'path' => $path, 'reason' => $reason, 'message' => $message,
-            'used' => $this->used, 'cost' => $cost, 'gate' => $gate, 'window_start' => $this->windowStart,
-        ];
+        $denial = ['provider' => $this->providerId, 'path' => $path, 'reason' => $reason, 'message' => $message];
+        if ($weight !== null) {
+            [$denial['used'], $denial['cost'], $denial['gate']] = $weight;
+        }
+        if ($this->limits->localBudget !== null) {
+            $denial['window_start'] = $this->windowStart;
+        }
         $until = $backoffUntil ?? $this->backoffUntil;
         if ($until !== null) {
             $denial['backoff_until'] = $until;
-        }
-        if ($this->limits->createLimit !== null) {
-            $denial['creates'] = $this->creates;
-            $denial['create_limit'] = $this->limits->createLimit;
         }
         throw new WeightBudgetError($message, $denial);
     }

@@ -89,8 +89,8 @@ public interface ISwapProvider
     string Name { get; }
     void AttachSwapCache(TransientSwapCache cache);
     /// <summary>
-    /// The provider's API limits, which size the request guard the pool attaches. Null
-    /// means the FixedFloat defaults.
+    /// How the request guard the pool attaches treats this provider. Null means no local
+    /// count: the guard only obeys the provider's 429.
     /// </summary>
     SwapProviderLimits? Limits => null;
     void AttachWeightBudget(ISwapWeightBudget budget);

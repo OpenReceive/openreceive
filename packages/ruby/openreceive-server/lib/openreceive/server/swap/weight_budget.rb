@@ -10,8 +10,9 @@ module OpenReceive
       # Marked (weight_budget?) so quote classification can map it to
       # provider_rate_limited, mirroring the JS weightBudget error tag.
       class WeightBudgetError < StandardError
-        # The denial diagnostics (provider, path, reason, used/cost/gate,
-        # window start, backoff, creates) ride the error itself.
+        # The denial diagnostics (provider, path, reason, backoff, and
+        # used/cost/gate and the window start for a guard that counts) ride
+        # the error itself.
         attr_reader :denial
 
         def initialize(message, denial = {})
@@ -24,19 +25,33 @@ module OpenReceive
         end
       end
 
-      LIGHTNING_SWAP_HOST = "lightning-swap.com"
+      FIXEDFLOAT_HOST = "ff.io"
 
-      # What one provider allows an API key per window, as far as the request
-      # guard needs to know it. The guard exists so a busy site stays inside
-      # the provider's limits; the provider remains the authority and its 429
-      # always wins. Twin of the JS SwapProviderLimits; the numbers are pinned
-      # across engines by spec/test-vectors/swap-provider-limits.json.
+      # The per-window count the guard keeps for a provider that needs one.
+      # Every call adds its weight to the window; a create may bring the
+      # window up to the whole soft cap, and the calls that are not creates
+      # (status, refund, catalog) may use only non_create_cap of it between
+      # them, so open swap screens polling their status never starve new
+      # swaps.
       #
-      # - profile: whose published limits these are.
       # - soft_cap: weight every call in one window may add up to.
-      # - create_gate: weight a create may bring the window up to.
-      # - create_limit: creates per window, for a provider that counts them on
-      #   their own; nil for one that does not.
+      # - non_create_cap: weight the calls that are not creates may use
+      #   between them in one window.
+      SwapProviderLocalBudget = Struct.new(
+        :soft_cap, :non_create_cap, :create_weight, :default_weight,
+        keyword_init: true
+      )
+
+      # How the request guard treats one provider. The provider remains the
+      # authority: its 429 always starts a stand-off. Only FixedFloat's own
+      # host also gets a local count. Twin of the JS SwapProviderLimits; the
+      # numbers are pinned across engines by
+      # spec/test-vectors/swap-provider-limits.json.
+      #
+      # - profile: "fixedfloat" for FixedFloat's own host; "provider-only"
+      #   for every other.
+      # - local_budget: the per-window count (a SwapProviderLocalBudget), or
+      #   nil when the guard keeps none and only obeys the provider's 429.
       # - backoff_seconds: stand-off after a 429 that names no wait.
       # - min_backoff_seconds, max_backoff_seconds: shortest and longest
       #   stand-off a 429's own wait is honored for.
@@ -45,13 +60,14 @@ module OpenReceive
       #   only. Status and refund calls for swaps that already exist keep
       #   working.
       SwapProviderLimits = Struct.new(
-        :profile, :soft_cap, :create_gate, :create_weight, :default_weight, :create_limit,
+        :profile, :local_budget,
         :backoff_seconds, :min_backoff_seconds, :max_backoff_seconds, :create_backoff_only,
         keyword_init: true
       ) do
         # The limits to guard a provider API with, chosen by its HTTPS host:
-        # lightning-swap.com or a subdomain of it is Lightning Swap; every
-        # other host, and a URL that does not parse, gets the FixedFloat ones.
+        # ff.io or a subdomain of it is FixedFloat's and is counted locally;
+        # every other host, and a URL that does not parse, only obeys the
+        # provider's 429.
         def self.for_base_url(base_url)
           host =
             begin
@@ -59,45 +75,44 @@ module OpenReceive
             rescue URI::InvalidURIError
               ""
             end
-          if host == LIGHTNING_SWAP_HOST || host.end_with?(".#{LIGHTNING_SWAP_HOST}")
-            LIGHTNING_SWAP_PROVIDER_LIMITS
-          else
+          if host == FIXEDFLOAT_HOST || host.end_with?(".#{FIXEDFLOAT_HOST}")
             FIXEDFLOAT_SWAP_PROVIDER_LIMITS
+          else
+            PROVIDER_ONLY_SWAP_PROVIDER_LIMITS
           end
         end
       end
 
       # FixedFloat: 250 weight a minute per key, a create costs 50, and going
-      # over blocks the key for longer each time. The guard stops well short:
-      # three creates a minute, 200 weight in all. Also the default for a
-      # provider this library does not know, because it is the stricter of
-      # the two.
+      # over blocks the key for longer each time. So the guard counts: 200
+      # weight a minute in all, of which the calls that are not creates may
+      # use 50. At least three creates a minute always fit, four when nothing
+      # else ran. A 429 stops every call for at least a minute.
       FIXEDFLOAT_SWAP_PROVIDER_LIMITS = SwapProviderLimits.new(
         profile: "fixedfloat",
-        soft_cap: 200,
-        create_gate: 150,
-        create_weight: 50,
-        default_weight: 1,
-        create_limit: nil,
+        local_budget: SwapProviderLocalBudget.new(
+          soft_cap: 200,
+          non_create_cap: 50,
+          create_weight: 50,
+          default_weight: 1
+        ).freeze,
         backoff_seconds: 60,
         min_backoff_seconds: 60,
         max_backoff_seconds: 3_600,
         create_backoff_only: false
       ).freeze
 
-      # Lightning Swap: per account, 30 new swaps and 400 API calls a minute
-      # once the account has completed a swap, every call counting as one. It
-      # refuses with a 429 that says how long to wait and never blocks a key
-      # for going over, so the guard sits at the limit itself. An account on
-      # lower limits (one that has not completed a swap yet) is held to them
-      # by the provider's own 429, which this guard then obeys.
-      LIGHTNING_SWAP_PROVIDER_LIMITS = SwapProviderLimits.new(
-        profile: "lightning-swap",
-        soft_cap: 400,
-        create_gate: 400,
-        create_weight: 1,
-        default_weight: 1,
-        create_limit: 30,
+      # Every other provider (Lightning Swap, one this library does not know,
+      # a test fake): no local count. The provider limits its own accounts
+      # and says so with a 429; a count of this library's own could only
+      # refuse payers the provider would have accepted. A 429 that answered a
+      # create stops creates only, for the wait it names (1 to 300 seconds; a
+      # minute when it names none). Lightning Swap answers this way: it
+      # counts new swaps apart from its other calls, per account, and names
+      # the wait in Retry-After.
+      PROVIDER_ONLY_SWAP_PROVIDER_LIMITS = SwapProviderLimits.new(
+        profile: "provider-only",
+        local_budget: nil,
         backoff_seconds: 60,
         min_backoff_seconds: 1,
         max_backoff_seconds: 300,
@@ -105,33 +120,24 @@ module OpenReceive
       ).freeze
 
       # Ruby port of packages/js/node/src/swap/weight-budget.ts: a disposable
-      # per-process request guard, sized by the provider's limits; the
+      # per-process request guard that follows the provider's limits; the
       # provider remains the global rate-limit authority.
       class SwapProviderWeightBudget
         WINDOW_SECONDS = 60
-        # The FixedFloat numbers under the names they had before the guard
-        # was sized by provider.
-        SOFT_CAP = FIXEDFLOAT_SWAP_PROVIDER_LIMITS.soft_cap
-        CREATE_GATE = FIXEDFLOAT_SWAP_PROVIDER_LIMITS.create_gate
-        CREATE_WEIGHT = FIXEDFLOAT_SWAP_PROVIDER_LIMITS.create_weight
-        DEFAULT_WEIGHT = FIXEDFLOAT_SWAP_PROVIDER_LIMITS.default_weight
-        BACKOFF_SECONDS = FIXEDFLOAT_SWAP_PROVIDER_LIMITS.backoff_seconds
 
-        def initialize(provider_id, clock, limits = FIXEDFLOAT_SWAP_PROVIDER_LIMITS)
+        def initialize(provider_id, clock, limits = PROVIDER_ONLY_SWAP_PROVIDER_LIMITS)
           @provider_id = provider_id
           @clock = clock
           @limits = limits
           @window_start = clock.call
           @used = 0
-          @creates = 0
+          @non_create_used = 0
           @backoff_until = nil
           @create_backoff_until = nil
           @monitor = Monitor.new
         end
 
-        def weight_for_path(path)
-          path == "create" ? @limits.create_weight : @limits.default_weight
-        end
+        attr_reader :limits
 
         # Raise the same denial reserve would, without using any budget. Lets
         # a caller refuse a new swap before it does any other work for it.
@@ -142,9 +148,11 @@ module OpenReceive
 
         def reserve(path)
           @monitor.synchronize do
-            check(path)
-            @used += weight_for_path(path)
-            @creates += 1 if path == "create"
+            cost = check(path)
+            unless cost.nil?
+              @used += cost
+              @non_create_used += cost unless path == "create"
+            end
           end
           nil
         end
@@ -166,7 +174,7 @@ module OpenReceive
               # has started accepting.
               @window_start = @backoff_until
               @used = 0
-              @creates = 0
+              @non_create_used = 0
             end
           end
           nil
@@ -174,25 +182,40 @@ module OpenReceive
 
         private
 
+        # Deny `path`, or return what reserving it costs (nil: nothing is
+        # counted). Under the monitor.
         def check(path)
           roll_window
-          now = @clock.call
-          cost = weight_for_path(path)
-          limit = gate(path)
-          backoff_until = active_backoff(path, now)
+          budget = @limits.local_budget
+          backoff_until = active_backoff(path, @clock.call)
           unless backoff_until.nil?
-            deny(path, "backoff", cost, limit,
-                 "Swap provider API is in backoff until #{backoff_until}.", backoff_until)
+            deny(path, "backoff", "Swap provider API is in backoff until #{backoff_until}.",
+                 budget.nil? ? nil : weigh(path, budget), backoff_until)
           end
-          if @used + cost > limit
-            deny(path, "exhausted", cost, limit,
-                 "Swap provider API weight budget exhausted (#{@used}+#{cost} > #{limit}).")
-          end
-          create_limit = @limits.create_limit
-          return unless path == "create" && !create_limit.nil? && @creates + 1 > create_limit
+          return nil if budget.nil?
 
-          deny(path, "exhausted", cost, limit,
-               "Swap provider create budget exhausted (#{@creates}+1 > #{create_limit}).")
+          cost = path == "create" ? budget.create_weight : budget.default_weight
+          if @used + cost > budget.soft_cap
+            deny(path, "exhausted",
+                 "Swap provider API weight budget exhausted (#{@used}+#{cost} > #{budget.soft_cap}).",
+                 [@used, cost, budget.soft_cap])
+          end
+          if path != "create" && @non_create_used + cost > budget.non_create_cap
+            deny(path, "exhausted",
+                 "Swap provider API weight budget for calls other than creates exhausted " \
+                 "(#{@non_create_used}+#{cost} > #{budget.non_create_cap}).",
+                 [@non_create_used, cost, budget.non_create_cap])
+          end
+          cost
+        end
+
+        # [used, cost, gate] for the cap `path` is counted against.
+        def weigh(path, budget)
+          if path == "create"
+            [@used, budget.create_weight, budget.soft_cap]
+          else
+            [@non_create_used, budget.default_weight, budget.non_create_cap]
+          end
         end
 
         def backoff_seconds(retry_after_seconds)
@@ -223,28 +246,23 @@ module OpenReceive
 
           @window_start = now
           @used = 0
-          @creates = 0
-        end
-
-        def gate(path)
-          path == "create" ? @limits.create_gate : @limits.soft_cap
+          @non_create_used = 0
         end
 
         # The denial carries its own diagnostics on the raised error: there is
         # no observer hook, because there was never a caller for one. Mirrors JS.
-        def deny(path, reason, cost, limit, message, backoff_until = nil)
+        def deny(path, reason, message, weight = nil, backoff_until = nil)
+          used, cost, gate = weight
           denial = {
             "provider" => @provider_id,
             "path" => path,
             "reason" => reason,
             "message" => message,
-            "used" => @used,
+            "used" => used,
             "cost" => cost,
-            "gate" => limit,
-            "window_start" => @window_start,
-            "backoff_until" => backoff_until || @backoff_until,
-            "creates" => @limits.create_limit.nil? ? nil : @creates,
-            "create_limit" => @limits.create_limit
+            "gate" => gate,
+            "window_start" => @limits.local_budget.nil? ? nil : @window_start,
+            "backoff_until" => backoff_until || @backoff_until
           }.compact
           raise WeightBudgetError.new(message, denial)
         end

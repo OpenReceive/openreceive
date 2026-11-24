@@ -7,6 +7,7 @@ import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { createHttpHandler, createHost, hostError } from "../packages/js/http/src/index.ts";
 import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
 import { FixedFloatApiError } from "../packages/js/node/src/swap/fixedfloat-transport.ts";
+import { FIXEDFLOAT_SWAP_PROVIDER_LIMITS } from "../packages/js/node/src/swap/weight-budget.ts";
 import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import {
   createTestkitReceiveClient,
@@ -973,8 +974,8 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     });
   }
   // Behind the swap_* vectors: a refused /create (the engine's own API error
-  // of kind "api"), or a create the service-attached weight budget refuses
-  // after three creates in this window (3 x 50 = the 150 create gate).
+  // of kind "api"), or a create the service-attached guard refuses on
+  // FixedFloat after four creates in this window (4 x 50 = the 200 soft cap).
   for (const [name, failure] of [
     ["swap_provider_refused", "refused"],
     ["swap_weight_budget_exhausted", "weight_budget"],
@@ -982,6 +983,7 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     let budget;
     const provider = {
       name: "fixedfloat",
+      limits: FIXEDFLOAT_SWAP_PROVIDER_LIMITS,
       supportedPayInAssets: async () => new Set(["USDT_TRON"]),
       invoiceExpirySeconds: () => 1800,
       attachWeightBudget: (attached) => {
@@ -1007,7 +1009,7 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       clock: () => 1000,
     });
     if (failure === "weight_budget") {
-      for (let index = 0; index < 3; index += 1) await budget.reserve("create");
+      for (let index = 0; index < 4; index += 1) await budget.reserve("create");
     }
     handlers[name] = createHttpHandler({ service: failingService, authorize: () => true, host });
   }

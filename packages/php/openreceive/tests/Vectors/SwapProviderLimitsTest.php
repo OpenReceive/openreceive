@@ -11,10 +11,10 @@ use OpenReceive\Tests\VectorSupport;
 use PHPUnit\Framework\TestCase;
 
 /**
- * swap-provider-limits.json: the request guard is sized by the provider's
- * host. The profile numbers, every `hosts` row and every clocked scenario
- * step run against the production SwapProviderLimits and WeightBudget, like
- * the JS test of the same name in tests/crosslang.test.mjs.
+ * swap-provider-limits.json: only FixedFloat's own host is counted locally.
+ * The profile numbers, every `hosts` row and every clocked scenario step run
+ * against the production SwapProviderLimits and WeightBudget, like the JS test
+ * of the same name in tests/crosslang.test.mjs.
  */
 final class SwapProviderLimitsTest extends TestCase
 {
@@ -25,7 +25,7 @@ final class SwapProviderLimitsTest extends TestCase
     {
         return [
             'fixedfloat' => SwapProviderLimits::fixedFloat(),
-            'lightning-swap' => SwapProviderLimits::lightningSwap(),
+            'provider-only' => SwapProviderLimits::providerOnly(),
         ];
     }
 
@@ -42,12 +42,14 @@ final class SwapProviderLimitsTest extends TestCase
         foreach ($family['profiles'] as $name => $expected) {
             $limits = $profiles[$name];
             self::assertSame($name, $limits->profile);
+            $budget = $limits->localBudget;
             self::assertSameRecord($expected, [
-                'soft_cap' => $limits->softCap,
-                'create_gate' => $limits->createGate,
-                'create_weight' => $limits->createWeight,
-                'default_weight' => $limits->defaultWeight,
-                'create_limit' => $limits->createLimit,
+                'local_budget' => $budget === null ? null : [
+                    'soft_cap' => $budget->softCap,
+                    'non_create_cap' => $budget->nonCreateCap,
+                    'create_weight' => $budget->createWeight,
+                    'default_weight' => $budget->defaultWeight,
+                ],
                 'backoff_seconds' => $limits->backoffSeconds,
                 'min_backoff_seconds' => $limits->minBackoffSeconds,
                 'max_backoff_seconds' => $limits->maxBackoffSeconds,

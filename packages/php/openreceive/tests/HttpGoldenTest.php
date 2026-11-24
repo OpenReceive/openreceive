@@ -81,9 +81,13 @@ final class HttpGoldenTest extends TestCase
      */
     private static function swapFailureService(string $failure): Service
     {
-        $provider = new class ($failure) implements \OpenReceive\Swap\SwapProvider, \OpenReceive\Swap\SwapProviderRuntime {
+        // It states FixedFloat's limits, the only ones the guard counts for, and
+        // leaves the refusal to the create itself (its check asks nothing).
+        $provider = new class ($failure) implements \OpenReceive\Swap\SwapProvider, \OpenReceive\Swap\SwapProviderRuntime, \OpenReceive\Swap\GuardedSwapProvider {
             public ?\OpenReceive\Swap\WeightBudget $budget = null;
             public function __construct(private readonly string $failure) {}
+            public function limits(): \OpenReceive\Swap\SwapProviderLimits { return \OpenReceive\Swap\SwapProviderLimits::fixedFloat(); }
+            public function assertCreateAvailable(): void {}
             public function name(): string { return 'fixedfloat'; }
             public function supportedPayInAssets(): array { return ['USDT_TRON']; }
             public function payInAssetCatalog(): array { return []; }
@@ -104,7 +108,8 @@ final class HttpGoldenTest extends TestCase
         };
         $service = new Service(new FakeWallet(static fn (): int => 1000), false, [$provider], ['USD'], static fn (): int => 1000);
         if ($failure === 'weight_budget') {
-            for ($i = 0; $i < 3; $i++) {
+            // Four creates in this window: 200, the soft cap.
+            for ($i = 0; $i < 4; $i++) {
                 $provider->budget?->reserve('create');
             }
         }

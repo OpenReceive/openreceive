@@ -20,5 +20,5 @@
       "request_id": "<request_id>"
     }
   },
-  "note": "The provider's create call goes through the weight budget the service attached, already spent by three creates in this window (3 x 50 = the 150 create gate), so the budget refuses before any provider request. A payer pressing Try again gets a retryable answer, the same one a provider 429 gives."
+  "note": "The provider is FixedFloat's own (the only profile the guard counts for), and its create call goes through the weight budget the service attached, already spent by four creates in this window (4 x 50 = the 200 soft cap), so the budget refuses before any provider request. A payer pressing Try again gets a retryable answer, the same one a provider 429 gives."
 }

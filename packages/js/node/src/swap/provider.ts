@@ -155,8 +155,8 @@ export interface SwapProvider {
    */
   attachApiResponseLogger?(log: (entry: SwapProviderApiResponseLog) => void): void;
   /**
-   * The provider's API limits, which size the request guard the service
-   * attaches. Omitted means the FixedFloat defaults.
+   * How the request guard the service attaches treats this provider. Omitted
+   * means no local count: the guard only obeys the provider's 429.
    */
   readonly limits?: SwapProviderLimits;
   /**
