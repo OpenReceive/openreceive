@@ -962,6 +962,90 @@ await journeyRun("tutorial", async (j) => {
   }
 });
 
+// (d') An experiment, run only when named (JOURNEYS=back-history): the classic
+// "history entry while a modal is open" pattern, tried in real Safari against
+// a host that routes on popstate (the demo's ShopStore.startRouting).
+//   A  the entry is pushed inside the payer's tap on How To Pay; edge swipe Back
+//   B  the entry is pushed 6 s later, outside any user activation; edge swipe Back
+//   C  the entry is pushed in the tap; the walkthrough is closed with its ✕ and
+//      the page calls history.back() to take the entry away again
+async function backHistoryCase(j, mode) {
+  j.orderUrl = await orderOneButton("back-history");
+  await lightningInvoice("back-history");
+  await sleep(800);
+  await web.ev(`(() => {
+    const exp = (window.__exp = { pops: [], pushedAt: undefined, mode: ${JSON.stringify(mode)} });
+    const dialogOpen = () => !!window.__lab.findEl(${JSON.stringify(Q.dialog)});
+    const closeButton = () => window.__lab.findEl({ sel: "[role=dialog] button, dialog button", name: "^(close|x|×)$", flags: "i", visible: true });
+    const push = () => { history.pushState({ ...(history.state ?? {}), orModal: 1 }, ""); exp.pushedAt = Date.now(); exp.lengthAfterPush = history.length; };
+    addEventListener("popstate", (event) => {
+      exp.pops.push({ at: Date.now(), state: JSON.stringify(event.state)?.slice(0, 120), href: location.href, dialogOpen: dialogOpen() });
+      // The widget's side of the pattern: Back closes the walkthrough.
+      if (!(event.state && event.state.orModal) && dialogOpen()) { exp.closingByPop = true; closeButton()?.click(); }
+    });
+    document.addEventListener("click", (event) => {
+      const path = event.composedPath();
+      if (path.some((n) => n.localName === "button" && /how to pay/i.test(n.textContent ?? ""))) {
+        exp.lengthBefore = history.length;
+        if (exp.mode === "B") setTimeout(push, 6000); else push();
+      }
+      if (exp.mode === "C" && path.some((n) => n === closeButton()) && !exp.closingByPop && history.state && history.state.orModal) {
+        setTimeout(() => history.back(), 0);
+      }
+    }, true);
+    return true;
+  })()`);
+  const loadedAt = await web.ev("window.__lab.loadedAt");
+  await realTap(Q.howToPay, "How To Pay", { journey: "back-history" });
+  await waitShown(Q.dialog, 15_000, "the walkthrough");
+  if (mode === "B") await sleep(7000);
+  j.beforeBack = await web.ev(
+    "({ url: location.href, length: history.length, exp: window.__exp })",
+  );
+  j.shots.push(await shot(`back-history-${mode}-open`));
+  if (mode === "C") {
+    await realTap(
+      {
+        sel: "[role=dialog] button, dialog button",
+        name: "^(close|x|×)$",
+        flags: "i",
+        visible: true,
+      },
+      "walkthrough close",
+      { journey: "back-history" },
+    );
+  } else {
+    await phone.edgeSwipeBack();
+  }
+  await sleep(2500);
+  await web.select(10_000).catch(() => undefined);
+  j.after = await web
+    .ev(
+      `({ url: location.href, length: history.length, sameDocument: window.__lab?.loadedAt === ${loadedAt}, dialogOpen: !!window.__lab?.findEl(${JSON.stringify(Q.dialog)}), invoice: !!window.__lab?.findEl(${JSON.stringify(Q.copyInvoice)}), grid: !!window.__lab?.findEl(${JSON.stringify(Q.bitcoin)}), exp: window.__exp })`,
+    )
+    .catch((e) => ({ error: String(e) }));
+  j.shots.push(await shot(`back-history-${mode}-after`));
+  // One more edge swipe: where does the payer's next Back go?
+  await phone.edgeSwipeBack();
+  await sleep(2500);
+  await web.select(10_000).catch(() => undefined);
+  j.afterSecondBack = await web
+    .ev(
+      `({ url: location.href, sameDocument: window.__lab?.loadedAt === ${loadedAt}, invoice: !!window.__lab?.findEl(${JSON.stringify(Q.copyInvoice)}), grid: !!window.__lab?.findEl(${JSON.stringify(Q.bitcoin)}) })`,
+    )
+    .catch((e) => ({ error: String(e) }));
+  j.shots.push(await shot(`back-history-${mode}-second-back`));
+  log(
+    `back-history ${mode}`,
+    JSON.stringify({ before: j.beforeBack, after: j.after, second: j.afterSecondBack }),
+  );
+}
+for (const mode of ["A", "B", "C"])
+  await journeyRun(`back-history-${mode}`, (j) => {
+    j.shots = [];
+    return backHistoryCase(j, mode);
+  });
+
 // (e) Reloads: Safari's reload button and pull-to-refresh on the invoice, and right after paying.
 await journeyRun("reload", async (j) => {
   j.orderUrl = await orderOneButton("reload");

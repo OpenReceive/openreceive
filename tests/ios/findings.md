@@ -291,3 +291,72 @@ history; see "Finding 3: the strategy" at the end. **4** to
 - **A real phone's suspension** of a backgrounded tab: see the app switch
   above.
 - **The 16 Pro in landscape:** see the lab artifacts.
+
+## Finding 3: the strategy
+
+The Android fix closes the walkthrough on Back through a CloseWatcher and
+never touches the host page's history. That cannot cover iOS:
+
+- **CloseWatcher on iOS.** Safari 27.2 has no CloseWatcher. WebKit turned it
+  on in July 2026 (WebKit bug 316977), and the Safari 27.3 beta notes list
+  "close watchers and the `closedby` attribute". But the HTML spec's close
+  requests are Esc, Android's Back, VoiceOver's scrub and a gamepad's back
+  button. Safari's edge swipe is history navigation, not a close request, so
+  27.3 will very likely still leave the page (unconfirmed until a 27.3
+  simulator runtime exists). Feature-detecting CloseWatcher cannot tell
+  whether the swipe is covered.
+- **The only lever is a history entry:** a same-URL `pushState` when the
+  walkthrough opens, closing it on `popstate`, and `history.back()` when it
+  closes another way (✕, Escape, a tap outside).
+
+**Measured in real Safari** (`JOURNEYS=back-history-A,back-history-B,back-history-C`,
+iPhone SE, iOS 27.2 and 18.4). The demo shop is the host, and it routes on
+every `popstate` (ShopStore.startRouting re-resolves the order):
+
+| Case | Result |
+| --- | --- |
+| A: entry pushed in the tap on How To Pay; edge swipe | one `popstate`, same URL, same document; the walkthrough closed; the open invoice stayed; the next swipe left for the shop as before |
+| B: entry pushed 6 s after the tap (no fresh user activation); edge swipe | the same as A: Safari did not skip the entry (the page had seen touches before) |
+| C: entry pushed in the tap; ✕, then `history.back()` | one `popstate`; the walkthrough closed; the invoice stayed; the entry was gone (the next Back went to the shop) |
+
+**What a host's router does with a same-URL entry** (from the routers'
+source; see the research notes):
+
+- **Angular** (`onSameUrlNavigation: 'ignore'`, the default): nothing.
+- **Next.js App Router 14.1 and later:** nothing, if the entry keeps
+  `history.state` (it copies its own keys). Older App Routers reload on a
+  Forward to an entry without `__NA`.
+- **React Router 6.4+ / 7 data routers:** a same-URL pop re-runs the page's
+  loaders once. An active `useBlocker` can turn the pop into a page reload.
+- **Vue Router 4:** the pop runs the global guards and `afterEach` again (for
+  example, a second analytics page view). It warns if its state keys are lost,
+  so the entry must spread `history.state`.
+- **Plain multi-page sites:** nothing.
+- **Hosts that route on `popstate` themselves**, like the demo: whatever their
+  handler does on a same-URL pop. The demo's was harmless.
+
+**The options:**
+
+| Option | Payer on iOS | Host risk | API |
+| --- | --- | --- | --- |
+| (a) Keep the limitation | edge swipe leaves the checkout mid-payment | none | none |
+| (b) Opt-in entry (`close-on-back` / `closeOnBack`) | fixed only where the host turns it on, so mostly not fixed | only for hosts that choose it | one prop |
+| (c) Entry by default where Back is not a close request (iOS/iPadOS WebKit), opt-out prop | fixed | the router effects above, once per walkthrough closed by Back or ✕ | one opt-out prop |
+| (d) The walkthrough inline on phones (expands in place, no overlay) | no modal, so no expectation that Back closes it; Back leaves the page as on any page | none | none; a design change |
+
+**Recommendation: (c).** The edge swipe is in the payment funnel, and losing
+the checkout mid-payment costs more than an extra loader run or page view on
+some routers. The measured behaviour in Safari is clean, and hosts with a
+router that minds have a switch.
+
+How to build it:
+- Push `{ ...history.state, openreceiveWalkthrough: id }`, the same URL,
+  synchronously in the click that opens the walkthrough.
+- On a `popstate` that leaves the entry, close the walkthrough. Skip the close
+  animation when `event.hasUAVisualTransition` is true.
+- When the walkthrough closes another way, call `history.back()` only if the
+  current entry is still ours.
+- Clean up on unmount.
+- Only where Back is not a close request: iOS/iPadOS WebKit (touch plus
+  `GestureEvent`). Chromium keeps its CloseWatcher and never gets an entry.
+- (d) is the alternative if no history entry is acceptable at all.
