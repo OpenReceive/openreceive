@@ -357,6 +357,9 @@ row whose `reference` is the order's and whose `status` is `settled`):
 />
 ```
 
+`settled_at` is Unix seconds, as `paid_at` is in the SQL table. Django's
+`OpenReceivePayment.paid_at` is a `datetime`: pass `int(paid_at.timestamp())`.
+
 ## Building your own UI
 
 The drop-in already follows the rules for what payers see. If you replace it,
