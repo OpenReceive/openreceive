@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0 - 2026-11-24
+
+No breaking API change in this gem.
+
+- Fixed: a paid order is never handed a new invoice or a swap deposit
+  address. Before a create mints another attempt for an order that has unpaid
+  ones, the engine checks those with the wallet (skipping any the request's
+  scan just checked) and answers 409 "already paid" if one was paid.
+- Added: `payments/check` answers `paid` with the attempt that paid the order
+  on every attempt of a paid order, and `checkouts/prepare` names the order's
+  newest unpaid attempt as `pending_payment_hash`, so a reloaded page shows
+  the receipt without another pick.
+- The swap changes of 0.6.0 come from `openreceive-server`; see its changelog.
+
 ## 0.5.0 - 2026-11-16
 
 No breaking API change in this gem. A Rails app with a custom ("headless")

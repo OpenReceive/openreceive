@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 - 2026-11-24
+
+Release with the complete 0.6.0 package family. No Ruby runtime changes
+from 0.5.0 in this gem. The bundled agent skill carries the 0.6.0 agent
+directions. The other changes of 0.6.0 are in `openreceive-server`,
+`openreceive-rails` and the JavaScript checkout packages.
+
 ## 0.5.0 - 2026-11-16
 
 Release with the complete 0.5.0 package family. No Ruby runtime changes

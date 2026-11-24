@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/next",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Accept Bitcoin Lightning payments in Next.js with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -23,7 +23,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/http": "0.5.0"
+    "@openreceive/http": "0.6.0"
   },
   "peerDependencies": {
     "next": "^16.4.6"

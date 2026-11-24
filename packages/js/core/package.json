@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Money and wallet primitives for OpenReceive Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",

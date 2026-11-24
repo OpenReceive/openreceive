@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-11-24
+
+A site that uses the packaged checkout needs no code change, and the new
+response fields are optional, so older checkouts ignore them. **One change may
+need a change on your side:** a custom swap provider for the Python, PHP or
+Ruby server that states its own limits. The Lightning Swap limits profile
+added in 0.5.0 is gone; use the provider-only profile in its place (see
+"Custom swap providers" under Changed). The JavaScript names were never
+exported from a package entry point.
 
 ### Fixed
 

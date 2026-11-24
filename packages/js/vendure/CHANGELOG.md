@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 - 2026-11-24
+
+- No changes to the plugin's own code. Through `@openreceive/node` it picks
+  up the 0.6.0 server fixes: a paid order is never handed a new invoice or
+  swap deposit address, and only FixedFloat swap calls are counted locally.
+
 ## 0.5.0 - 2026-11-16
 
 - No changes to the plugin's own code. Through `@openreceive/node` it picks

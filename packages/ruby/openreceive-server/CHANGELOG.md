@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.0 - 2026-11-24
+
+- Changed (swaps): the library counts calls to a swap provider itself only
+  for FixedFloat (`ff.io`). Lightning Swap, an unknown provider and a test
+  provider are never refused locally; a provider's 429 is still obeyed for the
+  wait it names, between 1 second and 5 minutes, and a 429 on a new swap stops
+  new swaps only. With FixedFloat, status and refund calls may use only 50 of
+  the 200 weight a minute, so open swap screens can no longer use up the room
+  for new swaps.
+- Changed (custom swap providers): `LIGHTNING_SWAP_PROVIDER_LIMITS` is gone.
+  Use `PROVIDER_ONLY_SWAP_PROVIDER_LIMITS`. A provider that states no limits
+  is not counted at all. The `swap.provider.rate_limited` log line no longer
+  carries `creates` or `create_limit`.
+- Fixed: a paid order is never handed a new invoice or a swap deposit
+  address. Before a create mints another attempt for a reference with unpaid
+  ones, the host's `check_earlier_attempts` callback can check them with the
+  wallet and answer 409 "already paid".
+- Added: `paid` on `payments/check` and `pending_payment_hash` on
+  `checkouts/prepare`, from the host's answers. Both are optional fields.
+
 ## 0.5.0 - 2026-11-16
 
 No breaking API change in this gem. The breaking changes of 0.5.0 are in the
