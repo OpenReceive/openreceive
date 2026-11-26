@@ -7,9 +7,9 @@
     "dev": "node --env-file=.env server.js"
   },
   "dependencies": {
-    "@openreceive/elements": "^0.4.19",
-    "@openreceive/express": "^0.4.19",
-    "@openreceive/http": "^0.4.19",
+    "@openreceive/elements": "^0.6.0",
+    "@openreceive/express": "^0.6.0",
+    "@openreceive/http": "^0.6.0",
     "express": "^5.1.0",
     "pg": "^8.23.1"
   },
