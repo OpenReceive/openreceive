@@ -678,6 +678,10 @@ const PLUGIN_LSC = `${LSC_WALK} Save the code alone in \`/tmp/openreceive-lsc\`,
 const VENDURE =
   "Please configure the receive-only wallet credential as `NWC_URI` in `server/.env`. Get it in Rizful: open the menu, tap NWC, choose Receive-only NWC code, and tap Copy (https://openreceive.org/get_a_nwc_code_to_receive_payments). Keep the wallet URI out of chat; I will not print it. Let me know once it's configured.";
 
+// Codex on Nuxt, 2026-11-26: the file as a Markdown link, not in backticks.
+const NUXT_LINKED =
+  "Add `NWC_URI=<your receive-only wallet code>` to [.env](/tmp/ortrial-nuxt-344a300a-SeIwt2/.env) and reply **saved**. In Rizful, open the NWC menu, choose **Receive-only NWC code**, and copy it directly into the file. [OpenReceive wallet setup](https://openreceive.org/get_a_nwc_code_to_receive_payments)";
+
 test("the directions' code-file fallback is a file request naming the file, the line and the code", () => {
   const cases = [
     [FILE_NWC, { path: "server/.env", variable: "NWC_URI", code: "nwc" }],
@@ -693,6 +697,10 @@ test("the directions' code-file fallback is a file request naming the file, the 
       { path: "/tmp/openreceive.AbC123/code", code: "nwc" },
     ],
     [VENDURE, { path: "server/.env", variable: "NWC_URI", code: "nwc" }],
+    [
+      NUXT_LINKED,
+      { path: "/tmp/ortrial-nuxt-344a300a-SeIwt2/.env", variable: "NWC_URI", code: "nwc" },
+    ],
   ];
   for (const [text, ask] of cases) {
     assert.equal(classify(text), "file", text);
@@ -727,6 +735,13 @@ test("a code the agent stores itself, a closing, a command or another file is no
   assert.equal(
     classify("Please run this in `server/`: `npm run migrate`, then reply done."),
     "delegate",
+  );
+  // A link to a web page is not a file to write.
+  assert.deepEqual(
+    codeFileAsks(
+      "Add `NWC_URI=<your code>` to [the guide](https://openreceive.org/guides/storage).",
+    ),
+    [],
   );
   // A code alone in a source file would break it.
   assert.deepEqual(

@@ -150,6 +150,19 @@ const NWC_WORDS =
   /\bnwc\b|nostr wallet connect|nostr\+walletconnect|receive-only|\bwallet\b|rizful|alby/i;
 const LSC_WORDS = /\blsc\b|swap|lightning-swap\.com|lightning\+swapconnect/i;
 
+/**
+ * A Markdown link to a local file, as the path in backticks: Codex on Nuxt,
+ * 2026-11-26, asked "Add `NWC_URI=<your receive-only wallet code>` to
+ * [.env](/tmp/<shop>/.env) and reply **saved**", and the merchant, who read
+ * only backticked paths, answered "Yes, go ahead." for 30 turns. A link to a
+ * web page stays a link.
+ */
+function linkedPathsBackticked(text: string): string {
+  return text.replace(/\[([^\]\n]*)\]\(([^)\s]+)\)/g, (link, _label, target: string) =>
+    /^[a-z][a-z0-9+.-]*:/i.test(target) || !pathLike(target) ? link : `\`${target}\``,
+  );
+}
+
 /** URLs out of the way, keeping the period that ends their sentence. */
 function maskUrls(text: string): string {
   return text.replace(/\bhttps?:\/\/\S+?(?=[).,;:!?'"]*(?:\s|$))/gi, "<url>");
@@ -213,7 +226,7 @@ export interface CodeFileAsk {
  * it in `.env`"), and is not a rule ("never …"). A closing is not a request.
  */
 export function codeFileAsks(text: string): CodeFileAsk[] {
-  const message = maskUrls(text.trim());
+  const message = maskUrls(linkedPathsBackticked(text.trim()));
   if (DONE.test(message) && !message.includes("?") && !REPLY_CUE.test(message)) return [];
   const replyAsked = REPLY_CUE.test(message);
   const context = NWC_WORDS.test(message) || LSC_WORDS.test(message);
