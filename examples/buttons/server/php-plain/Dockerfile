@@ -16,6 +16,7 @@ COPY packages/js/fastify/package.json ./packages/js/fastify/package.json
 COPY packages/js/http/package.json ./packages/js/http/package.json
 COPY packages/js/next/package.json ./packages/js/next/package.json
 COPY packages/js/node/package.json ./packages/js/node/package.json
+COPY packages/js/nuxt/package.json ./packages/js/nuxt/package.json
 COPY packages/js/openreceive/package.json ./packages/js/openreceive/package.json
 COPY packages/js/provider-data/package.json ./packages/js/provider-data/package.json
 COPY packages/js/react/package.json ./packages/js/react/package.json
