@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 - 2026-11-26
+
+- No changes to this gem's code. Released with the complete 0.6.1 package
+  family. The Rails quickstart now links "When the payer leaves the page" in
+  the deploying guide, for a backstop pass when no payment request follows.
+
 ## 0.6.0 - 2026-11-24
 
 No breaking API change in this gem.

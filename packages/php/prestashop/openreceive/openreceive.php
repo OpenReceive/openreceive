@@ -27,7 +27,7 @@ class OpenReceive extends PaymentModule
     {
         $this->name = 'openreceive';
         $this->tab = 'payments_gateways';
-        $this->version = '0.6.0';
+        $this->version = '0.6.1';
         $this->author = 'OpenReceive';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = ['min' => '9.0.0', 'max' => _PS_VERSION_];

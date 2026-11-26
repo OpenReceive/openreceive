@@ -1,4 +1,4 @@
-# OpenReceive agent directions: WordPress + Easy Digital Downloads (0.6.0)
+# OpenReceive agent directions: WordPress + Easy Digital Downloads (0.6.1)
 
 These directions are 22 KB. Download them with your shell and follow them from Step 0:
 

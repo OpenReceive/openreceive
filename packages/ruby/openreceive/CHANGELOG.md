@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 - 2026-11-26
+
+Release with the complete 0.6.1 package family. No Ruby runtime changes
+from 0.6.0 in this gem. The bundled agent skill carries the 0.6.1 agent
+directions: the Nuxt module, and what to do when the payer leaves the page.
+
 ## 0.6.0 - 2026-11-24
 
 Release with the complete 0.6.0 package family. No Ruby runtime changes

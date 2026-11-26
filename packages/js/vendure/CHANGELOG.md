@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 - 2026-11-26
+
+- No changes to the plugin's own code. Released with the complete 0.6.1
+  package family.
+
 ## 0.6.0 - 2026-11-24
 
 - No changes to the plugin's own code. Through `@openreceive/node` it picks

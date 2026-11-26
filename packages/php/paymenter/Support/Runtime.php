@@ -31,7 +31,7 @@ use Paymenter\Extensions\Gateways\OpenReceive\Support\Commands\TestInvoiceComman
  */
 final class Runtime
 {
-    public const VERSION = '0.6.0';
+    public const VERSION = '0.6.1';
 
     /** The extension's class and folder name, and the `extension` column of its gateway row. */
     public const EXTENSION = 'OpenReceive';

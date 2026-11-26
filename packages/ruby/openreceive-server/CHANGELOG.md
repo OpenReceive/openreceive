@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 - 2026-11-26
+
+- No changes to this gem's code. Released with the complete 0.6.1 package
+  family.
+
 ## 0.6.0 - 2026-11-24
 
 - Changed (swaps): the library counts calls to a swap provider itself only

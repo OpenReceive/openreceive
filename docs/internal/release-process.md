@@ -2,7 +2,7 @@
 
 These packages make up the general release. They all share one version number:
 
-- OpenReceive `0.6.0`
+- OpenReceive `0.6.1`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -10,6 +10,7 @@ These packages make up the general release. They all share one version number:
 - `@openreceive/express`
 - `@openreceive/fastify`
 - `@openreceive/next`
+- `@openreceive/nuxt`
 - `@openreceive/medusa`
 - `@openreceive/vendure`
 - `@openreceive/browser`
@@ -35,7 +36,7 @@ packages are:
 - the Node service package
 - the shipped HTTP route handler, `@openreceive/http`
 - its framework adapters: `@openreceive/express`, `@openreceive/fastify` and
-  `@openreceive/next`
+  `@openreceive/next`, and the Nuxt module `@openreceive/nuxt`
 - the Medusa plugin and payment provider, `@openreceive/medusa`
 - the Vendure plugin and payment method handler, `@openreceive/vendure`
 - core contracts and helpers, browser checkout helpers, provider-data assets,
@@ -763,7 +764,7 @@ the publisher already does. Do not weaken or skip release coverage.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.6.0`. We do not use per-package
+Tag the prepared release commit once, as `v0.6.1`. We do not use per-package
 tags while the general package family releases in lockstep with the workspace
 version. Add per-package tags only if versions ever diverge, and only after the
 contract is stable enough that they will not confuse SDK consumers.

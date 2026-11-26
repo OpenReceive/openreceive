@@ -25,9 +25,9 @@ directory, next to Stripe and PayPal:
 
 ```sh
 cd /var/www/paymenter
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.0/openreceive-paymenter-0.6.0.zip
-unzip -q openreceive-paymenter-0.6.0.zip -d extensions/Gateways
-rm openreceive-paymenter-0.6.0.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-paymenter-0.6.1.zip
+unzip -q openreceive-paymenter-0.6.1.zip -d extensions/Gateways
+rm openreceive-paymenter-0.6.1.zip
 chown -R www-data:www-data extensions/Gateways/OpenReceive
 sudo -u www-data php artisan app:extension:install gateway OpenReceive
 ```

@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Django (0.6.0)
+# OpenReceive agent directions: Django (0.6.1)
 
 These directions are 50 KB. Download them with your shell and follow them from Step 0:
 
