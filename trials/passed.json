@@ -172,12 +172,12 @@
     },
     {
       "trial": "nuxt",
-      "date": "2026-10-14",
-      "release": "0.4.26",
+      "date": "2026-11-26",
+      "release": "0.6.1",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "71aab1c1757a"
+      "mode": "released",
+      "directions": "3c62468d802f"
     },
     {
       "trial": "astro",
