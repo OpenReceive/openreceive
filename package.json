@@ -109,6 +109,8 @@
     "release:fossbilling:build": "node tools/release/fossbilling-extension.mjs build",
     "release:prestashop:plan": "node tools/release/prestashop-module.mjs plan",
     "release:prestashop:build": "node tools/release/prestashop-module.mjs build",
+    "release:hikashop:plan": "node tools/release/hikashop-package.mjs plan",
+    "release:hikashop:build": "node tools/release/hikashop-package.mjs build",
     "release:odoo:plan": "node tools/release/odoo-module.mjs plan",
     "release:odoo:build": "node tools/release/odoo-module.mjs build",
     "release:odoo-apps:plan": "node tools/release/odoo-apps.mjs plan",

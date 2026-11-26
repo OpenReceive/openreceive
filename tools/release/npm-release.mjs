@@ -409,6 +409,7 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     ["docs/guides/quickstart-paymenter.md", "paymenter"],
     ["docs/guides/quickstart-fossbilling.md", "fossbilling"],
     ["docs/guides/quickstart-prestashop.md", "prestashop"],
+    ["docs/guides/quickstart-hikashop.md", "hikashop"],
     ["docs/guides/quickstart-odoo.md", "odoo"],
   ]) {
     const quickstartPath = path.join(root, quickstart);
@@ -540,6 +541,12 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/prestashop/composer.lock",
       "packages/php/prestashop/openreceive/src/Runtime.php",
       "packages/php/prestashop/openreceive/openreceive.php",
+      "packages/php/hikashop/composer.json",
+      "packages/php/hikashop/composer.lock",
+      "packages/php/hikashop/plg_hikashoppayment_openreceive/src/Runtime.php",
+      "packages/php/hikashop/pkg_openreceive.xml",
+      "packages/php/hikashop/plg_hikashoppayment_openreceive/openreceive.xml",
+      "packages/php/hikashop/plg_console_openreceive/openreceive.xml",
       "packages/python/odoo/payment_openreceive/__manifest__.py",
       "packages/python/odoo/payment_openreceive/static/description/index.html",
       "packages/python/odoo/README.md",
@@ -550,6 +557,7 @@ function dryRunPrepare(root, targetVersion) {
       "docs/guides/quickstart-paymenter.md",
       "docs/guides/quickstart-fossbilling.md",
       "docs/guides/quickstart-prestashop.md",
+      "docs/guides/quickstart-hikashop.md",
       "docs/guides/quickstart-odoo.md",
       "package-lock.json",
     ]

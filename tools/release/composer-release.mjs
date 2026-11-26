@@ -190,10 +190,10 @@ export function updatePhpVersions(root, targetVersion) {
       }
     }
   }
-  // The billing-panel extensions and the PrestaShop module bundle the engine
-  // like the WordPress plugin, and declare their own version in
-  // Runtime::VERSION (and FOSSBilling's module manifest), which their builds
-  // check.
+  // The billing-panel extensions and the PrestaShop and HikaShop plugins
+  // bundle the engine like the WordPress plugin, and declare their own
+  // version in Runtime::VERSION (and FOSSBilling's module manifest), which
+  // their builds check.
   for (const [name, runtimePath, manifestPath] of [
     ["paymenter", "Support/Runtime.php", null],
     [
@@ -202,6 +202,7 @@ export function updatePhpVersions(root, targetVersion) {
       "src/modules/Openreceive/manifest.json",
     ],
     ["prestashop", "openreceive/src/Runtime.php", null],
+    ["hikashop", "plg_hikashoppayment_openreceive/src/Runtime.php", null],
   ]) {
     const extensionDir = path.join(root, "packages/php", name);
     if (!existsSync(path.join(extensionDir, "composer.json"))) continue;
@@ -251,6 +252,25 @@ export function updatePhpVersions(root, targetVersion) {
     if (before !== after) {
       writeFileSync(prestashopModule, after);
       changed.push("packages/php/prestashop/openreceive/openreceive.php");
+    }
+  }
+  // Joomla reads each extension's version from its XML manifest: the
+  // HikaShop package and its two plugins.
+  for (const manifest of [
+    "pkg_openreceive.xml",
+    "plg_hikashoppayment_openreceive/openreceive.xml",
+    "plg_console_openreceive/openreceive.xml",
+  ]) {
+    const file = path.join(root, "packages/php/hikashop", manifest);
+    if (!existsSync(file)) continue;
+    const before = readFileSync(file, "utf8");
+    const after = before.replace(
+      /<version>[^<]+<\/version>/,
+      `<version>${targetVersion}</version>`,
+    );
+    if (before !== after) {
+      writeFileSync(file, after);
+      changed.push(`packages/php/hikashop/${manifest}`);
     }
   }
   // The Laravel demo installs both packages from their monorepo paths. Their

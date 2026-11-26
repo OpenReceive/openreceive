@@ -380,6 +380,30 @@ for (const gemName of GEM_NAMES) {
     ).includes(`$this->version = '${releaseVersion}';`),
     "PrestaShop module version must match the workspace release",
   );
+  const hikashopManifest = readJson("packages/php/hikashop/composer.json");
+  expect(
+    hikashopManifest.require["openreceive/openreceive"] === composerConstraint(releaseVersion),
+    "HikaShop engine constraint must match the workspace release",
+  );
+  expect(
+    readFileSync(
+      path.join(root, "packages/php/hikashop/plg_hikashoppayment_openreceive/src/Runtime.php"),
+      "utf8",
+    ).includes(`const VERSION = '${releaseVersion}';`),
+    "HikaShop Runtime::VERSION must match the workspace release",
+  );
+  for (const manifest of [
+    "pkg_openreceive.xml",
+    "plg_hikashoppayment_openreceive/openreceive.xml",
+    "plg_console_openreceive/openreceive.xml",
+  ]) {
+    expect(
+      readFileSync(path.join(root, "packages/php/hikashop", manifest), "utf8").includes(
+        `<version>${releaseVersion}</version>`,
+      ),
+      `HikaShop ${manifest} version must match the workspace release`,
+    );
+  }
   expect(
     readFileSync(
       path.join(root, "packages/python/odoo/payment_openreceive/__manifest__.py"),

@@ -400,6 +400,8 @@ Run from the repo root on a clean, current `master`.
    npm run release:fossbilling:build
    composer install --working-dir=packages/php/prestashop
    npm run release:prestashop:build
+   composer install --working-dir=packages/php/hikashop
+   npm run release:hikashop:build
    npm run release:odoo:build
    npm run build:docs
    npm run release:artifacts -- check
@@ -409,11 +411,14 @@ Run from the repo root on a clean, current `master`.
 
    The artifact tool derives filenames from the public npm and gem lists and
    registry version conversions. It refuses to create the draft when any of the
-   30 required assets is missing: 17 npm tarballs, 3 gems, Python wheel and sdist,
+   31 required assets is missing: 17 npm tarballs, 3 gems, Python wheel and sdist,
    standalone checkout, WordPress ZIP, Paymenter ZIP, the two FOSSBilling ZIPs
    (the whole extension, and the module alone that FOSSBilling's extension
-   directory installs), PrestaShop ZIP, Odoo module ZIP, and docs bundle. It never
-   substitutes an older WordPress, Paymenter, FOSSBilling, PrestaShop or Odoo ZIP. The source-tag build is the documented fallback for
+   directory installs), PrestaShop ZIP, HikaShop package ZIP (a Joomla
+   package), Odoo module ZIP, and docs bundle. It never substitutes an older
+   WordPress, Paymenter, FOSSBilling, PrestaShop, HikaShop or Odoo ZIP. The
+   HikaShop package goes to the GitHub release only: listing it in the Joomla
+   Extensions Directory is the maintainer's, from their own JED account. The source-tag build is the documented fallback for
    historical releases with a missing ZIP. WordPress builds require PHP GMP,
    sodium, Composer and WP-CLI, in addition to the completed standalone build.
 

@@ -19,8 +19,10 @@ import { root } from "../shared/root.mjs";
  * @param {string} options.prefix The Strauss namespace prefix, e.g. "OpenReceive\\Paymenter\\Vendor\\".
  * @param {string[]} options.ownCode The extension's own code directories, relative to `directory`, whose
  *   imports Strauss rewrites (the composer.json's extra.strauss.update_call_sites).
+ * @param {string} [options.preamble] PHP run before the release's autoload checks require autoload.php,
+ *   for a host whose files exit unless the host defined a constant (Joomla's `_JEXEC`).
  */
-export function bundleDependencies({ source, staging, directory, prefix, ownCode }) {
+export function bundleDependencies({ source, staging, directory, prefix, ownCode, preamble = "" }) {
   const run = (bin, args) => execFileSync(bin, args, { cwd: directory, stdio: "inherit" });
   assert(
     existsSync(path.join(source, "vendor/bin/strauss")),
@@ -175,11 +177,11 @@ export function bundleDependencies({ source, staging, directory, prefix, ownCode
   const php = prefix.replaceAll("\\", "\\\\");
   run("php", [
     "-r",
-    `require 'autoload.php'; if (!class_exists('${php}OpenReceive\\\\Server\\\\Service') || class_exists('OpenReceive\\\\Server\\\\Service')) exit(1);`,
+    `${preamble}require 'autoload.php'; if (!class_exists('${php}OpenReceive\\\\Server\\\\Service') || class_exists('OpenReceive\\\\Server\\\\Service')) exit(1);`,
   ]);
   run("php", [
     "-r",
-    `require 'autoload.php'; $key = new ${prefix}swentel\\nostr\\Key\\Key(); if ($key->getPublicKey(str_repeat('0', 63) . '1') !== '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798') exit(1);`,
+    `${preamble}require 'autoload.php'; $key = new ${prefix}swentel\\nostr\\Key\\Key(); if ($key->getPublicKey(str_repeat('0', 63) . '1') !== '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798') exit(1);`,
   ]);
   run("php", [
     "-r",
