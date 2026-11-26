@@ -162,18 +162,7 @@ Until `server/openreceive.ts` exists, the module warns and mounts no route.
 
 ## 5. The checkout page
 
-The page asks your own server route whether this visitor owns the order:
-
-```ts
-// server/api/checkout/[reference].get.ts
-export default defineEventHandler(async (event) => {
-  const order = await findOrder(getRouterParam(event, "reference") ?? "");
-  if (!order || order.visitor !== getCookie(event, "visitor")) {
-    throw createError({ statusCode: 404, statusMessage: "Not found" });
-  }
-  return { reference: order.id, swapPaymentHash: order.swapPaymentHash ?? undefined };
-});
-```
+The order's own page renders the checkout:
 
 ```vue
 <!-- app/pages/checkout/[reference].vue -->
@@ -202,6 +191,19 @@ function onState(event: Event) {
   <OpenReceiveCheckout v-if="data" :reference="data.reference" resumable
     :resume-payment-hash="data.swapPaymentHash" :on-state="onState" />
 </template>
+```
+
+It asks your own server route whether this visitor owns the order:
+
+```ts
+// server/api/checkout/[reference].get.ts
+export default defineEventHandler(async (event) => {
+  const order = await findOrder(getRouterParam(event, "reference") ?? "");
+  if (!order || order.visitor !== getCookie(event, "visitor")) {
+    throw createError({ statusCode: 404, statusMessage: "Not found" });
+  }
+  return { reference: order.id, swapPaymentHash: order.swapPaymentHash ?? undefined };
+});
 ```
 
 `<OpenReceiveCheckout>` needs no import and no stylesheet import: the module

@@ -496,7 +496,7 @@
       "slug": "quickstart-nuxt",
       "title": "Nuxt Quickstart",
       "category": "quickstart",
-      "bytes": 11102
+      "bytes": 11140
     },
     {
       "path": "/guides/astro-recipe",
@@ -696,7 +696,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "category": "agent-directions",
-      "bytes": 38513
+      "bytes": 38551
     },
     {
       "path": "/guides/agent-directions-astro",
@@ -1413,7 +1413,7 @@
       "kind": "agent-directions-payload",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38513,
+      "bytes": 38551,
       "copy_button": true,
       "self_contained": true
     },
