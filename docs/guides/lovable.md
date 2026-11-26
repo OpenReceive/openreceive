@@ -94,9 +94,11 @@ payment as received, and `openreceive_on_paid` marks the order paid.
   page's cookies. Lovable keeps your users' sign-in in the browser instead,
   so each order carries a buyer token that matches an HttpOnly cookie set
   when the order is created. Only that browser can pay for the order.
-- **No worker or cron job.** Each request to the payment routes also checks
-  the wallet for settled invoices, through a lock in your database. A payer
-  who closes the tab is settled on the next request.
+- **No worker or cron job required.** Each request to the payment routes also
+  checks the wallet for settled invoices, through a lock in your database. A
+  payer who closes the tab is settled on the next request from anyone.
+  On a quiet site that can be hours later. If fulfillment should not wait,
+  see [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page).
 - **Your secrets stay on the server.** `NWC_URI` and `LSC_URI_PRIMARY` are
   Lovable secrets, read only by server code. They never go into `.env`, which
   Lovable commits, or into a `VITE_` variable, which ends up in the browser.

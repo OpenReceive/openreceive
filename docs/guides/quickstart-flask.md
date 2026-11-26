@@ -302,9 +302,13 @@ Behind a reverse proxy, wrap the app in Werkzeug's `ProxyFix`
 `request.remote_addr` is the proxy, and `rate_limiting` counts it as the one
 payer. → [Rate limiting](rate-limiting.md)
 
-An optional worker, `openreceive notifications --app app:openreceive`,
-listens for wallet payment notifications so settlement does not wait for the
-next page load. → [openreceive notifications](api-reference.md#openreceive-reconcile--openreceive-notifications)
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, `openreceive notifications --app app:openreceive`, which settles
+within a second of the payment. Where you can only schedule commands, run
+`openreceive reconcile --app app:openreceive` from cron every minute instead.
+→ [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page) ·
+[openreceive notifications](api-reference.md#openreceive-reconcile--openreceive-notifications)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as

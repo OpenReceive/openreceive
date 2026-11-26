@@ -23,6 +23,7 @@ final class Reconcile extends Command
         Runtime::cliContext();
         try {
             Runtime::reconcile();
+            Runtime::recordCronRun();
         } catch (\Throwable $error) {
             $output->writeln('<error>Reconcile failed: ' . Runtime::errorMessage($error) . '</error>');
             return Command::FAILURE;

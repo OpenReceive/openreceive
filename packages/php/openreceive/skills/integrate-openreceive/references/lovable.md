@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Lovable)
 
 ```text
-READ THIS FIRST: this file is 28 KB and a summary drops required steps. Read all of it:
+READ THIS FIRST: this file is 29 KB and a summary drops required steps. Read all of it:
 https://openreceive.org/agent-directions/lovable/full.md
 If your fetch tool gave you a summary, fetch that URL again for the full text.
 ```
@@ -580,6 +580,8 @@ refund off-screen ([Swap refunds](https://openreceive.org/guides/swap-refunds.md
 Set them as server secrets, never with a `VITE_` prefix, which would put them
 in the browser bundle.
 
-No worker or cron job is needed. Each request to the payment routes also
+No worker or cron job is required. Each request to the payment routes also
 checks the wallet for settled invoices, through a lock in your database. A
-payer who closes the tab is settled on the next request.
+payer who closes the tab is settled on the next request from anyone.
+On a quiet site that can be hours later. If fulfillment should not wait, see
+[When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page).

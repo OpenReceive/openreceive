@@ -218,6 +218,8 @@ for the host's crontab:
 `*/5 * * * * cd /path/to/shop && docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile`.
 Otherwise, for the web user's crontab:
 `*/5 * * * * php /path/to/prestashop/bin/console openreceive:reconcile`.
+Until it runs, doctor's Reconcile line says the cron line never ran and the
+settings page shows a warning. That is expected, not something to fix.
 
 ## Non-negotiables
 
@@ -377,8 +379,8 @@ under **Payment → Preferences**; installing ticks them all.
 `doctor` checks the module, PHP and its GMP and sodium, each code as set or
 unset (never its value), the order state, the payment option and its
 currencies, the tables, the checkout's files, the wallet, the price feed for
-every currency the shop sells in, each swap provider, and when the wallet was
-last scanned. It exits nonzero when a check fails.
+every currency the shop sells in, each swap provider, when the wallet was last
+scanned and when the cron line last ran. It exits nonzero when a check fails.
 
 ### The cron job
 
@@ -402,6 +404,10 @@ the host's crontab, with your Compose project's folder:
 
 Each pass also finishes any order whose payment settled but which did not
 move to "Payment accepted", and every checkout request runs one pass too.
+
+Until the cron line has run in the last 15 minutes, the module's settings
+page shows a warning with the line to add, and `doctor` shows when it last
+ran.
 
 ### Check it
 

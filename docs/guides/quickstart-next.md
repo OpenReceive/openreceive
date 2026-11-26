@@ -205,11 +205,13 @@ pending invoices, so a payer who closes the tab is still covered.
 `rateLimiting: true` is for public web shops behind such a proxy. Leave it off
 for point-of-sale, where many payers share one IP. → [Rate limiting](rate-limiting.md)
 
-An optional worker, `startNotificationWorker({ service, host })`, listens for
-wallet payment notifications so settlement does not wait for the next page
-load. It is a separate long-lived Node process, not a route. On a serverless
-host, skip it and rely on the request-path settlement described above.
-→ [startNotificationWorker](api-reference.md#startnotificationworker)
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, `startNotificationWorker({ service, host })`: a separate
+long-lived Node process, not a route, that settles within a second of the
+payment. On a serverless host, use a scheduled pass instead.
+→ [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page) ·
+[startNotificationWorker](api-reference.md#startnotificationworker)
 
 You can also compose the pieces yourself (`createOpenReceive` + `createHost`)
 when you need a shared wallet client or a custom repository.

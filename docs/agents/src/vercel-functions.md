@@ -270,9 +270,11 @@ itself, and they hold for every integration.
 - It runs on Node, never the Edge runtime: no
   `export const config = { runtime: "edge" }`. `maxDuration: 30` in
   `vercel.json` gives it time to reach the wallet.
-- No cron job (`crons` in `vercel.json`) and no notifications worker: each
-  request to the payment routes settles payments through a lock in the
-  database.
+- No cron job (`crons` in `vercel.json`) and no notifications worker unless
+  the user asks: each request to the payment routes settles payments through
+  a lock in the database. A payer who leaves is settled on the next request;
+  if orders must not wait on a quiet site, see
+  https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page
 - `rateLimiting.ip` reads the first address of `x-forwarded-for`, which
   Vercel replaces with the client's own on every request. That is true on
   Vercel only: behind another proxy, read the header that proxy sets.
@@ -342,7 +344,7 @@ Fetch one when the moment comes. Each is raw markdown, so a plain GET is
 enough; drop the `.md` for the same page a person would read.
 
 - https://openreceive.org/guides/vercel-functions.md — what the merchant does on Vercel around these steps
-- https://openreceive.org/guides/serverless.md — pooled database URLs, timeouts, and why there is no cron or worker
+- https://openreceive.org/guides/serverless.md — pooled database URLs, timeouts, and when a scheduled pass helps
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
 - https://openreceive.org/guides/authorization.md — before you write `authorize`
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one

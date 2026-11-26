@@ -338,19 +338,23 @@ use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 Settlement runs on the request path. Every payment route first runs one bounded
 reconcile pass through the durable `openreceive_meta` gate. The gate allows at
-most one real wallet scan every 3 seconds, shared by every PHP process. You do
-not need a cron job. Tune or disable it with `Engine`'s
+most one real wallet scan every 3 seconds, shared by every PHP process, so
+checkouts need no cron job. Tune or disable it with `Engine`'s
 `opportunisticReconcile` (`false`, or `['min_interval_seconds' => …]`).
 
-Optionally, run one worker so settlement does not wait for the next page load:
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, which settles within a second of the payment:
 
 ```php
 $engine->notificationsWorker()->run();   // blocks: an NWC-02 listener plus a periodic pass
 ```
 
-Run it as its own long-lived process (`php bin/notifications`). To run a pass
-yourself, use the one-shot `$engine->reconcile()`.
-→ [Engine notificationsWorker](api-reference.md#engine-notificationsworker)
+Run it as its own long-lived process (`php bin/notifications`). Where you can
+only schedule commands, run a script that calls the one-shot
+`$engine->reconcile()` from cron every minute instead.
+→ [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page) ·
+[Engine notificationsWorker](api-reference.md#engine-notificationsworker)
 
 ## Swap secrets
 

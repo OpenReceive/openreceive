@@ -113,6 +113,18 @@ final class Runtime
         self::$engine = null;
     }
 
+    /** Called by `openreceive:reconcile` after each finished pass, so the settings page knows the cron line runs. */
+    public static function recordCronRun(): void
+    {
+        \Configuration::updateGlobalValue(CronStatus::SETTING, (string) time());
+    }
+
+    /** Unix seconds of the last finished cron pass; 0 for never. */
+    public static function lastCronRun(): int
+    {
+        return (int) \Configuration::getGlobalValue(CronStatus::SETTING);
+    }
+
     public static function paymentName(): string
     {
         $name = trim((string) \Configuration::getGlobalValue(self::NAME_SETTING));

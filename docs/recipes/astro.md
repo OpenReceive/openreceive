@@ -223,9 +223,11 @@ out of `process.env`. To try swaps locally, start it with
 `node --env-file=.env node_modules/.bin/astro dev`. Never declare them with
 `context: "client"`, which would send them to the browser.
 
-No worker or cron job is needed. Each request to the payment routes also
+No worker or cron job is required. Each request to the payment routes also
 checks the wallet for settled invoices, through a lock in your database. A
-payer who closes the tab is settled on the next request.
+payer who closes the tab is settled on the next request from anyone.
+On a quiet site that can be hours later. If fulfillment should not wait, see
+[When the payer leaves the page](../guides/deploying.md#when-the-payer-leaves-the-page).
 
 ## Next
 

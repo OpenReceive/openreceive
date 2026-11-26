@@ -245,10 +245,12 @@ page, as the payer's receipt.
 
 ## How it runs
 
-- **No worker or cron job.** Each request to the payment routes also checks
-  the wallet for settled invoices. The open checkout polls, so a payer who
-  waits sees the order paid; a payer who closes the tab is settled on the
-  next request.
+- **No worker or cron job required.** Each request to the payment routes also
+  checks the wallet for settled invoices. The open checkout polls, so a payer
+  who waits sees the order paid; a payer who closes the tab is settled on the
+  next request from anyone.
+  On a quiet site that can be hours later. If fulfillment should not wait,
+  see [When the payer leaves the page](../guides/deploying.md#when-the-payer-leaves-the-page).
 - **About a second a request.** Each request boots a stack, connects to the
   wallet's relay and asks Supabase Auth about the token. The first request
   after a deploy also downloads the packages, which took about 5 s in our

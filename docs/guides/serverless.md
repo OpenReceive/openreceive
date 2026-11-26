@@ -24,12 +24,15 @@ guide covers what changes when the server is serverless.
   not work here: each instance has its own disk, which is wiped when the
   instance stops, and no two instances see the same file. Use Postgres,
   reached through its pooler.
-- **No cron job and no worker.** Each request to the payment routes first
-  checks the wallet for settled invoices, through a lock in your database, so
-  a payer who closes the tab is settled by the next request from anyone. See
-  [the durable scan gate](deploying.md#the-durable-scan-gate). A cron job
-  cannot stand in for that, and nothing needs one: a scheduled run every few
-  minutes is not a checkout, and a once-a-day run is far too slow.
+- **No cron job or worker required.** Each request to the payment routes
+  first checks the wallet for settled invoices, through a lock in your
+  database, so a payer who closes the tab is settled by the next request from
+  anyone. See [the durable scan gate](deploying.md#the-durable-scan-gate). On
+  a quiet site that next request can be hours away. If fulfillment should not
+  wait, add a scheduled function that runs every minute as a backstop: see
+  [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page). It adds
+  to the pass on requests and does not replace it, and a once-a-day schedule
+  is too slow to help.
 - **A Node or Python server runtime.** Node 22 or newer, or Python 3.10 to
   3.13. An Edge runtime is not a Node server: keep the payment route on Node.
   For Cloudflare Workers, see the [TanStack Start recipe](../recipes/tanstack-start.md).

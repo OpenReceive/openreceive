@@ -436,7 +436,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
 - https://openreceive.org/guides/supabase.md — when the database is Supabase: its pooler, its certificate, and locking the tables away from its Data API
-- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and why it needs no cron or worker
+- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and when a scheduled pass helps
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/mobile-apps.md — when a mobile app takes the payment: the checkout page it opens, and what the App Store and Google Play allow
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
@@ -659,9 +659,13 @@ the app with no secrets can do the same.
 `rate_limiting=True` is for public web shops. Leave it off for point-of-sale,
 where many payers share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
 
-An optional worker, `openreceive notifications --app main:app`, listens for
-wallet payment notifications so settlement does not wait for the next page
-load. → [openreceive notifications](https://openreceive.org/guides/api-reference.md#openreceive-reconcile--openreceive-notifications)
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, `openreceive notifications --app main:app`, which settles
+within a second of the payment. Where you can only schedule commands, run
+`openreceive reconcile --app main:app` from cron every minute instead.
+→ [When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page) ·
+[openreceive notifications](https://openreceive.org/guides/api-reference.md#openreceive-reconcile--openreceive-notifications)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as

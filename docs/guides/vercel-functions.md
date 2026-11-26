@@ -121,9 +121,11 @@ We measured these on a Vercel deployment with Fluid compute and Node 24.
   before a request arrives. A stack built when the file loaded answered the
   first request on a fresh instance with a 503. Built on the first request
   and kept for the next ones, it answered every time, also after idle gaps.
-- **No worker or cron job.** Each request to the payment routes also checks
-  the wallet for settled invoices, through a lock in your database. A payer
-  who closes the tab is settled on the next request from anyone.
+- **No worker or cron job required.** Each request to the payment routes also
+  checks the wallet for settled invoices, through a lock in your database. A
+  payer who closes the tab is settled on the next request from anyone.
+  On a quiet site that can be hours later. If fulfillment should not wait,
+  see [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page).
 - **Node, with time to spare.** The function runs on Node, never the Edge
   runtime. `maxDuration: 30` in `vercel.json` covers a slow wallet relay; a
   checkout request took 0.1 to 1.6 seconds in our test.

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Next.js)
 
 ```sh
-# READ THIS FIRST: this file is 47 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 48 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/next/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/next/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -427,7 +427,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
 - https://openreceive.org/guides/supabase.md — when the database is Supabase: its pooler, its certificate, and locking the tables away from its Data API
-- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and why it needs no cron or worker
+- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and when a scheduled pass helps
 - https://openreceive.org/guides/node-orms.md — recipes for Prisma, Drizzle, Knex, TypeORM, Sequelize
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/mobile-apps.md — when a mobile app takes the payment: the checkout page it opens, and what the App Store and Google Play allow
@@ -662,11 +662,13 @@ pending invoices, so a payer who closes the tab is still covered.
 `rateLimiting: true` is for public web shops behind such a proxy. Leave it off
 for point-of-sale, where many payers share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
 
-An optional worker, `startNotificationWorker({ service, host })`, listens for
-wallet payment notifications so settlement does not wait for the next page
-load. It is a separate long-lived Node process, not a route. On a serverless
-host, skip it and rely on the request-path settlement described above.
-→ [startNotificationWorker](https://openreceive.org/guides/api-reference.md#startnotificationworker)
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, `startNotificationWorker({ service, host })`: a separate
+long-lived Node process, not a route, that settles within a second of the
+payment. On a serverless host, use a scheduled pass instead.
+→ [When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page) ·
+[startNotificationWorker](https://openreceive.org/guides/api-reference.md#startnotificationworker)
 
 You can also compose the pieces yourself (`createOpenReceive` + `createHost`)
 when you need a shared wallet client or a custom repository.

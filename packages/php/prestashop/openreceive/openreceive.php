@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use PrestaShop\Module\OpenReceive\CronStatus;
 use PrestaShop\Module\OpenReceive\Host;
 use PrestaShop\Module\OpenReceive\Requirements;
 use PrestaShop\Module\OpenReceive\Runtime;
@@ -75,6 +76,7 @@ class OpenReceive extends PaymentModule
     {
         Runtime::forgetCodes();
         \Configuration::deleteByName(Runtime::NAME_SETTING);
+        \Configuration::deleteByName(CronStatus::SETTING);
         return parent::uninstall();
     }
 
@@ -132,6 +134,11 @@ class OpenReceive extends PaymentModule
             $status($codes['nwc_uri']),
             $status($codes['lsc_uri_primary']),
         ));
+        // Only once checkout offers the option: before that there is nothing to settle.
+        $cron = $codes['nwc_uri'] === '' ? null : CronStatus::warning(Runtime::lastCronRun(), time(), _PS_ROOT_DIR_ . '/bin/console');
+        if ($cron !== null) {
+            $html .= $this->displayWarning(htmlspecialchars($cron, ENT_QUOTES));
+        }
         return $html . $this->settingsForm();
     }
 

@@ -8,6 +8,7 @@ use OpenReceive\Server\Doctor as CoreDoctor;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\MetaStore;
 use OpenReceive\Swap\SwapProvider;
+use PrestaShop\Module\OpenReceive\CronStatus;
 use PrestaShop\Module\OpenReceive\Requirements;
 use PrestaShop\Module\OpenReceive\Runtime;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -116,7 +117,8 @@ final class Doctor extends Command
             $last = is_array($gate) ? (int) ($gate['finished_at'] ?? $gate['claimed_at'] ?? 0) : 0;
             $pending = (int) (Runtime::connection()->query('SELECT COUNT(*) AS n FROM ' . Runtime::table() . ' WHERE status = ?', ['pending'])[0]['n'] ?? 0);
             return 'on every checkout request, and from cron: php bin/console openreceive:reconcile every five minutes. Last wallet scan: '
-                . ($last > 0 ? gmdate('Y-m-d H:i', $last) . ' UTC' : 'none yet') . "; {$pending} payment(s) pending";
+                . ($last > 0 ? gmdate('Y-m-d H:i', $last) . ' UTC' : 'none yet') . "; {$pending} payment(s) pending"
+                . '. Last cron run: ' . CronStatus::describe(Runtime::lastCronRun(), time());
         });
 
         foreach ($this->lines as $line) {

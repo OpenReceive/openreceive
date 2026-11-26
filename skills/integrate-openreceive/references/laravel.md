@@ -827,12 +827,14 @@ version in step with the Composer package.
 
 ### Reconciliation
 
-Settlement runs on the request path. You do not need a cron job. Disable or
+Settlement runs on the request path, so checkouts need no cron job. Disable or
 tune it with `'opportunistic_reconcile'` (`false`, or
 `['min_interval_seconds' => …]`).
 
-Optionally, run one worker so settlement does not wait for the next page
-load:
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, add a backstop. The first is one worker, which settles within a second
+of the payment:
 
 ```sh
 php artisan openreceive:notifications
@@ -844,8 +846,10 @@ not one per web instance.
 
 Two more commands help:
 
-- `php artisan openreceive:reconcile` runs one pass, if you want to drive it
-  yourself.
+- `php artisan openreceive:reconcile` runs one pass. The other backstop is
+  `Schedule::command('openreceive:reconcile')->everyMinute();` in
+  `routes/console.php`, with Laravel's usual `schedule:run` cron.
+  → [When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page)
 - `php artisan openreceive:doctor` reports every credential as set or unset,
   the host and its placeholders, the route mount, and the wallet preflight.
 

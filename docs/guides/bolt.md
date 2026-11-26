@@ -115,9 +115,11 @@ payment as received, and `openreceive_on_paid` marks the order paid.
 - **The price comes from your products.** Bolt apps usually create orders
   from the page, so a trigger copies each price from your products table
   into the order. Whatever the browser sends, it pays the catalog price.
-- **No worker or cron job.** Each request to the payment routes also checks
-  the wallet for settled invoices. A payer who closes the tab is settled on
-  the next request.
+- **No worker or cron job required.** Each request to the payment routes also
+  checks the wallet for settled invoices. A payer who closes the tab is
+  settled on the next request from anyone.
+  On a quiet site that can be hours later. If fulfillment should not wait,
+  see [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page).
 - **Your secrets stay on the server.** `NWC_URI` and `LSC_URI_PRIMARY` are
   Bolt secrets, read only by the server function. They never go into `.env`
   or a `VITE_` variable, which end up in the browser.

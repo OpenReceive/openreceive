@@ -364,12 +364,14 @@ the API ([Headless checkout](headless-checkout.md)).
 
 ## Reconciliation
 
-Settlement runs on the request path. You do not need a cron job. Disable or
+Settlement runs on the request path, so checkouts need no cron job. Disable or
 tune it with `config.opportunistic_reconcile` (`false`, or
 `{ min_interval_seconds: … }`).
 
-Optionally, run one worker so settlement does not wait for the next page
-load:
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, add a backstop. The first is one worker, which settles within a second
+of the payment:
 
 ```sh
 bin/rails openreceive:notifications
@@ -377,9 +379,11 @@ bin/rails openreceive:notifications
 
 → [rake openreceive:notifications](api-reference.md#rake-openreceivenotifications)
 
-To run a pass yourself, use the one-shot `OpenReceive.reconcile!` or
-`bin/rails openreceive:reconcile`.
-→ [OpenReceive.reconcile!](api-reference.md#openreceivereconcile)
+The other is a pass every minute: `OpenReceive::ReconcileJob` as a recurring
+job (Solid Queue's `config/recurring.yml`), or cron running
+`bin/rails openreceive:reconcile`. `OpenReceive.reconcile!` runs one pass in
+Ruby. → [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page) ·
+[OpenReceive.reconcile!](api-reference.md#openreceivereconcile)
 
 ## Swap secrets
 

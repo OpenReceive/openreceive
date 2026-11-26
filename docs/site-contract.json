@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 16828
+      "bytes": 17039
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 17803
+      "bytes": 18014
     },
     {
       "path": "/guides/quickstart-nestjs",
@@ -43,7 +43,7 @@
       "slug": "quickstart-nestjs",
       "title": "NestJS Quickstart",
       "category": "quickstart",
-      "bytes": 17705
+      "bytes": 17916
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -53,7 +53,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 17483
+      "bytes": 17780
     },
     {
       "path": "/guides/quickstart-django",
@@ -63,7 +63,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 21398
+      "bytes": 21722
     },
     {
       "path": "/guides/quickstart-flask",
@@ -73,7 +73,7 @@
       "slug": "quickstart-flask",
       "title": "Flask Quickstart",
       "category": "quickstart",
-      "bytes": 19929
+      "bytes": 20233
     },
     {
       "path": "/guides/quickstart-next",
@@ -83,7 +83,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 19012
+      "bytes": 19154
     },
     {
       "path": "/guides/vercel",
@@ -93,7 +93,7 @@
       "slug": "vercel",
       "title": "Bitcoin Checkout on Vercel and v0",
       "category": "guide",
-      "bytes": 10480,
+      "bytes": 10658,
       "assets_base": "/assets/"
     },
     {
@@ -104,7 +104,7 @@
       "slug": "vercel-functions",
       "title": "Bitcoin Checkout on Vercel Functions",
       "category": "guide",
-      "bytes": 8401
+      "bytes": 8570
     },
     {
       "path": "/guides/replit",
@@ -125,7 +125,7 @@
       "slug": "lovable",
       "title": "Bitcoin Checkout on Lovable",
       "category": "guide",
-      "bytes": 6606
+      "bytes": 6787
     },
     {
       "path": "/guides/bolt",
@@ -135,7 +135,7 @@
       "slug": "bolt",
       "title": "Bitcoin Checkout on Bolt",
       "category": "guide",
-      "bytes": 7837
+      "bytes": 8018
     },
     {
       "path": "/guides/supabase",
@@ -145,7 +145,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 17685
+      "bytes": 17866
     },
     {
       "path": "/guides/supabase-migration",
@@ -165,7 +165,7 @@
       "slug": "serverless",
       "title": "Bitcoin Checkout on Serverless Hosts",
       "category": "guide",
-      "bytes": 10543
+      "bytes": 10738
     },
     {
       "path": "/guides/mobile-apps",
@@ -195,7 +195,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 20162
+      "bytes": 20524
     },
     {
       "path": "/guides/quickstart-php",
@@ -205,7 +205,7 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 18385
+      "bytes": 18671
     },
     {
       "path": "/guides/quickstart-laravel",
@@ -215,7 +215,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 22233
+      "bytes": 22600
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -396,7 +396,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 15661
+      "bytes": 17974
     },
     {
       "path": "/guides/host-testing",
@@ -466,7 +466,7 @@
       "slug": "tanstack-start-recipe",
       "title": "TanStack Start Recipe",
       "category": "recipe",
-      "bytes": 12074
+      "bytes": 12254
     },
     {
       "path": "/guides/supabase-edge-functions-recipe",
@@ -476,7 +476,7 @@
       "slug": "supabase-edge-functions-recipe",
       "title": "Supabase Edge Functions Recipe",
       "category": "recipe",
-      "bytes": 11284
+      "bytes": 11475
     },
     {
       "path": "/guides/sveltekit-recipe",
@@ -486,7 +486,7 @@
       "slug": "sveltekit-recipe",
       "title": "SvelteKit Recipe",
       "category": "recipe",
-      "bytes": 9895
+      "bytes": 10075
     },
     {
       "path": "/guides/nuxt-recipe",
@@ -496,7 +496,7 @@
       "slug": "nuxt-recipe",
       "title": "Nuxt Recipe",
       "category": "recipe",
-      "bytes": 8394
+      "bytes": 8574
     },
     {
       "path": "/guides/astro-recipe",
@@ -506,7 +506,7 @@
       "slug": "astro-recipe",
       "title": "Astro Recipe",
       "category": "recipe",
-      "bytes": 9252
+      "bytes": 9432
     },
     {
       "path": "/guides/react-router-recipe",
@@ -516,7 +516,7 @@
       "slug": "react-router-recipe",
       "title": "React Router Recipe",
       "category": "recipe",
-      "bytes": 8898
+      "bytes": 9078
     },
     {
       "path": "/guides/vercel-functions-recipe",
@@ -526,7 +526,7 @@
       "slug": "vercel-functions-recipe",
       "title": "Vercel Functions Recipe",
       "category": "recipe",
-      "bytes": 14168
+      "bytes": 14343
     },
     {
       "path": "/guides/custom-checkout-route",
@@ -546,7 +546,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "agent-directions",
-      "bytes": 44259
+      "bytes": 44498
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -556,7 +556,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "agent-directions",
-      "bytes": 44852
+      "bytes": 45091
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -566,7 +566,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "agent-directions",
-      "bytes": 45964
+      "bytes": 46289
     },
     {
       "path": "/guides/agent-directions-django",
@@ -576,7 +576,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "agent-directions",
-      "bytes": 49966
+      "bytes": 50318
     },
     {
       "path": "/guides/agent-directions-flask",
@@ -586,7 +586,7 @@
       "slug": "agent-directions-flask",
       "title": "Agent Directions: Flask",
       "category": "agent-directions",
-      "bytes": 48466
+      "bytes": 48798
     },
     {
       "path": "/guides/agent-directions-next",
@@ -596,7 +596,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "agent-directions",
-      "bytes": 47419
+      "bytes": 47589
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -606,7 +606,7 @@
       "slug": "agent-directions-nestjs",
       "title": "Agent Directions: NestJS",
       "category": "agent-directions",
-      "bytes": 45879
+      "bytes": 46118
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -616,7 +616,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "agent-directions",
-      "bytes": 46420
+      "bytes": 46813
     },
     {
       "path": "/guides/agent-directions-php",
@@ -626,7 +626,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "agent-directions",
-      "bytes": 45366
+      "bytes": 45683
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -636,7 +636,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "agent-directions",
-      "bytes": 48646
+      "bytes": 49044
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -656,7 +656,7 @@
       "slug": "agent-directions-lovable",
       "title": "Agent Directions: Lovable",
       "category": "agent-directions",
-      "bytes": 28482
+      "bytes": 28683
     },
     {
       "path": "/guides/agent-directions-bolt",
@@ -666,7 +666,7 @@
       "slug": "agent-directions-bolt",
       "title": "Agent Directions: Bolt",
       "category": "agent-directions",
-      "bytes": 28695
+      "bytes": 28907
     },
     {
       "path": "/guides/agent-directions-vercel-functions",
@@ -676,7 +676,7 @@
       "slug": "agent-directions-vercel-functions",
       "title": "Agent Directions: Vercel Functions",
       "category": "agent-directions",
-      "bytes": 36091
+      "bytes": 36480
     },
     {
       "path": "/guides/agent-directions-sveltekit",
@@ -686,7 +686,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "category": "agent-directions",
-      "bytes": 38785
+      "bytes": 38983
     },
     {
       "path": "/guides/agent-directions-nuxt",
@@ -696,7 +696,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "category": "agent-directions",
-      "bytes": 36171
+      "bytes": 36369
     },
     {
       "path": "/guides/agent-directions-astro",
@@ -706,7 +706,7 @@
       "slug": "agent-directions-astro",
       "title": "Agent Directions: Astro",
       "category": "agent-directions",
-      "bytes": 37893
+      "bytes": 38091
     },
     {
       "path": "/guides/agent-directions-react-router",
@@ -716,7 +716,7 @@
       "slug": "agent-directions-react-router",
       "title": "Agent Directions: React Router",
       "category": "agent-directions",
-      "bytes": 36871
+      "bytes": 37069
     },
     {
       "path": "/guides/agent-directions-tanstack-start",
@@ -726,7 +726,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "category": "agent-directions",
-      "bytes": 42205
+      "bytes": 42403
     },
     {
       "path": "/guides/agent-directions-mobile",
@@ -806,7 +806,7 @@
       "slug": "quickstart-prestashop",
       "title": "PrestaShop Quickstart",
       "category": "quickstart",
-      "bytes": 11658
+      "bytes": 11841
     },
     {
       "path": "/guides/quickstart-odoo",
@@ -896,7 +896,7 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "category": "agent-directions",
-      "bytes": 26039
+      "bytes": 26369
     },
     {
       "path": "/guides/agent-directions-odoo",
@@ -1014,7 +1014,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44259,
+      "bytes": 44498,
       "copy_button": true,
       "self_contained": true
     },
@@ -1035,7 +1035,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44852,
+      "bytes": 45091,
       "copy_button": true,
       "self_contained": true
     },
@@ -1056,7 +1056,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 47419,
+      "bytes": 47589,
       "copy_button": true,
       "self_contained": true
     },
@@ -1077,7 +1077,7 @@
       "kind": "agent-directions-payload",
       "stack": "nestjs",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45879,
+      "bytes": 46118,
       "copy_button": true,
       "self_contained": true
     },
@@ -1098,7 +1098,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45964,
+      "bytes": 46289,
       "copy_button": true,
       "self_contained": true
     },
@@ -1119,7 +1119,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 49966,
+      "bytes": 50318,
       "copy_button": true,
       "self_contained": true
     },
@@ -1140,7 +1140,7 @@
       "kind": "agent-directions-payload",
       "stack": "flask",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 48466,
+      "bytes": 48798,
       "copy_button": true,
       "self_contained": true
     },
@@ -1161,7 +1161,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 46420,
+      "bytes": 46813,
       "copy_button": true,
       "self_contained": true
     },
@@ -1182,7 +1182,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45366,
+      "bytes": 45683,
       "copy_button": true,
       "self_contained": true
     },
@@ -1203,7 +1203,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 48646,
+      "bytes": 49044,
       "copy_button": true,
       "self_contained": true
     },
@@ -1287,7 +1287,7 @@
       "kind": "agent-directions-payload",
       "stack": "prestashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26039,
+      "bytes": 26369,
       "copy_button": true,
       "self_contained": true
     },
@@ -1371,7 +1371,7 @@
       "kind": "agent-directions-payload",
       "stack": "lovable",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 28482,
+      "bytes": 28683,
       "copy_button": true,
       "self_contained": true
     },
@@ -1392,7 +1392,7 @@
       "kind": "agent-directions-payload",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38785,
+      "bytes": 38983,
       "copy_button": true,
       "self_contained": true
     },
@@ -1413,7 +1413,7 @@
       "kind": "agent-directions-payload",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36171,
+      "bytes": 36369,
       "copy_button": true,
       "self_contained": true
     },
@@ -1434,7 +1434,7 @@
       "kind": "agent-directions-payload",
       "stack": "astro",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37893,
+      "bytes": 38091,
       "copy_button": true,
       "self_contained": true
     },
@@ -1455,7 +1455,7 @@
       "kind": "agent-directions-payload",
       "stack": "react-router",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36871,
+      "bytes": 37069,
       "copy_button": true,
       "self_contained": true
     },
@@ -1476,7 +1476,7 @@
       "kind": "agent-directions-payload",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42205,
+      "bytes": 42403,
       "copy_button": true,
       "self_contained": true
     },
@@ -1518,7 +1518,7 @@
       "kind": "agent-directions-payload",
       "stack": "bolt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 28695,
+      "bytes": 28907,
       "copy_button": true,
       "self_contained": true
     },
@@ -1539,7 +1539,7 @@
       "kind": "agent-directions-payload",
       "stack": "vercel-functions",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36091,
+      "bytes": 36480,
       "copy_button": true,
       "self_contained": true
     }

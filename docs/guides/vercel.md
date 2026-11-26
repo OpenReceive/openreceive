@@ -178,10 +178,12 @@ payment as received, and `onPaid` marks the order paid.
 
 ## How it runs on Vercel
 
-- **No worker or cron job.** Each request to the payment routes also checks
-  the wallet for settled invoices, through a lock in your database. A payer
-  who closes the tab is settled on the next request. Vercel's once-a-day
-  Hobby cron is not needed.
+- **No worker or cron job required.** Each request to the payment routes also
+  checks the wallet for settled invoices, through a lock in your database. A
+  payer who closes the tab is settled on the next request from anyone. On a
+  quiet site that can be hours later. Vercel's once-a-day Hobby cron is too
+  slow to help; for a backstop on Pro, see
+  [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page).
 - **Pooled database URL.** Vercel functions reach Neon through its transaction
   pooler. OpenReceive's storage is tested against transaction pooling with
   `pg`, Knex, Prisma (`@prisma/adapter-pg`) and TypeORM.

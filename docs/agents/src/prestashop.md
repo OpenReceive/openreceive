@@ -198,6 +198,8 @@ for the host's crontab:
 `*/5 * * * * cd /path/to/shop && docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile`.
 Otherwise, for the web user's crontab:
 `*/5 * * * * php /path/to/prestashop/bin/console openreceive:reconcile`.
+Until it runs, doctor's Reconcile line says the cron line never ran and the
+settings page shows a warning. That is expected, not something to fix.
 
 ## Non-negotiables
 

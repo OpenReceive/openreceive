@@ -463,7 +463,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
 - https://openreceive.org/guides/supabase.md — when the database is Supabase: its pooler, its certificate, and locking the tables away from its Data API
-- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and why it needs no cron or worker
+- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and when a scheduled pass helps
 - https://openreceive.org/guides/node-orms.md — recipes for Prisma, Drizzle, Knex, TypeORM, Sequelize
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/mobile-apps.md — when a mobile app takes the payment: the checkout page it opens, and what the App Store and Google Play allow
@@ -774,6 +774,8 @@ refund off-screen ([Swap refunds](https://openreceive.org/guides/swap-refunds.md
 Set them as server secrets, never with a `VITE_` prefix, which would put them
 in the browser bundle.
 
-No worker or cron job is needed. Each request to the payment routes also
+No worker or cron job is required. Each request to the payment routes also
 checks the wallet for settled invoices, through a lock in your database. A
-payer who closes the tab is settled on the next request.
+payer who closes the tab is settled on the next request from anyone.
+On a quiet site that can be hours later. If fulfillment should not wait, see
+[When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page).

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (PHP)
 
 ```sh
-# READ THIS FIRST: this file is 45 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 46 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/php/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/php/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -772,19 +772,23 @@ use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 Settlement runs on the request path. Every payment route first runs one bounded
 reconcile pass through the durable `openreceive_meta` gate. The gate allows at
-most one real wallet scan every 3 seconds, shared by every PHP process. You do
-not need a cron job. Tune or disable it with `Engine`'s
+most one real wallet scan every 3 seconds, shared by every PHP process, so
+checkouts need no cron job. Tune or disable it with `Engine`'s
 `opportunisticReconcile` (`false`, or `['min_interval_seconds' => …]`).
 
-Optionally, run one worker so settlement does not wait for the next page load:
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, which settles within a second of the payment:
 
 ```php
 $engine->notificationsWorker()->run();   // blocks: an NWC-02 listener plus a periodic pass
 ```
 
-Run it as its own long-lived process (`php bin/notifications`). To run a pass
-yourself, use the one-shot `$engine->reconcile()`.
-→ [Engine notificationsWorker](https://openreceive.org/guides/api-reference.md#engine-notificationsworker)
+Run it as its own long-lived process (`php bin/notifications`). Where you can
+only schedule commands, run a script that calls the one-shot
+`$engine->reconcile()` from cron every minute instead.
+→ [When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page) ·
+[Engine notificationsWorker](https://openreceive.org/guides/api-reference.md#engine-notificationsworker)
 
 ### Swap secrets
 

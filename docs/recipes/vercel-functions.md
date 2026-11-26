@@ -36,9 +36,11 @@ npm install @openreceive/http @openreceive/elements pg @vercel/functions
   from the project's **Storage** tab. Its free plan is enough. Neon sets
   `DATABASE_URL`, a pooled URL for the app, and `DATABASE_URL_UNPOOLED`, a
   direct URL for creating tables.
-- **No cron job and no worker.** Each request to the payment routes also
+- **No cron job or worker required.** Each request to the payment routes also
   checks the wallet for settled invoices, through a lock in your database, so
   a payer who closes the tab is settled on the next request from anyone.
+  On a quiet site that can be hours later. If fulfillment should not wait,
+  see [When the payer leaves the page](../guides/deploying.md#when-the-payer-leaves-the-page).
 - **Pages in `public/`.** With no `public/` folder, Vercel serves every file
   in the project's root, your server modules in `lib/` included. The codes
   stay in environment variables either way, but keeping the pages in

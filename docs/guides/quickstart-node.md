@@ -177,9 +177,12 @@ pending invoices, so a payer who closes the tab is still covered.
 `rateLimiting: true` is for public web shops. Leave it off for point-of-sale,
 where many payers share one IP. → [Rate limiting](rate-limiting.md)
 
-An optional worker, `startNotificationWorker({ service, host })`, listens for
-wallet payment notifications so settlement does not wait for the next page
-load. → [startNotificationWorker](api-reference.md#startnotificationworker)
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, `startNotificationWorker({ service, host })`: it listens
+for wallet payment notifications and settles within a second.
+→ [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page) ·
+[startNotificationWorker](api-reference.md#startnotificationworker)
 
 You can also compose the pieces yourself (`createOpenReceive` + `createHost`)
 when you need a shared wallet client or a custom repository.

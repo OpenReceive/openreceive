@@ -203,9 +203,12 @@ Where `authorize` finds the user:
 `app.setGlobalPrefix()` does not move middleware. The routes stay under
 `/openreceive`, the `prefix` the checkout below uses.
 
-An optional worker, `startNotificationWorker({ service, host })`, listens for
-wallet payment notifications so settlement does not wait for the next page
-load. → [startNotificationWorker](api-reference.md#startnotificationworker)
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, run one worker, `startNotificationWorker({ service, host })`: it listens
+for wallet payment notifications and settles within a second.
+→ [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page) ·
+[startNotificationWorker](api-reference.md#startnotificationworker)
 
 <!-- shared:begin reference -->
 Your app also needs an ordinary route that creates the order. It validates the

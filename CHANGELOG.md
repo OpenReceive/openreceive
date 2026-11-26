@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.1 - Unreleased
+
+### Added
+
+- **PrestaShop:** the module's settings page warns when the cron line has
+  not run in the last 15 minutes, and shows this shop's line to add. Without
+  it, a customer who pays and leaves the page gets their order only when the
+  next checkout runs a pass. `openreceive:reconcile` records each pass it
+  finishes, and `doctor` shows when the cron line last ran. `doctor` reports
+  this without failing, so it still passes before the line is added.
+
+### Documentation
+
+- A new section in the deploying guide, "When the payer leaves the page",
+  says what happens to a payer who pays and leaves. They are settled by the
+  next request to a payment route from anyone, which on a quiet site can be
+  hours later, and `onPaid` waits until then. The guide gives two backstops:
+  the notifications worker, or a scheduled pass every minute, with the command
+  for Rails, Laravel, plain PHP, Django, FastAPI, Flask, Node and serverless
+  hosts. Every framework quickstart and recipe, the serverless, Vercel,
+  Supabase, Lovable and Bolt guides, and the agent directions now point to it,
+  where they used to say no cron job is needed.
+
 ## 0.6.0 - 2026-11-24
 
 A site that uses the packaged checkout needs no code change, and the new

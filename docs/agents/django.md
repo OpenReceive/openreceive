@@ -430,7 +430,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the engine tables and the attempt state machine
 - https://openreceive.org/guides/supabase.md — when the database is Supabase: its pooler, its certificate, and locking the tables away from its Data API
-- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and why it needs no cron or worker
+- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and when a scheduled pass helps
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/mobile-apps.md — when a mobile app takes the payment: the checkout page it opens, and what the App Store and Google Play allow
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
@@ -823,12 +823,14 @@ only if this app cannot use a drop-in. In that case
 
 ### Reconciliation
 
-Settlement runs on the request path. You do not need a cron job. Disable or
+Settlement runs on the request path, so checkouts need no cron job. Disable or
 tune it with `"OPPORTUNISTIC_RECONCILE"` (`False`, or
 `{"min_interval_seconds": …}`).
 
-Optionally, run one worker so settlement does not wait for the next page
-load:
+A payer who pays and leaves is settled by the next payment request from
+anyone, which on a quiet site can be hours later. If fulfillment should not
+wait, add a backstop. The first is one worker, which settles within a second
+of the payment:
 
 ```sh
 manage.py openreceive_notifications
@@ -840,7 +842,9 @@ process also runs a periodic reconcile pass, every
 catches notifications missed while the worker was down. Run one process in
 total, not one per web instance.
 
-To run a pass yourself, use the one-shot `manage.py openreceive_reconcile`.
+The other is the one-shot `manage.py openreceive_reconcile`, run from cron
+every minute, where you can schedule commands but not keep a process running.
+→ [When the payer leaves the page](https://openreceive.org/guides/deploying.md#when-the-payer-leaves-the-page)
 
 ### Swap secrets
 

@@ -386,9 +386,11 @@ its API gateway.
 
 ## How it runs on Supabase
 
-- **No worker or cron job.** Each request to the payment routes also checks
-  the wallet for settled invoices, through a lock in your database. A payer
-  who closes the tab is settled on the next request.
+- **No worker or cron job required.** Each request to the payment routes also
+  checks the wallet for settled invoices, through a lock in your database. A
+  payer who closes the tab is settled on the next request from anyone.
+  On a quiet site that can be hours later. If fulfillment should not wait,
+  see [When the payer leaves the page](deploying.md#when-the-payer-leaves-the-page).
 - **One database.** Orders and payment attempts share it, so `onPaid` (or
   `openreceive_on_paid`, over HTTPS) marks the order paid in the same
   transaction that records the payment.

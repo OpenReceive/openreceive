@@ -60,9 +60,44 @@ wallet for payments to pending invoices. All open tabs share that pass. So if
 one payer closes the tab, another payer's later request can settle the first
 invoice.
 
-You do not need a cron job. An unpaid attempt is only closed after a
-successful wallet scan at or after its expiry. The local clock alone never
-closes it.
+An unpaid attempt is only closed after a successful wallet scan at or after
+its expiry. The local clock alone never closes it.
+
+## When the payer leaves the page
+
+A payer who keeps the checkout open sees the payment settle within seconds.
+A payer who pays and then leaves, by closing the tab or staying in the
+wallet app, is settled by the next request to a payment route from anyone.
+On a site with few visitors that can be hours later, and `onPaid` runs only
+then. The money is in your wallet the whole time. Only the order waits.
+
+If fulfillment should not wait for the next visitor, add one backstop:
+
+- **The notifications worker** ([below](#worker-topology)): one long-lived
+  process. It settles within a second of the payment and runs its own
+  periodic pass.
+- **A scheduled pass every minute**, where you can schedule a command but not
+  keep a process running. It goes through the same gate as the pass on
+  requests, and it does not call the wallet when nothing is pending.
+
+| Stack | Scheduled pass |
+| --- | --- |
+| Rails | `OpenReceive::ReconcileJob` as a recurring job (for example Solid Queue's `config/recurring.yml`), or cron running `bin/rails openreceive:reconcile` |
+| Laravel | `Schedule::command('openreceive:reconcile')->everyMinute();` in `routes/console.php`, with Laravel's usual `schedule:run` cron |
+| Plain PHP | cron running a script that calls `$engine->reconcile()` |
+| Django | cron running `manage.py openreceive_reconcile` |
+| FastAPI, Flask | cron running `openreceive reconcile --app main:app` |
+| Node on a server | the worker. There is no `npx openreceive reconcile`, because the CLI cannot see your `onPaid` |
+| Serverless | a scheduled function that calls `maybeReconcilePayments({ service, host })` from `@openreceive/http`, with a wallet client and host built from the same code and database as your routes ([createHost](api-reference.md#createhost)). A schedule of once a day, the limit on some free plans, is too slow to help |
+
+Both backstops are safe next to each other and next to the pass on requests.
+Settlement is written once, so `onPaid` never runs twice.
+
+Store plugins already ship a backstop: WooCommerce and Easy Digital Downloads
+use Action Scheduler or WP-Cron, Medusa, Vendure, Odoo and Paymenter run a
+job every minute, and FOSSBilling runs a pass on each of its cron runs.
+PrestaShop needs the cron line from [its quickstart](quickstart-prestashop.md#the-cron-job).
+The BTCPay Server plugin listens for wallet notifications itself.
 
 ## Worker topology
 
@@ -73,8 +108,7 @@ No background process is required. You can optionally add one:
   notifications and runs a periodic backup pass.
 - **Rails**: `bin/rails openreceive:notifications`. The one-shot tools
   `OpenReceive.reconcile!`, `OpenReceive::ReconcileJob`, and
-  `bin/rails openreceive:reconcile` are still available. Nothing needs
-  scheduling.
+  `bin/rails openreceive:reconcile` are still available.
 - **Laravel**: `php artisan openreceive:notifications`, one process in total.
   Compose runs it as a second service from the same image.
   `php artisan openreceive:reconcile` is the one-shot pass.

@@ -203,9 +203,11 @@ The route reads them from `process.env` when the first request arrives.
 in the server's environment: `react-router-serve` does not read `.env`. Never
 give them a `VITE_` prefix, which would put them in the browser bundle.
 
-No worker or cron job is needed. Each request to the payment routes also
+No worker or cron job is required. Each request to the payment routes also
 checks the wallet for settled invoices, through a lock in your database. A
-payer who closes the tab is settled on the next request.
+payer who closes the tab is settled on the next request from anyone.
+On a quiet site that can be hours later. If fulfillment should not wait, see
+[When the payer leaves the page](../guides/deploying.md#when-the-payer-leaves-the-page).
 
 ## Next
 
