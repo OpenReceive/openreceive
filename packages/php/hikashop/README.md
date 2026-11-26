@@ -42,6 +42,9 @@ php cli/joomla.php openreceive:doctor
 The source directory is not an installable package: the release ZIP bundles
 the dependencies, prefixed inside `vendor.phar`, and the checkout's script.
 
+Joomla offers later releases in **System → Update → Extensions**: the package
+registers the update server https://openreceive.org/assets/updates/hikashop.xml.
+
 ## Commands
 
 - `openreceive:configure --nwc-uri=-` (or `--lsc-uri-primary=-`) saves a code

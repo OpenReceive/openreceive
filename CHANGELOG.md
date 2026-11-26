@@ -21,7 +21,9 @@
   class. Codes are saved on the payment method's page in HikaShop or from
   stdin, sealed with a key from the site's secret. A cron line runs
   `openreceive:reconcile` for customers who leave the page, and the payment
-  method's page warns until it runs. See the
+  method's page warns until it runs. The package registers an update server
+  (https://openreceive.org/assets/updates/hikashop.xml), so Joomla offers
+  later releases in **System → Update → Extensions**. See the
   [HikaShop quickstart](docs/guides/quickstart-hikashop.md).
 
 ## 0.6.1 - 2026-11-26

@@ -816,7 +816,7 @@
       "slug": "quickstart-hikashop",
       "title": "HikaShop Quickstart",
       "category": "quickstart",
-      "bytes": 11473
+      "bytes": 11688
     },
     {
       "path": "/guides/quickstart-odoo",
@@ -916,7 +916,7 @@
       "slug": "agent-directions-hikashop",
       "title": "Agent directions (HikaShop)",
       "category": "agent-directions",
-      "bytes": 25537
+      "bytes": 25753
     },
     {
       "path": "/guides/agent-directions-odoo",
@@ -1328,7 +1328,7 @@
       "kind": "agent-directions-payload",
       "stack": "hikashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25537,
+      "bytes": 25753,
       "copy_button": true,
       "self_contained": true
     },
@@ -3034,6 +3034,15 @@
       "bytes": 20100,
       "referenced_by": [
         "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/updates/hikashop.xml",
+      "source": "docs/assets/updates/hikashop.xml",
+      "content_type": "application/xml; charset=utf-8",
+      "bytes": 785,
+      "referenced_by": [
+        "/guides/quickstart-hikashop"
       ]
     }
   ],

@@ -319,6 +319,12 @@ Use your Joomla service's own name. Always pass `-u www-data`: a command that
 runs as root can leave files in Joomla's cache that the web server cannot
 write.
 
+#### Updates
+
+The package registers its update server, so Joomla offers each new release in
+**System → Update → Extensions** like any other extension. Updating keeps the
+saved wallet codes and the payment rows.
+
 ### Configure the wallet
 
 You need a receive-only NWC code: a Nostr Wallet Connect code that can create

@@ -19,7 +19,7 @@
 //
 // `--check` fails the gate when the committed contract is stale.
 
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { OPENRECEIVE_DEMOS } from "../shared/demo-catalog.mjs";
 import {
@@ -977,6 +977,53 @@ for (const page of PLUGIN_PAGES) {
     }
   }
   assets.push(...pageAssets);
+}
+
+// The HikaShop package's Joomla update server. pkg_openreceive.xml names
+// https://openreceive.org/assets/updates/hikashop.xml, and Joomla polls it to
+// offer the next release in System → Update → Extensions (the Joomla
+// Extensions Directory requires one). It is generated here from the release
+// version, so a site sync after each release serves the new download URL,
+// and `--check` fails when the committed copy is stale. The URL stays on one
+// line: Joomla reports a newline around it as "malformed".
+const HIKASHOP_UPDATES = "docs/assets/updates/hikashop.xml";
+const hikashopUpdates = `<?xml version="1.0" encoding="utf-8"?>
+<updates>
+	<update>
+		<name>OpenReceive for HikaShop</name>
+		<description>Bitcoin Lightning payments for HikaShop, paid straight into your own wallet.</description>
+		<element>pkg_openreceive</element>
+		<type>package</type>
+		<version>${release}</version>
+		<infourl title="OpenReceive for HikaShop">https://openreceive.org/guides/quickstart-hikashop</infourl>
+		<downloads>
+			<downloadurl type="full" format="zip">https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-hikashop-${release}.zip</downloadurl>
+		</downloads>
+		<maintainer>OpenReceive</maintainer>
+		<maintainerurl>https://openreceive.org</maintainerurl>
+		<targetplatform name="joomla" version="(5|6)\\..*"/>
+		<php_minimum>8.2</php_minimum>
+	</update>
+</updates>
+`;
+{
+  const absolute = path.join(root, HIKASHOP_UPDATES);
+  const current = existsSync(absolute) ? readFileSync(absolute, "utf8") : null;
+  if (check && current !== hikashopUpdates) {
+    console.error(`error: ${HIKASHOP_UPDATES} is stale. Run \`npm run generate:site-contract\`.`);
+    process.exit(1);
+  }
+  if (!check && current !== hikashopUpdates) {
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, hikashopUpdates);
+  }
+  assets.push({
+    path: assetPath(HIKASHOP_UPDATES),
+    source: HIKASHOP_UPDATES,
+    content_type: "application/xml; charset=utf-8",
+    bytes: Buffer.byteLength(hikashopUpdates),
+    referenced_by: ["/guides/quickstart-hikashop"],
+  });
 }
 
 // One entry per served file, whoever embeds it: the BTCPay install

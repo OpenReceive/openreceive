@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<updates>
+	<update>
+		<name>OpenReceive for HikaShop</name>
+		<description>Bitcoin Lightning payments for HikaShop, paid straight into your own wallet.</description>
+		<element>pkg_openreceive</element>
+		<type>package</type>
+		<version>0.6.1</version>
+		<infourl title="OpenReceive for HikaShop">https://openreceive.org/guides/quickstart-hikashop</infourl>
+		<downloads>
+			<downloadurl type="full" format="zip">https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-hikashop-0.6.1.zip</downloadurl>
+		</downloads>
+		<maintainer>OpenReceive</maintainer>
+		<maintainerurl>https://openreceive.org</maintainerurl>
+		<targetplatform name="joomla" version="(5|6)\..*"/>
+		<php_minimum>8.2</php_minimum>
+	</update>
+</updates>

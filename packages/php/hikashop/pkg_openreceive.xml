@@ -20,4 +20,7 @@
 	<languages folder="language">
 		<language tag="en-GB">en-GB/pkg_openreceive.sys.ini</language>
 	</languages>
+	<updateservers>
+		<server type="extension" priority="1" name="OpenReceive for HikaShop">https://openreceive.org/assets/updates/hikashop.xml</server>
+	</updateservers>
 </extension>
