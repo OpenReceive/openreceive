@@ -768,7 +768,7 @@ const FRAMEWORKS = [
     install: "npm install @openreceive/nuxt pg",
     requires: "Node ≥ 22, Nuxt 4 on Nitro's node-server preset",
     demo: null,
-    example_path: null,
+    example_path: "examples/nuxt-starter",
     video: null,
     shared_checkout_demo: true,
     capabilities: {
@@ -1068,6 +1068,11 @@ const frameworks = FRAMEWORKS.map((framework) => {
   const viaBtcpay = row.type === "via-btcpay";
   if (viaBtcpay && (demo || row.example_path !== null || row.shared_checkout_demo)) {
     fail("is via-btcpay, so its demo and example_path are null and it has no shared checkout demo");
+  }
+  // The site links every other row's example app, and refuses a row without
+  // one (0.6.1's Nuxt row reached the site sync with none).
+  if (!recipe && !viaBtcpay && !demo && row.example_path === null) {
+    fail(`has type ${row.type}, so it needs a demo or an example_path`);
   }
   if (!recipe && row.agent_stack === null) {
     fail(`has type ${row.type}, so it needs an agent_stack`);

@@ -1,0 +1,22 @@
+{
+  "name": "openreceive-nuxt-starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "start": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "@openreceive/http": "^0.6.1",
+    "@openreceive/nuxt": "^0.6.1",
+    "nuxt": "^4.7.0",
+    "pg": "^8.23.1"
+  },
+  "overrides": {
+    "vue-router": "5.4.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
