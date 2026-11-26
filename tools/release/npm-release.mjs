@@ -607,19 +607,22 @@ function assertVersionsReady(root, targetVersion) {
   }
 }
 
-export async function assertNotPublished(packageName, version, root) {
+/**
+ * Whether npm already holds this version. A published version can never be
+ * replaced, so publish skips it and goes on with the rest: a re-run after a
+ * partial publish, and a new package whose first version went up by hand so
+ * it could get a trusted publisher (docs/internal/release-process.md).
+ */
+export async function isPublished(packageName, version, root) {
   try {
     const output = await runNpm(
       ["view", `${packageName}@${version}`, "version", "--json"],
       root,
       path.join(root, ".release/npm-cache"),
     );
-    if (output.trim().replace(/^"|"$/g, "") === version) {
-      throw new Error(`${packageName}@${version} already exists on npm`);
-    }
+    return output.trim().replace(/^"|"$/g, "") === version;
   } catch (error) {
-    if (error.message.includes("already exists on npm")) throw error;
-    if (error.message.includes("E404") || error.message.includes("404 Not Found")) return;
+    if (error.message.includes("E404") || error.message.includes("404 Not Found")) return false;
     throw error;
   }
 }
@@ -647,6 +650,8 @@ export async function publishTarballs(root, tarballs, args, input = {}) {
   // Dependencies become available before their consumers. Independent leaves
   // publish concurrently; a failed publish stops scheduling further packages.
   const packages = input.packages ?? publicPackages(root);
+  // Already on npm: done, so its dependents still wait for it and then go.
+  const skip = input.skip ?? new Set();
   const byName = new Map(tarballs.map((item) => [item.name, item.tarball]));
   for (const { name } of tarballs) {
     assert(PUBLIC_PACKAGE_SET.has(name), `${name}: refusing to publish non-public package`);
@@ -662,6 +667,10 @@ export async function publishTarballs(root, tarballs, args, input = {}) {
     packages,
     async (pkg) => {
       const name = pkg.manifest.name;
+      if (skip.has(name)) {
+        console.error(`skipping ${name}: this version is already on npm`);
+        return;
+      }
       const tarball = byName.get(name);
       const argsForPackage = [
         "publish",
@@ -770,13 +779,22 @@ async function main() {
         for (const entry of green) console.error(`- ${entry.workflowName}: ${entry.url}`);
       }
     }
-    await runPackageTasks(
+    const onNpm = await runPackageTasks(
       PUBLIC_PACKAGE_NAMES.map((name) => ({ manifest: { name } })),
-      (pkg) => assertNotPublished(pkg.manifest.name, targetVersion, root),
+      async (pkg) =>
+        (await isPublished(pkg.manifest.name, targetVersion, root)) ? pkg.manifest.name : null,
     );
+    const published = new Set(onNpm.filter((name) => name !== null));
+    if (published.size === PUBLIC_PACKAGE_NAMES.length) {
+      console.log(
+        `Every public package is already on npm at ${targetVersion}; nothing to publish.`,
+      );
+      return;
+    }
+    for (const name of published) console.error(`${name}@${targetVersion} is already on npm`);
     const result = await buildPublicTarballs(root, targetVersion, args);
     smokePackageTarballs(result, root);
-    await publishTarballs(root, result.tarballs, args);
+    await publishTarballs(root, result.tarballs, args, { skip: published });
     console.log(
       `${args["dry-run"] ? "Dry-run checked" : "Published"} ${result.tarballs.length} package(s) for ${targetVersion}.`,
     );

@@ -175,3 +175,28 @@ test("publication runs independent packages concurrently after their dependencie
   assert.equal(peak, 2);
   assert.equal(completed.size, 3);
 });
+
+test("publication skips a version already on npm and still publishes its dependents", async () => {
+  const packages = [
+    pkg("@openreceive/nuxt", { "@openreceive/core": "1" }),
+    pkg("@openreceive/core"),
+    pkg("@openreceive/provider-data"),
+  ];
+  const published = [];
+  await publishTarballs(
+    "/fixture",
+    packages.map(({ manifest }) => ({
+      name: manifest.name,
+      tarball: `/fixture/${manifest.name.split("/")[1]}.tgz`,
+    })),
+    { "dry-run": true },
+    {
+      packages,
+      skip: new Set(["@openreceive/core"]),
+      runNpm: async (args) => {
+        published.push(path.basename(args[1], ".tgz"));
+      },
+    },
+  );
+  assert.deepEqual(published.sort(), ["nuxt", "provider-data"]);
+});

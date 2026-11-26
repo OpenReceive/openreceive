@@ -99,7 +99,11 @@ create accounts or enforce environment reviewer settings.
   `v*` tags only. Every `repository.url` names `OpenReceive/openreceive` in that
   exact case, because npm checks it against the provenance the workflow signs.
   A new public package must exist on npm before it can have a trusted
-  publisher, so its first version goes up by hand (step 8's fallback).
+  publisher, so its first version goes up by hand, from the release commit,
+  before the tag's `Publish npm` run is approved: `npm pack -w <package>`,
+  then `npm publish <tarball> --access public` and the `npm trust` line above
+  for that package, in an interactive terminal. The run then skips the version
+  npm already holds and publishes the rest (0.6.1, `@openreceive/nuxt`).
 - On rubygems.org, each of the three gems has one entry under "Trusted
   publishers" with these values:
   - repository owner `OpenReceive` (case-sensitive)

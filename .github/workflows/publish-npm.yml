@@ -1,6 +1,6 @@
 name: Publish npm
 
-# Publishes the 16 public npm packages with Trusted Publishing: the job proves
+# Publishes the 17 public npm packages with Trusted Publishing: the job proves
 # its identity with a GitHub OIDC token and npm accepts the upload without any
 # stored token, and attaches a provenance statement to every version. npm
 # trusts exactly this repository + this filename + the `npm` environment (one
@@ -12,7 +12,8 @@ name: Publish npm
 # CI and Release Dry Run on the same commit and refuses to publish unless both
 # passed. The publisher is the same tools/release/npm-release.mjs the
 # maintainer ran locally: exact tarballs, the tarball smoke, dependency order,
-# versions npm already holds are refused before anything is built.
+# versions npm already holds are skipped (a re-run, or a new package's
+# first version published by hand so it could get a trusted publisher).
 
 on:
   push:
