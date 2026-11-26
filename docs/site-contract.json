@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 6557
+      "bytes": 6625
     },
     {
       "path": "/guides/quickstart-node",
@@ -489,14 +489,14 @@
       "bytes": 10075
     },
     {
-      "path": "/guides/nuxt-recipe",
-      "markdown_path": "/guides/nuxt-recipe.md",
-      "source": "docs/recipes/nuxt.md",
+      "path": "/guides/quickstart-nuxt",
+      "markdown_path": "/guides/quickstart-nuxt.md",
+      "source": "docs/guides/quickstart-nuxt.md",
       "kind": "guide",
-      "slug": "nuxt-recipe",
-      "title": "Nuxt Recipe",
-      "category": "recipe",
-      "bytes": 8574
+      "slug": "quickstart-nuxt",
+      "title": "Nuxt Quickstart",
+      "category": "quickstart",
+      "bytes": 11102
     },
     {
       "path": "/guides/astro-recipe",
@@ -546,7 +546,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "agent-directions",
-      "bytes": 44498
+      "bytes": 44559
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -596,7 +596,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "agent-directions",
-      "bytes": 47589
+      "bytes": 47650
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -696,7 +696,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "category": "agent-directions",
-      "bytes": 36369
+      "bytes": 38513
     },
     {
       "path": "/guides/agent-directions-astro",
@@ -1014,7 +1014,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44498,
+      "bytes": 44559,
       "copy_button": true,
       "self_contained": true
     },
@@ -1056,7 +1056,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 47589,
+      "bytes": 47650,
       "copy_button": true,
       "self_contained": true
     },
@@ -1413,7 +1413,7 @@
       "kind": "agent-directions-payload",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36369,
+      "bytes": 38513,
       "copy_button": true,
       "self_contained": true
     },
@@ -2298,25 +2298,25 @@
       "id": "nuxt",
       "label": "Nuxt",
       "family": "node",
-      "type": "recipe",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Nuxt",
-      "quickstart_slug": "nuxt-recipe",
-      "quickstart_path": "/guides/nuxt-recipe",
-      "quickstart_title": "Nuxt Recipe",
+      "quickstart_slug": "quickstart-nuxt",
+      "quickstart_path": "/guides/quickstart-nuxt",
+      "quickstart_title": "Nuxt Quickstart",
       "agent_stack": "nuxt",
       "agent_payload_path": "/agent-directions/nuxt.md",
       "agent_full_path": "/agent-directions/nuxt/full.md",
-      "adapter_package": "@openreceive/http",
-      "install": "npm install @openreceive/http @openreceive/vue pg",
-      "requires": "Node ≥ 22, Nuxt on Nitro's node-server preset",
+      "adapter_package": "@openreceive/nuxt",
+      "install": "npm install @openreceive/nuxt pg",
+      "requires": "Node ≥ 22, Nuxt 4 on Nitro's node-server preset",
       "example_path": null,
       "example_url": null,
       "demo_port": null,
       "video": null,
       "shared_checkout_demo": true,
       "capabilities": {
-        "runtime": "Node 22: agent trials on Nuxt 4.6 (Nitro 2), and the recipe's own check",
-        "databases": "PostgreSQL",
+        "runtime": "Node 22: Nuxt 4.7 (Nitro 2) in tests/nuxt, and agent trials",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8, MariaDB 11 and SQLite",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
@@ -3053,6 +3053,18 @@
       "to": "/guides/quickstart-flask.md",
       "status": 301,
       "must_exist": true
+    },
+    {
+      "from": "/guides/nuxt-recipe",
+      "to": "/guides/quickstart-nuxt",
+      "status": 301,
+      "must_exist": true
+    },
+    {
+      "from": "/guides/nuxt-recipe.md",
+      "to": "/guides/quickstart-nuxt.md",
+      "status": 301,
+      "must_exist": true
     }
   ],
   "agent_discovery": {
@@ -3062,7 +3074,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 10424
+        "bytes": 10432
       },
       {
         "path": "/openapi.yaml",

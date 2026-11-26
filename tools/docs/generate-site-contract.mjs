@@ -755,23 +755,25 @@ const FRAMEWORKS = [
       ...RECIPE_CAPABILITIES,
     },
   },
+  // Nuxt was a recipe until @openreceive/nuxt (2026-11-26): the module mounts
+  // the route the recipe had the developer write, and registers the checkout.
   {
     id: "nuxt",
     label: "Nuxt",
-    type: "recipe",
+    type: "package",
     family: "node",
-    quickstart_slug: "nuxt-recipe",
+    quickstart_slug: "quickstart-nuxt",
     agent_stack: "nuxt",
-    adapter_package: "@openreceive/http",
-    install: "npm install @openreceive/http @openreceive/vue pg",
-    requires: "Node ≥ 22, Nuxt on Nitro's node-server preset",
+    adapter_package: "@openreceive/nuxt",
+    install: "npm install @openreceive/nuxt pg",
+    requires: "Node ≥ 22, Nuxt 4 on Nitro's node-server preset",
     demo: null,
     example_path: null,
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node 22: agent trials on Nuxt 4.6 (Nitro 2), and the recipe's own check",
-      ...RECIPE_CAPABILITIES,
+      ...NODE_CAPABILITIES,
+      runtime: "Node 22: Nuxt 4.7 (Nitro 2) in tests/nuxt, and agent trials",
     },
   },
   {

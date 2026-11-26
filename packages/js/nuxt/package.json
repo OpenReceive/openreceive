@@ -1,0 +1,75 @@
+{
+  "name": "@openreceive/nuxt",
+  "version": "0.6.0",
+  "description": "Nuxt module for Bitcoin Lightning checkout into your own wallet, with optional USDT, USDC, SOL and ETH swaps.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "nuxt",
+    "nuxt-module",
+    "checkout",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/module.js",
+  "types": "./dist/module.d.ts",
+  "dependencies": {
+    "@nuxt/kit": "^4.0.0",
+    "@openreceive/http": "0.6.0",
+    "@openreceive/vue": "0.6.0",
+    "h3": "^1.15.0"
+  },
+  "peerDependencies": {
+    "vue": ">=3.4.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/module.d.ts",
+      "import": "./dist/module.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup && node ../../../tools/package/write-nuxt-module-json.mjs",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpenReceive/openreceive.git",
+    "directory": "packages/js/nuxt"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org/integrations/nuxt",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@nuxt/schema": "^4.7.0"
+  }
+}

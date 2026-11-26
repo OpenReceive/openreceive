@@ -44,6 +44,8 @@ export const QUICKSTARTS = [
   "docs/guides/quickstart-php.md",
   // Flask carries the credentials block and the reading list.
   "docs/guides/quickstart-flask.md",
+  // Nuxt carries the credentials block and the reading list.
+  "docs/guides/quickstart-nuxt.md",
 ];
 
 const FENCE = /^<!-- shared:(begin|end) ([a-z0-9-]+) -->$/;

@@ -12,6 +12,8 @@
       "!**/coverage",
       "!**/.release",
       "!**/.next",
+      "!**/.nuxt",
+      "!**/.output",
       "!**/.vite",
       "!**/.wrangler",
       "!**/.openreceive",

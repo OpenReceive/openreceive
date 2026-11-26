@@ -4,6 +4,18 @@
 
 ### Added
 
+- **`@openreceive/nuxt`, a Nuxt module.** Add it to `modules` in
+  `nuxt.config.ts` and it mounts the payment routes as a Nitro server route
+  and registers `<OpenReceiveCheckout>`, the `@openreceive/vue` checkout with
+  its stylesheet. The three hooks and the database handle go in
+  `server/openreceive.ts`, as the default export of `defineOpenReceive` from
+  `@openreceive/nuxt/server`, where `native` is the request's `H3Event`. The
+  routes are built on the first request, so `nuxt build` and prerendering
+  never connect to the wallet. Options: `prefix`, `config`, `css`. Nuxt 4.
+  The Nuxt recipe is now the [Nuxt quickstart](docs/guides/quickstart-nuxt.md),
+  and /guides/nuxt-recipe redirects to it. A new CI lane (`npm run
+  test:nuxt`) builds a Nuxt 4.7 app on the module and pays an order through
+  it, in Chromium too.
 - **PrestaShop:** the module's settings page warns when the cron line has
   not run in the last 15 minutes, and shows this shop's line to add. Without
   it, a customer who pays and leaves the page gets their order only when the

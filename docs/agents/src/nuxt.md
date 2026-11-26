@@ -1,13 +1,14 @@
 # OpenReceive agent directions (Nuxt)
 
 Add OpenReceive to a Nuxt application — the app you are already working in,
-on Nitro's `node-server` preset. OpenReceive ships no Nuxt package: the
-integration is one server route that hands each request to
-`@openreceive/http`. You do not need a copy of the OpenReceive source: the
-packages are on npm, and the Nuxt recipe is appended to this file in full as
-the quickstart, so you can do the whole integration without fetching
-anything. Prefer the published packages and the handler they export — do not
-reimplement wallet RPC, settlement, or pricing.
+on Nitro's `node-server` preset. The integration is the `@openreceive/nuxt`
+module: it mounts the payment routes and registers the checkout component,
+and you write the three hooks in `server/openreceive.ts`. You do not need a
+copy of the OpenReceive source: the packages are on npm, and the Nuxt
+quickstart is appended to this file in full, so you can do the whole
+integration without fetching anything. Prefer the published packages and the
+module — do not write the payment route by hand, and do not reimplement
+wallet RPC, settlement, or pricing.
 
 Do not clone the OpenReceive repository into this app, and do not copy a demo's
 models (`ShopOrder`, a signed-cookie visitor, an in-memory catalog) over tables
@@ -23,7 +24,7 @@ session/auth in `authorize` and its existing database handle in `storage.db`.
 ## What OpenReceive is
 
 A payment library that runs inside YOUR server. It mounts as ONE catch-all
-server route (`server/routes/openreceive/[...path].ts`, on Nitro's
+server route (registered by `@openreceive/nuxt`, on Nitro's
 `node-server` preset) in the application you are editing, issues Lightning
 invoices against a wallet the merchant already controls, and calls back into
 your code when one settles. There is no OpenReceive account and no API key, and
@@ -256,17 +257,21 @@ itself, and they hold for every integration.
   `createTransactionDetails(...)`, or `renderTransactionDetailsHtml` with no
   bundler (the standalone file has no `createTransactionDetails`, and one bad
   import stops the whole page), and render the caret only when it returns rows.
-- The handler lives in `server/utils/`, and the stack is built on the first
-  request, never at import, so the build and prerendering never connect to the
-  wallet. The route goes in `server/routes/`, not `server/api/` (which adds
-  `/api` to the path), runs on Node — never an edge preset — and hands
-  `@openreceive/http` `toWebRequest(event)`.
-- Pass the `H3Event` as `native`, so `authorize` reads the session the app
-  already has, and give `rateLimiting` `ip: ({ native }) =>
-  getRequestIP(native)`. Add `{ xForwardedFor: true }` only behind your own
-  reverse proxy, which sets that header.
-- `<Checkout>` comes from `@openreceive/vue/checkout.vue`, with
-  `@openreceive/vue/styles.css`, on the order's own page: its resumable URL.
+- `@openreceive/nuxt` goes in `modules` in `nuxt.config.ts`, and the hooks
+  in `server/openreceive.ts`, as the default export of `defineOpenReceive`
+  from `@openreceive/nuxt/server`. Do not add a payment route of your own
+  under `server/routes/` or `server/api/`: the module mounts them, and the
+  app runs on Node — never an edge preset. The module builds the stack on
+  the first request, so the build and prerendering never connect to the
+  wallet.
+- `native` in `authorize` is the request's `H3Event`, so `authorize` reads
+  the session the app already has (`getCookie(native, …)`, the user its
+  session module reads from the event). `rateLimiting` counts the socket
+  address; add `trustProxyIpHeader: true` only behind your own reverse proxy,
+  which sets `x-forwarded-for`.
+- The checkout is `<OpenReceiveCheckout>`, registered by the module with its
+  stylesheet: no import, on the order's own page, its resumable URL. Do not
+  pass it a `prefix`: it follows the module's.
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
 

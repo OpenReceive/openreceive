@@ -5,7 +5,7 @@ import { assertReleaseAssets, releaseArtifacts } from "../tools/release/github-a
 
 test("general release requires every public platform, including matching WordPress, Paymenter, FOSSBilling, PrestaShop and Odoo ZIPs", () => {
   const names = releaseArtifacts("1.2.3", "1.2.3").map((file) => path.basename(file));
-  assert.equal(names.length, 29);
+  assert.equal(names.length, 30);
   assert.doesNotThrow(() => assertReleaseAssets("1.2.3", names, "1.2.3"));
   for (const omitted of names) {
     assert.throws(

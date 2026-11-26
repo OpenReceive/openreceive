@@ -17,6 +17,7 @@ optional. The provider decides which assets and networks are available.
 3. [Next.js quickstart](quickstart-next.md)
    - [Bitcoin checkout on Vercel and v0](vercel.md): the same Next.js setup, hosted on Vercel or built by v0
    - [Bitcoin checkout on Vercel Functions](vercel-functions.md): a site on Vercel with no framework, static pages and functions in `api/`
+   - [Nuxt quickstart](quickstart-nuxt.md): the `@openreceive/nuxt` module and the Vue checkout
 4. [NestJS quickstart](quickstart-nestjs.md): the Express adapter, mounted in `main.ts`
 5. [Node ORM recipes](node-orms.md)
 6. [Rails quickstart](quickstart-rails.md)
@@ -31,8 +32,7 @@ Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Supabase Edge Functions](../recipes/supabase-edge-functions.md),
 [Vercel Functions](../recipes/vercel-functions.md) (one function and a rewrite, no framework).
 On Node, the same handler mounts in [SvelteKit](../recipes/sveltekit.md),
-[Nuxt](../recipes/nuxt.md), [Astro](../recipes/astro.md) and
-[React Router](../recipes/react-router.md).
+[Astro](../recipes/astro.md) and [React Router](../recipes/react-router.md).
 
 ## AI app builders
 

@@ -327,8 +327,8 @@ const STACKS = [
   {
     stack: "nuxt",
     source: "docs/agents/src/nuxt.md",
-    quickstart: "docs/recipes/nuxt.md",
-    quickstartSlug: "nuxt-recipe",
+    quickstart: "docs/guides/quickstart-nuxt.md",
+    quickstartSlug: "quickstart-nuxt",
     brief: libraryBrief(".env"),
   },
   {
@@ -444,6 +444,7 @@ const UNLISTED_GUIDES = {
   "quickstart-fastapi": "inlined in full below, or another stack's",
   "quickstart-django": "inlined in full below, or another stack's",
   "quickstart-flask": "inlined in full below, or another stack's",
+  "quickstart-nuxt": "inlined in full below, or another stack's",
   "quickstart-rails": "inlined in full below, or another stack's",
   "quickstart-php": "inlined in full below, or another stack's",
   "quickstart-laravel": "inlined in full below, or another stack's",
@@ -454,7 +455,7 @@ const UNLISTED_GUIDES = {
   "tanstack-start-recipe":
     "TanStack Start only; the Next.js payload links it as the web-standard sibling, the other stacks have no use for it",
   ...Object.fromEntries(
-    ["sveltekit-recipe", "nuxt-recipe", "astro-recipe", "react-router-recipe"].map((slug) => [
+    ["sveltekit-recipe", "astro-recipe", "react-router-recipe"].map((slug) => [
       slug,
       "one JavaScript framework each; the Node and Next.js payloads link them for an app that turns out to be that framework",
     ]),

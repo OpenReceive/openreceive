@@ -16,6 +16,8 @@ const npmTimeoutMs = Number(process.env.OPENRECEIVE_PACKAGE_SMOKE_NPM_TIMEOUT_MS
 // postcss is only here to parse the shipped stylesheets for the scope pin below.
 const localSmokeDependencies = new Set([
   "@getalby/sdk",
+  // @openreceive/nuxt's module entry runs in nuxt.config, on @nuxt/kit.
+  "@nuxt/kit",
   "commander",
   "postcss",
   "qrcode",
@@ -47,6 +49,8 @@ const importChecks = {
     "typeof mod.openReceiveProviderId === 'function' && typeof mod.isOpenReceiveProvider === 'function' && mod.OPENRECEIVE_MEDUSA_ROUTE_PREFIX === '/store/openreceive' && mod.isOpenReceiveProvider(mod.openReceiveProviderId())",
   "@openreceive/next":
     "typeof mod.openReceiveNextHandlers === 'function' && typeof mod.createStack === 'function' && typeof mod.HttpError === 'function' && mod.createSqlPayments === undefined && mod.maybeReconcilePayments === undefined",
+  "@openreceive/nuxt":
+    "typeof mod.default === 'function' && typeof mod.default.getMeta === 'function'",
   "@openreceive/node":
     "typeof mod.createOpenReceive === 'function' && typeof mod.ServiceError === 'function' && typeof mod.ConfigError === 'function' && typeof mod.createNwcReceiveClient === 'function'",
   "@openreceive/provider-data":
@@ -407,6 +411,20 @@ assert(
     "node_modules/@openreceive/angular/dist/types/openreceive-angular-checkout-component.d.ts",
   ),
   "@openreceive/angular: checkout component typings must be packaged"
+);
+// The Nuxt app's server/openreceive.ts imports the server subpath, which
+// must load without @nuxt/kit: the build tools stay out of the server bundle.
+const nuxtServer = await import("@openreceive/nuxt/server");
+assert(
+  typeof nuxtServer.defineOpenReceive === "function" &&
+    typeof nuxtServer.createStack === "function" &&
+    readFileSync("node_modules/@openreceive/nuxt/dist/server.js", "utf8").includes("@nuxt/kit") === false,
+  "@openreceive/nuxt/server: defineOpenReceive must load without @nuxt/kit"
+);
+assert(
+  JSON.parse(readFileSync("node_modules/@openreceive/nuxt/dist/module.json", "utf8")).docs ===
+    "https://openreceive.org/integrations/nuxt",
+  "@openreceive/nuxt: dist/module.json must ship, with the docs link the Nuxt modules directory reads"
 );
 // One bin owner: only @openreceive/node ships the openreceive bin (the
 // umbrella hard-depends on it, so the CLI is always installed either way).

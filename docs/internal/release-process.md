@@ -53,7 +53,7 @@ Six destinations, six publishers:
 
 | Registry | Who publishes | Credential |
 | --- | --- | --- |
-| npm (16 packages) | GitHub Actions, `.github/workflows/publish-npm.yml`, through `tools/release/npm-release.mjs publish` | none stored: OIDC Trusted Publishing, approved per run in the `npm` environment |
+| npm (17 packages) | GitHub Actions, `.github/workflows/publish-npm.yml`, through `tools/release/npm-release.mjs publish` | none stored: OIDC Trusted Publishing, approved per run in the `npm` environment |
 | RubyGems (3 gems) | GitHub Actions, `.github/workflows/publish-gems.yml` | none stored: OIDC Trusted Publishing, approved per run in the `rubygems` environment |
 | PyPI (1 distribution) | GitHub Actions, `.github/workflows/publish-pypi.yml` | none stored: OIDC Trusted Publishing, approved per run in the `pypi` environment |
 | Packagist (2 packages) | GitHub Actions, `.github/workflows/publish-composer.yml`. It pushes the split repositories that Packagist watches. | separate write-enabled deploy keys: `COMPOSER_OPENRECEIVE_SSH_KEY` for `OpenReceive/openreceive-php`, `COMPOSER_LARAVEL_SSH_KEY` for `OpenReceive/openreceive-laravel`, both in the protected `packagist` environment |
@@ -70,7 +70,7 @@ create accounts or enforce environment reviewer settings.
   userconfig, the `gh` config directory and `GH_REPO` for the OpenReceive
   identity. It also exports a push-scoped `GEM_HOST_API_KEY`, which only the
   manual gem fallback uses. Source it first in every release shell.
-- On npmjs.com, each of the 16 public packages has one trusted publisher:
+- On npmjs.com, each of the 17 public packages has one trusted publisher:
   GitHub Actions, repository `OpenReceive/openreceive`, workflow
   `publish-npm.yml`, environment `npm`. `npm trust` refuses granular tokens
   that bypass 2FA, so log in with the account itself, in an interactive
@@ -81,7 +81,7 @@ create accounts or enforce environment reviewer settings.
   NPM_CONFIG_USERCONFIG=~/.npmrc-openreceive npx -y npm@11 login --auth-type=web
   ```
 
-  Then set all 16 from the same terminal (npm 11.10 or later). The first one
+  Then set all 17 from the same terminal (npm 11.10 or later). The first one
   asks for 2FA in the browser; tick "skip 2FA for the next 5 minutes" there and
   the rest go through:
 
@@ -404,7 +404,7 @@ Run from the repo root on a clean, current `master`.
 
    The artifact tool derives filenames from the public npm and gem lists and
    registry version conversions. It refuses to create the draft when any of the
-   29 required assets is missing: 16 npm tarballs, 3 gems, Python wheel and sdist,
+   30 required assets is missing: 17 npm tarballs, 3 gems, Python wheel and sdist,
    standalone checkout, WordPress ZIP, Paymenter ZIP, the two FOSSBilling ZIPs
    (the whole extension, and the module alone that FOSSBilling's extension
    directory installs), PrestaShop ZIP, Odoo module ZIP, and docs bundle. It never
@@ -727,7 +727,7 @@ the publisher already does. Do not weaken or skip release coverage.
 - `.github/workflows/release.yml` is a release dry run on every `v*` tag.
   Together with `ci.yml` it covers every `test:ci` step. `release:publish`
   relies on that to skip the local suite.
-- `.github/workflows/publish-npm.yml` publishes the 16 npm packages on a `v*`
+- `.github/workflows/publish-npm.yml` publishes the 17 npm packages on a `v*`
   tag through npm Trusted Publishing, once `CI` and `Release Dry Run` passed on
   the same commit. The `npm` environment's required approval gates it. It is
   the only workflow allowed to run `npm-release.mjs publish`.

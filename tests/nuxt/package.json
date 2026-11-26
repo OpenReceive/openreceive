@@ -1,0 +1,10 @@
+{
+  "name": "openreceive-nuxt-test",
+  "private": true,
+  "type": "module",
+  "description": "Nuxt for tests/nuxt, kept out of the root install so other jobs skip it. vue-router stays on 5.4.0: with 5.5.2, Nuxt 4.7.0's built server answers every page with 500 (__VUE_OPTIONS_API__ is not defined), with or without OpenReceive.",
+  "dependencies": {
+    "nuxt": "4.7.0",
+    "vue-router": "5.4.0"
+  }
+}

@@ -43,6 +43,9 @@ export const SITE_REDIRECTS = [
   // The Flask recipe became the Flask quickstart, with agent directions, on 2026-10-13.
   { from: "/guides/flask-recipe", to: "/guides/quickstart-flask", status: 301 },
   { from: "/guides/flask-recipe.md", to: "/guides/quickstart-flask.md", status: 301 },
+  // The Nuxt recipe became the Nuxt quickstart, on the @openreceive/nuxt module, on 2026-11-26.
+  { from: "/guides/nuxt-recipe", to: "/guides/quickstart-nuxt", status: 301 },
+  { from: "/guides/nuxt-recipe.md", to: "/guides/quickstart-nuxt.md", status: 301 },
 ];
 
 // The platform pages (contract v8): the /platforms index, and /platforms/<id>

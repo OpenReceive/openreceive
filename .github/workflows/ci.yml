@@ -215,6 +215,30 @@ jobs:
       - run: npm run build:packages
       - run: npm run test:vendure
 
+  js-nuxt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+      # @openreceive/nuxt in a real Nuxt 4 app, built and run as its Node
+      # server on SQLite, with a wallet on a local relay: the module's route
+      # pays an order, a stranger is refused, and Chromium starts the
+      # module's checkout under its prefix.
+      OPENRECEIVE_TEST_RELAY_URL: ws://127.0.0.1:57777
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: docker compose -f tests/workers/compose.yml up -d --wait
+      - run: npm ci
+      # Nuxt itself, kept out of the root install so other jobs skip it.
+      - run: npm ci --prefix tests/nuxt
+      - run: npx playwright install chromium --with-deps
+      - run: npm run build:packages
+      - run: npm run test:nuxt
+
   js-supabase:
     runs-on: ubuntu-latest
     timeout-minutes: 15

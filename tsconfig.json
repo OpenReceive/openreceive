@@ -28,6 +28,8 @@
       "@openreceive/medusa": ["packages/js/medusa/src/index.ts"],
       "@openreceive/next": ["packages/js/next/src/index.ts"],
       "@openreceive/node": ["packages/js/node/src/index.ts"],
+      "@openreceive/nuxt": ["packages/js/nuxt/src/module.ts"],
+      "@openreceive/nuxt/server": ["packages/js/nuxt/src/server.ts"],
       "@openreceive/node/cli": ["packages/js/node/src/cli.ts"],
       "@openreceive/provider-data": ["packages/js/provider-data/src/index.ts"],
       "@openreceive/react": ["packages/js/react/src/index.ts"],
@@ -35,7 +37,8 @@
       "@openreceive/testkit": ["packages/js/testkit/src/index.ts"],
       "@openreceive/vendure": ["packages/js/vendure/src/index.ts"],
       "@openreceive/vendure/plugin": ["packages/js/vendure/src/plugin.ts"],
-      "@openreceive/vue": ["packages/js/vue/src/index.ts"]
+      "@openreceive/vue": ["packages/js/vue/src/index.ts"],
+      "@openreceive/vue/checkout.vue": ["packages/js/vue/src/Checkout.vue.d.ts"]
     },
     "types": ["node"]
   },

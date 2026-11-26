@@ -14,6 +14,7 @@ export const OPENRECEIVE_PUBLIC_PACKAGE_NAMES = [
   "@openreceive/medusa",
   "@openreceive/next",
   "@openreceive/node",
+  "@openreceive/nuxt",
   "@openreceive/provider-data",
   "@openreceive/react",
   "@openreceive/svelte",

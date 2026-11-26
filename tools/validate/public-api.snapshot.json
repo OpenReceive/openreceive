@@ -974,6 +974,64 @@
       ]
     }
   },
+  "@openreceive/nuxt": {
+    ".": {
+      "values": [
+        "default"
+      ],
+      "types": [
+        "ModuleOptions"
+      ]
+    },
+    "./server": {
+      "values": [
+        "createHttpHandler",
+        "createStack",
+        "defineOpenReceive",
+        "hostError",
+        "HostError",
+        "HttpError",
+        "isServiceErrorShape",
+        "mapHostRouteError",
+        "startNotificationWorker"
+      ],
+      "types": [
+        "Authorize",
+        "AuthorizeAction",
+        "AuthorizeContext",
+        "AuthorizeResource",
+        "Checkout",
+        "CheckoutCreatedHook",
+        "CheckoutCreatedInput",
+        "CreateCheckoutAmount",
+        "CreateHttpHandlerOptions",
+        "CreateStackOptions",
+        "Host",
+        "HttpHandler",
+        "IpRateLimitConfig",
+        "NotificationWorker",
+        "NuxtAuthorizeContext",
+        "NuxtIpRateLimitConfig",
+        "OpenReceive",
+        "OpenReceiveNuxtConfig",
+        "PaymentCheck",
+        "PaymentRepository",
+        "PaymentSettlement",
+        "PaymentSettlementHook",
+        "RateLimit",
+        "ResolveCheckoutContext",
+        "ResolveCheckoutHook",
+        "ResolvedHostCheckout",
+        "ServiceErrorShape",
+        "SettlementEvent",
+        "SettlementEventHook",
+        "Stack",
+        "StackStorage",
+        "StackWallet",
+        "SwapCheckout"
+      ]
+    }
+  },
   "openreceive": {},
   "@openreceive/provider-data": {
     ".": {

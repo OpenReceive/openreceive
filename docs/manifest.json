@@ -386,10 +386,10 @@
       "public": true
     },
     {
-      "slug": "nuxt-recipe",
-      "title": "Nuxt Recipe",
-      "source_path": "docs/recipes/nuxt.md",
-      "category": "recipe",
+      "slug": "quickstart-nuxt",
+      "title": "Nuxt Quickstart",
+      "source_path": "docs/guides/quickstart-nuxt.md",
+      "category": "quickstart",
       "audience": "developer",
       "public": true
     },
