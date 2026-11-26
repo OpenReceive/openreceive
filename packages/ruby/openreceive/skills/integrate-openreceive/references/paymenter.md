@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/paymenter/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.6.1.
+These directions describe OpenReceive 0.6.2.
 
 Install and configure the OpenReceive payment gateway in the Paymenter billing
 panel you are working in. Preserve its theme, clients, products, invoices and
@@ -105,7 +105,7 @@ release. With Paymenter's official Docker image, download and unpack it inside
 the container, as the web user:
 
 ```sh
-docker compose exec -T -u nginx paymenter sh -c 'cd /app/extensions/Gateways && curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-paymenter-0.6.1.zip && unzip -q openreceive-paymenter-0.6.1.zip && rm openreceive-paymenter-0.6.1.zip'
+docker compose exec -T -u nginx paymenter sh -c 'cd /app/extensions/Gateways && curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-paymenter-0.6.2.zip && unzip -q openreceive-paymenter-0.6.2.zip && rm openreceive-paymenter-0.6.2.zip'
 docker compose exec -T -u nginx paymenter php artisan app:extension:install gateway OpenReceive
 ```
 
@@ -253,9 +253,9 @@ directory, next to Stripe and PayPal:
 
 ```sh
 cd /var/www/paymenter
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-paymenter-0.6.1.zip
-unzip -q openreceive-paymenter-0.6.1.zip -d extensions/Gateways
-rm openreceive-paymenter-0.6.1.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-paymenter-0.6.2.zip
+unzip -q openreceive-paymenter-0.6.2.zip -d extensions/Gateways
+rm openreceive-paymenter-0.6.2.zip
 chown -R www-data:www-data extensions/Gateways/OpenReceive
 sudo -u www-data php artisan app:extension:install gateway OpenReceive
 ```

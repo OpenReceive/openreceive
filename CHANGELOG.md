@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.2 - 2026-11-26
 
 ### Added
 
@@ -25,6 +25,13 @@
   (https://openreceive.org/assets/updates/hikashop.xml), so Joomla offers
   later releases in **System → Update → Extensions**. See the
   [HikaShop quickstart](docs/guides/quickstart-hikashop.md).
+
+### Docs
+
+- **Nuxt:** `examples/nuxt-starter`, a Nuxt 4 shop on Postgres with the
+  `@openreceive/nuxt` module, is the Nuxt row's example. The quickstart's
+  checkout section shows the page before its API route. Nuxt passed three
+  agent trials on the published 0.6.1 module.
 
 ## 0.6.1 - 2026-11-26
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 - 2026-11-26
+
+Release with the complete 0.6.2 package family. No Ruby runtime changes
+from 0.6.1 in this gem. The bundled agent skill carries the 0.6.2 agent
+directions, which add HikaShop for Joomla.
+
 ## 0.6.1 - 2026-11-26
 
 Release with the complete 0.6.1 package family. No Ruby runtime changes

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 - 2026-11-26
+
+- No changes to this gem's code. Released with the complete 0.6.2 package
+  family.
+
 ## 0.6.1 - 2026-11-26
 
 - No changes to this gem's code. Released with the complete 0.6.1 package

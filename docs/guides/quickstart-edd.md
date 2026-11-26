@@ -25,7 +25,7 @@ activate it. With WP-CLI, run `wp plugin install openreceive --activate`.
 
 Each GitHub release also attaches the plugin as a ZIP, for a site that cannot
 reach WordPress.org:
-[openreceive-wordpress-0.6.1.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-wordpress-0.6.1.zip).
+[openreceive-wordpress-0.6.2.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-wordpress-0.6.2.zip).
 Install it through **Plugins → Add New → Upload Plugin**. The GitHub
 source-code ZIP is not an installable plugin.
 

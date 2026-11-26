@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Vendure (0.6.1)
+# OpenReceive agent directions: Vendure (0.6.2)
 
 These directions are 26 KB. Download them with your shell and follow them from Step 0:
 

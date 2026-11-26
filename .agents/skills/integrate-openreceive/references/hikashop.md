@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/hikashop/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.6.1.
+These directions describe OpenReceive 0.6.2.
 
 Install and configure the OpenReceive payment plugin in the Joomla site with
 HikaShop you are working in. Preserve its template, customers, products,
@@ -117,9 +117,9 @@ the GitHub source-code ZIP or a ZIP from an older release. With the Docker
 image, download it inside the container, as the web user:
 
 ```sh
-docker compose exec -T -u www-data joomla sh -c 'cd /tmp && curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-hikashop-0.6.1.zip'
-docker compose exec -T -u www-data joomla php cli/joomla.php extension:install --path=/tmp/openreceive-hikashop-0.6.1.zip
-docker compose exec -T -u www-data joomla rm /tmp/openreceive-hikashop-0.6.1.zip
+docker compose exec -T -u www-data joomla sh -c 'cd /tmp && curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-hikashop-0.6.2.zip'
+docker compose exec -T -u www-data joomla php cli/joomla.php extension:install --path=/tmp/openreceive-hikashop-0.6.2.zip
+docker compose exec -T -u www-data joomla rm /tmp/openreceive-hikashop-0.6.2.zip
 ```
 
 On a server, download it to a temporary folder the same way and run the same
@@ -291,9 +291,9 @@ folder (the one that holds `cli/joomla.php`):
 
 ```sh
 cd /var/www/html
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-hikashop-0.6.1.zip
-sudo -u www-data php cli/joomla.php extension:install --path="$PWD/openreceive-hikashop-0.6.1.zip"
-rm openreceive-hikashop-0.6.1.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-hikashop-0.6.2.zip
+sudo -u www-data php cli/joomla.php extension:install --path="$PWD/openreceive-hikashop-0.6.2.zip"
+rm openreceive-hikashop-0.6.2.zip
 ```
 
 Use your own site folder and web server user. Installing creates the
@@ -311,8 +311,8 @@ Run every command inside the container, in `/var/www/html`, as its web user
 `www-data`. Download the release there too:
 
 ```sh
-docker compose exec -T -u www-data joomla sh -c 'cd /tmp && curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-hikashop-0.6.1.zip'
-docker compose exec -T -u www-data joomla php cli/joomla.php extension:install --path=/tmp/openreceive-hikashop-0.6.1.zip
+docker compose exec -T -u www-data joomla sh -c 'cd /tmp && curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-hikashop-0.6.2.zip'
+docker compose exec -T -u www-data joomla php cli/joomla.php extension:install --path=/tmp/openreceive-hikashop-0.6.2.zip
 ```
 
 Use your Joomla service's own name. Always pass `-u www-data`: a command that

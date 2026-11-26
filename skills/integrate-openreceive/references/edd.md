@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/edd/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.6.1.
+These directions describe OpenReceive 0.6.2.
 
 Install and configure the OpenReceive payment gateway in the Easy Digital
 Downloads (EDD) store you are working in. Preserve its theme, checkout,
@@ -105,7 +105,7 @@ is saved or the user said "Bitcoin only". Never invent a placeholder code.
 Install this release from the WordPress.org plugin directory:
 
 ```sh
-wp plugin install openreceive --version=0.6.1 --activate
+wp plugin install openreceive --version=0.6.2 --activate
 ```
 
 If that fails because WordPress.org does not have this version yet, install
@@ -113,7 +113,7 @@ the ZIP attached to the same GitHub release. Never install the GitHub
 source-code ZIP or a ZIP from an older release:
 
 ```sh
-wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-wordpress-0.6.1.zip --activate
+wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-wordpress-0.6.2.zip --activate
 ```
 
 It needs Easy Digital Downloads active, and PHP 8.2+ with GMP and sodium in
@@ -266,7 +266,7 @@ activate it. With WP-CLI, run `wp plugin install openreceive --activate`.
 
 Each GitHub release also attaches the plugin as a ZIP, for a site that cannot
 reach WordPress.org:
-[openreceive-wordpress-0.6.1.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.6.1/openreceive-wordpress-0.6.1.zip).
+[openreceive-wordpress-0.6.2.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.6.2/openreceive-wordpress-0.6.2.zip).
 Install it through **Plugins → Add New → Upload Plugin**. The GitHub
 source-code ZIP is not an installable plugin.
 
