@@ -6,7 +6,7 @@ description: >
   SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
   Python, Django, FastAPI, Flask, Laravel, plain PHP, WordPress/WooCommerce,
   Easy Digital Downloads,
-  Paymenter, FOSSBilling, PrestaShop, Odoo, Medusa, Vendure, Lovable, Bolt, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
+  Paymenter, FOSSBilling, PrestaShop, HikaShop (Joomla), Odoo, Medusa, Vendure, Lovable, Bolt, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
   mobile apps (React Native, Expo, Flutter, Swift, Kotlin) through their
   server, or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
   converts these payments to BTC over Lightning in the merchant's connected
@@ -62,6 +62,10 @@ connected wallet; asset and network availability depends on the provider.
    - PrestaShop: [references/prestashop.md](references/prestashop.md) — a
      payment module from the GitHub release, configured with bin/console
      commands; no Composer or npm packages.
+   - HikaShop (Joomla): [references/hikashop.md](references/hikashop.md) — a
+     Joomla package from the GitHub release with HikaShop's payment plugin,
+     configured with `php cli/joomla.php` commands; no Composer or npm
+     packages.
    - Odoo: [references/odoo.md](references/odoo.md) — a payment provider module
      from the GitHub release and the `openreceive` package from PyPI,
      configured with `odoo openreceive` commands.

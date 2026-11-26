@@ -51,6 +51,10 @@ const GENERATED_REFERENCES = [
     target: "skills/integrate-openreceive/references/prestashop.md",
   },
   {
+    source: "docs/agents/hikashop.md",
+    target: "skills/integrate-openreceive/references/hikashop.md",
+  },
+  {
     source: "docs/agents/odoo.md",
     target: "skills/integrate-openreceive/references/odoo.md",
   },

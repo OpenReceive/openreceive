@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **HikaShop for Joomla: an OpenReceive payment plugin.** Each release
+  attaches `openreceive-hikashop-<version>.zip`, a Joomla package that
+  Joomla's **System → Install → Extensions** or `php cli/joomla.php
+  extension:install` installs: HikaShop's payment plugin and its commands for
+  Joomla's console (`openreceive:configure`, `doctor`, `test-invoice [--new]`
+  and `reconcile`). Joomla 5 and 6 with HikaShop 6; the free Starter edition
+  is enough. The package is GPL-2.0-or-later, as the Joomla Extensions
+  Directory requires, and bundles the MIT engine prefixed inside its
+  `vendor.phar`. The customer picks the method at checkout and pays on
+  HikaShop's thank-you page, or from the order's page in their account; only
+  the order's customer, or a browser HikaShop showed the order to, may pay
+  it, and each write needs Joomla's form token. A settled payment is written
+  in the order's history inside the settlement transaction, on Joomla's own
+  database link, then the order moves to "Confirmed" through HikaShop's order
+  class. Codes are saved on the payment method's page in HikaShop or from
+  stdin, sealed with a key from the site's secret. A cron line runs
+  `openreceive:reconcile` for customers who leave the page, and the payment
+  method's page warns until it runs. See the
+  [HikaShop quickstart](docs/guides/quickstart-hikashop.md).
+
 ## 0.6.1 - 2026-11-26
 
 ### Added

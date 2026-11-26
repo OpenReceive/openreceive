@@ -63,7 +63,7 @@ const content = `# OpenReceive
 > Open-source libraries for accepting inbound Bitcoin Lightning payments
 > directly into a wallet the application owner controls, plus plugins that do
 > the same for WooCommerce and Easy Digital Downloads (one WordPress plugin),
-> Paymenter, FOSSBilling, PrestaShop, Odoo, Medusa, Vendure and BTCPay Server.
+> Paymenter, FOSSBilling, PrestaShop, HikaShop, Odoo, Medusa, Vendure and BTCPay Server.
 > Optional swaps let payers use USDT, USDC, SOL or ETH, which a configured swap
 > provider converts to BTC over Lightning in the same wallet. OpenReceive never
 > holds funds, has no accounts or API keys, and connects through a

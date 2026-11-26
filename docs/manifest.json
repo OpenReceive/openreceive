@@ -802,6 +802,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-hikashop",
+      "title": "HikaShop Quickstart",
+      "source_path": "docs/guides/quickstart-hikashop.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-odoo",
       "title": "Odoo Quickstart",
       "source_path": "docs/guides/quickstart-odoo.md",
@@ -869,6 +877,14 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "source_path": "docs/agents/prestashop.md",
+      "category": "agent-directions",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-hikashop",
+      "title": "Agent directions (HikaShop)",
+      "source_path": "docs/agents/hikashop.md",
       "category": "agent-directions",
       "audience": "developer",
       "public": true

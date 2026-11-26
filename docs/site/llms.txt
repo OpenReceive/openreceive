@@ -3,7 +3,7 @@
 > Open-source libraries for accepting inbound Bitcoin Lightning payments
 > directly into a wallet the application owner controls, plus plugins that do
 > the same for WooCommerce and Easy Digital Downloads (one WordPress plugin),
-> Paymenter, FOSSBilling, PrestaShop, Odoo, Medusa, Vendure and BTCPay Server.
+> Paymenter, FOSSBilling, PrestaShop, HikaShop, Odoo, Medusa, Vendure and BTCPay Server.
 > Optional swaps let payers use USDT, USDC, SOL or ETH, which a configured swap
 > provider converts to BTC over Lightning in the same wallet. OpenReceive never
 > holds funds, has no accounts or API keys, and connects through a
@@ -35,6 +35,7 @@ markdown.
 - [Vendure Quickstart](https://openreceive.org/guides/quickstart-vendure.md)
 - [FOSSBilling Quickstart](https://openreceive.org/guides/quickstart-fossbilling.md)
 - [PrestaShop Quickstart](https://openreceive.org/guides/quickstart-prestashop.md)
+- [HikaShop Quickstart](https://openreceive.org/guides/quickstart-hikashop.md)
 - [Odoo Quickstart](https://openreceive.org/guides/quickstart-odoo.md)
 - [Agent Directions: Node.js](https://openreceive.org/agent-directions/node/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Fastify](https://openreceive.org/agent-directions/fastify/full.md): self-contained agent directions, quickstart included
@@ -61,6 +62,7 @@ markdown.
 - [Agent directions (Paymenter)](https://openreceive.org/agent-directions/paymenter/full.md): self-contained agent directions, quickstart included
 - [Agent directions (FOSSBilling)](https://openreceive.org/agent-directions/fossbilling/full.md): self-contained agent directions, quickstart included
 - [Agent directions (PrestaShop)](https://openreceive.org/agent-directions/prestashop/full.md): self-contained agent directions, quickstart included
+- [Agent directions (HikaShop)](https://openreceive.org/agent-directions/hikashop/full.md): self-contained agent directions, quickstart included
 - [Agent directions (Odoo)](https://openreceive.org/agent-directions/odoo/full.md): self-contained agent directions, quickstart included
 - [Agent directions (Medusa)](https://openreceive.org/agent-directions/medusa/full.md): self-contained agent directions, quickstart included
 - [Agent directions (Vendure)](https://openreceive.org/agent-directions/vendure/full.md): self-contained agent directions, quickstart included

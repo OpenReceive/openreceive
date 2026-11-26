@@ -262,6 +262,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
         "paymenter",
         "fossbilling",
         "prestashop",
+        "hikashop",
         "odoo",
         "medusa",
         "vendure",
@@ -311,6 +312,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
         "paymenter",
         "fossbilling",
         "prestashop",
+        "hikashop",
         "odoo",
         "medusa",
         "vendure",
@@ -378,6 +380,7 @@ test("every library payload writes codes with the file tool, and Express, Fastif
         "paymenter",
         "fossbilling",
         "prestashop",
+        "hikashop",
         "odoo",
         "medusa",
         "vendure",
@@ -529,6 +532,47 @@ test("the PrestaShop payload pins the release ZIP, adds GMP, installs with bin/c
   assert.match(stepThree, /php bin\/console openreceive:reconcile/);
   assert.match(stepThree, /do not add it yourself/);
   assert.match(text, /Never read or run anything from another\s+project/);
+});
+
+// HikaShop takes the PrestaShop shape on Joomla. Its own steps: Joomla's
+// console installs the package ZIP and carries the commands, the official
+// image already has GMP, and Joomla has no scheduler either, so the last
+// message gives the merchant the reconcile cron line. The word the
+// maintainer's wording rules forbid never appears in its own text.
+test("the HikaShop payload pins the release ZIP, installs with Joomla's console and ends at test-invoice", () => {
+  const text = payloads.find(({ stack }) => stack === "hikashop").text;
+  const step = stepZero(text);
+  const stepThree = text.match(/^## Step 3\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.ok(
+    text.includes(
+      `https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-hikashop-${release}.zip`,
+    ),
+    "the package ZIP is pinned to this release",
+  );
+  assert.doesNotMatch(text, /\{\{release\}\}/);
+  assert.match(
+    text,
+    /php cli\/joomla\.php extension:install --path=\/tmp\/openreceive-hikashop-[^ ]+\.zip/,
+  );
+  assert.match(text, /openreceive:configure --nwc-uri=- < \/tmp\/openreceive-code/);
+  assert.match(text, /--lsc-uri-primary=-/);
+  assert.match(text, /file-editing tool, not a shell command/);
+  assert.match(text, /docker compose exec -T -u www-data joomla php cli\/joomla\.php/);
+  assert.match(text, /Run `php` as the web server's user, never as root\./);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(stepThree, /php cli\/joomla\.php openreceive:test-invoice --new/);
+  assert.match(stepThree, /You cannot pay the invoice/);
+  assert.match(stepThree, /starts "Setup is finished" and has at most six short lines/);
+  assert.match(stepThree, /php cli\/joomla\.php openreceive:reconcile/);
+  assert.match(stepThree, /do not add it yourself/);
+  assert.match(text, /Never read or run anything from another\s+project/);
+  // The shared brief above the steps quotes how users ask; HikaShop's own
+  // directions and quickstart name the coins instead.
+  for (const file of ["docs/agents/src/hikashop.md", "docs/guides/quickstart-hikashop.md"]) {
+    const own = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(own, /\bcrypto\b/i, file);
+    assert.doesNotMatch(own, /no KYC/i, file);
+  }
 });
 
 // FOSSBilling takes the Paymenter shape. Its own steps: the official image

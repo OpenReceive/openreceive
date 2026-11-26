@@ -196,6 +196,14 @@ const STACKS = [
       "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its back-office screens are only for a PrestaShop with no shell.",
   },
   {
+    stack: "hikashop",
+    source: "docs/agents/src/hikashop.md",
+    quickstart: "docs/guides/quickstart-hikashop.md",
+    brief: BILLING_PANEL_BRIEF,
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its back-office screens are only for a Joomla site with no shell.",
+  },
+  {
     stack: "odoo",
     source: "docs/agents/src/odoo.md",
     quickstart: "docs/guides/quickstart-odoo.md",
@@ -388,6 +396,8 @@ const UNLISTED_GUIDES = {
   "quickstart-fossbilling": "inlined in full below, or another stack's",
   "agent-directions-prestashop": "this payload's own page",
   "quickstart-prestashop": "inlined in full below, or another stack's",
+  "agent-directions-hikashop": "this payload's own page",
+  "quickstart-hikashop": "inlined in full below, or another stack's",
   "agent-directions-odoo": "this payload's own page",
   "quickstart-odoo": "inlined in full below, or another stack's",
   "agent-directions-medusa": "this payload's own page",
@@ -606,6 +616,34 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "PrestaShop keeps its data in MySQL or MariaDB",
     serverless: "PrestaShop runs on an ordinary PHP host",
     "mobile-apps": "PrestaShop's own order confirmation page is the payment page",
+    "wordpress-hosting": "WordPress hosts only",
+  },
+  hikashop: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "payment-safety-upgrade",
+        "react-material-ui-recipe",
+        "node-orms",
+      ].map((slug) => [
+        slug,
+        "the HikaShop plugin supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "Joomla keeps HikaShop's data in MySQL or MariaDB",
+    serverless: "Joomla runs on an ordinary PHP host",
+    "mobile-apps": "HikaShop's own thank-you page is the payment page",
     "wordpress-hosting": "WordPress hosts only",
   },
   odoo: {

@@ -115,6 +115,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/paymenter.md",
   "/agent-directions/fossbilling.md",
   "/agent-directions/prestashop.md",
+  "/agent-directions/hikashop.md",
   "/agent-directions/odoo.md",
   "/agent-directions/medusa.md",
   "/agent-directions/vendure.md",

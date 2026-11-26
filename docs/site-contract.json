@@ -809,6 +809,16 @@
       "bytes": 11841
     },
     {
+      "path": "/guides/quickstart-hikashop",
+      "markdown_path": "/guides/quickstart-hikashop.md",
+      "source": "docs/guides/quickstart-hikashop.md",
+      "kind": "guide",
+      "slug": "quickstart-hikashop",
+      "title": "HikaShop Quickstart",
+      "category": "quickstart",
+      "bytes": 11473
+    },
+    {
       "path": "/guides/quickstart-odoo",
       "markdown_path": "/guides/quickstart-odoo.md",
       "source": "docs/guides/quickstart-odoo.md",
@@ -899,6 +909,16 @@
       "bytes": 26369
     },
     {
+      "path": "/guides/agent-directions-hikashop",
+      "markdown_path": "/guides/agent-directions-hikashop.md",
+      "source": "docs/agents/hikashop.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-hikashop",
+      "title": "Agent directions (HikaShop)",
+      "category": "agent-directions",
+      "bytes": 25537
+    },
+    {
       "path": "/guides/agent-directions-odoo",
       "markdown_path": "/guides/agent-directions-odoo.md",
       "source": "docs/agents/odoo.md",
@@ -927,7 +947,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 5428
+      "bytes": 5501
     },
     {
       "path": "/wordpress",
@@ -1288,6 +1308,27 @@
       "stack": "prestashop",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 26369,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/hikashop.md",
+      "source": "docs/agents/cover/hikashop.md",
+      "kind": "agent-directions-cover",
+      "stack": "hikashop",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 292,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/hikashop/full.md"
+    },
+    {
+      "path": "/agent-directions/hikashop/full.md",
+      "source": "docs/agents/hikashop.md",
+      "kind": "agent-directions-payload",
+      "stack": "hikashop",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 25537,
       "copy_button": true,
       "self_contained": true
     },
@@ -1936,6 +1977,35 @@
           "cursor/grok-4.7-medium-fast"
         ]
       }
+    },
+    {
+      "id": "hikashop",
+      "label": "HikaShop",
+      "family": "php",
+      "type": "plugin",
+      "heading": "Accept Bitcoin & Stablecoin Payments With HikaShop",
+      "quickstart_slug": "quickstart-hikashop",
+      "quickstart_path": "/guides/quickstart-hikashop",
+      "quickstart_title": "HikaShop Quickstart",
+      "agent_stack": "hikashop",
+      "agent_payload_path": "/agent-directions/hikashop.md",
+      "agent_full_path": "/agent-directions/hikashop/full.md",
+      "adapter_package": "openreceive-hikashop",
+      "install": "Install openreceive-hikashop-<version>.zip in Joomla's System → Install → Extensions, or run php cli/joomla.php extension:install --path=openreceive-hikashop-<version>.zip",
+      "requires": "Joomla 5 or 6, HikaShop 6 (the free Starter edition is enough), PHP ≥ 8.2, GMP and sodium",
+      "example_path": "packages/php/hikashop",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/php/hikashop",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "Joomla 6.2.0 (PHP 8.4) and 5.4.10 (PHP 8.3), their official Docker images, with HikaShop Starter 6.8.2",
+        "databases": "MySQL or MariaDB, Joomla's own database",
+        "secrets": "HikaShop's configuration table, sealed with a key derived from the site's own secret in configuration.php",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": null
     },
     {
       "id": "odoo",
@@ -3074,7 +3144,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 10432
+        "bytes": 10666
       },
       {
         "path": "/openapi.yaml",

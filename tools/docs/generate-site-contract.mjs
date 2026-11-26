@@ -79,6 +79,11 @@ const AGENT_PAYLOADS = [
     stack: "prestashop",
   },
   {
+    path: "/agent-directions/hikashop.md",
+    source: "docs/agents/hikashop.md",
+    stack: "hikashop",
+  },
+  {
     path: "/agent-directions/odoo.md",
     source: "docs/agents/odoo.md",
     stack: "odoo",
@@ -531,6 +536,36 @@ const FRAMEWORKS = [
       runtime: "PrestaShop 9.2.0, its official Docker image with GMP added, on PHP 8.5",
       databases: "MySQL or MariaDB, PrestaShop's own database",
       secrets: "The module's configuration, encrypted by PrestaShop with the shop's own key",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's page.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  // A Joomla store. The release ZIP is a Joomla package: HikaShop's payment
+  // plugin and its console commands, GPL-2.0-or-later as the Joomla
+  // Extensions Directory requires. No agent trial has run on it yet.
+  {
+    id: "hikashop",
+    label: "HikaShop",
+    type: "plugin",
+    family: "php",
+    quickstart_slug: "quickstart-hikashop",
+    agent_stack: "hikashop",
+    adapter_package: "openreceive-hikashop",
+    install:
+      "Install openreceive-hikashop-<version>.zip in Joomla's System → Install → Extensions, or run php cli/joomla.php extension:install --path=openreceive-hikashop-<version>.zip",
+    requires:
+      "Joomla 5 or 6, HikaShop 6 (the free Starter edition is enough), PHP ≥ 8.2, GMP and sodium",
+    demo: null,
+    example_path: "packages/php/hikashop",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime:
+        "Joomla 6.2.0 (PHP 8.4) and 5.4.10 (PHP 8.3), their official Docker images, with HikaShop Starter 6.8.2",
+      databases: "MySQL or MariaDB, Joomla's own database",
+      secrets:
+        "HikaShop's configuration table, sealed with a key derived from the site's own secret in configuration.php",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's page.",
       mobile: STORE_MOBILE,
