@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="console" method="upgrade">
+	<name>plg_console_openreceive</name>
+	<author>OpenReceive</author>
+	<authorEmail>info@openreceive.org</authorEmail>
+	<authorUrl>https://openreceive.org</authorUrl>
+	<creationDate>2026-11</creationDate>
+	<copyright>(C) 2026 OpenReceive</copyright>
+	<license>GNU General Public License version 2 or later; see LICENSE</license>
+	<version>0.6.1</version>
+	<description>PLG_CONSOLE_OPENRECEIVE_XML_DESCRIPTION</description>
+	<files>
+		<filename plugin="openreceive">openreceive.php</filename>
+		<filename>LICENSE</filename>
+	</files>
+	<languages folder="language">
+		<language tag="en-GB">en-GB/plg_console_openreceive.sys.ini</language>
+	</languages>
+</extension>

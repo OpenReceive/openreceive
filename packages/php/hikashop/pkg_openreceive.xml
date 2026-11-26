@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="package" method="upgrade">
+	<name>pkg_openreceive</name>
+	<packagename>openreceive</packagename>
+	<author>OpenReceive</author>
+	<authorEmail>info@openreceive.org</authorEmail>
+	<authorUrl>https://openreceive.org</authorUrl>
+	<packagerurl>https://openreceive.org/guides/quickstart-hikashop</packagerurl>
+	<creationDate>2026-11</creationDate>
+	<copyright>(C) 2026 OpenReceive</copyright>
+	<license>GNU General Public License version 2 or later; see LICENSE</license>
+	<version>0.6.1</version>
+	<description>PKG_OPENRECEIVE_XML_DESCRIPTION</description>
+	<scriptfile>script.php</scriptfile>
+	<blockChildUninstall>true</blockChildUninstall>
+	<files folder="packages">
+		<file type="plugin" id="openreceive" group="hikashoppayment">plg_hikashoppayment_openreceive.zip</file>
+		<file type="plugin" id="openreceive" group="console">plg_console_openreceive.zip</file>
+	</files>
+	<languages folder="language">
+		<language tag="en-GB">en-GB/pkg_openreceive.sys.ini</language>
+	</languages>
+</extension>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="hikashoppayment" method="upgrade">
+	<name>plg_hikashoppayment_openreceive</name>
+	<author>OpenReceive</author>
+	<authorEmail>info@openreceive.org</authorEmail>
+	<authorUrl>https://openreceive.org</authorUrl>
+	<creationDate>2026-11</creationDate>
+	<copyright>(C) 2026 OpenReceive</copyright>
+	<license>GNU General Public License version 2 or later; see LICENSE</license>
+	<version>0.6.1</version>
+	<description>PLG_HIKASHOPPAYMENT_OPENRECEIVE_XML_DESCRIPTION</description>
+	<files>
+		<filename plugin="openreceive">openreceive.php</filename>
+		<filename>autoload.php</filename>
+		<filename>vendor.phar</filename>
+		<filename>LICENSE</filename>
+		<folder>src</folder>
+	</files>
+	<media folder="media" destination="plg_hikashoppayment_openreceive">
+		<filename>openreceive-checkout.js</filename>
+		<filename>openreceive-checkout.css</filename>
+		<filename>MANIFEST.json</filename>
+	</media>
+	<languages folder="language">
+		<language tag="en-GB">en-GB/plg_hikashoppayment_openreceive.ini</language>
+		<language tag="en-GB">en-GB/plg_hikashoppayment_openreceive.sys.ini</language>
+	</languages>
+	<params addpath="/components/com_hikashop/params">
+		<param name="pluginoptions" type="pluginoptions" default="plugin" label="hikashop" description="HikaShop options" />
+	</params>
+	<config>
+		<fields name="params" addfieldpath="/components/com_hikashop/fields">
+			<fieldset name="basic">
+				<field id="pluginoptions" name="pluginoptions" type="pluginoptions" label="hikashop" description="HikaShop options" />
+			</fieldset>
+		</fields>
+	</config>
+</extension>
