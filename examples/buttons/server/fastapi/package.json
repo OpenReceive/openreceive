@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-fastapi",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,9 +12,9 @@
   "dependencies": {
     "@mantine/core": "^9.8.0",
     "@mantine/hooks": "^9.8.0",
-    "@openreceive/browser": "0.6.2",
-    "@openreceive/provider-data": "0.6.2",
-    "@openreceive/react": "0.6.2",
+    "@openreceive/browser": "0.6.3",
+    "@openreceive/provider-data": "0.6.3",
+    "@openreceive/react": "0.6.3",
     "@tabler/icons-react": "^3.50.0",
     "@vitejs/plugin-react": "^6.2.1",
     "mobx": "^6.15.0",

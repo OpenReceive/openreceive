@@ -1,4 +1,4 @@
-# OpenReceive agent directions: PHP (0.6.2)
+# OpenReceive agent directions: PHP (0.6.3)
 
 These directions are 46 KB. Download them with your shell and follow them from Step 0:
 

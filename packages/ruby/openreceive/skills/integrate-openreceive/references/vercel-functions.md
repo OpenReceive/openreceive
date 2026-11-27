@@ -18,7 +18,7 @@ curl -fsSL https://openreceive.org/agent-directions/vercel-functions/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.6.2.
+These directions describe OpenReceive 0.6.3.
 
 Add OpenReceive to this site on Vercel with no framework: static pages, and
 Node functions under `api/`, the site you are already working in. OpenReceive
@@ -132,7 +132,7 @@ Vercel. Never set the spend-capable override to get past it.
 ## Step 1 — the packages
 
 ```sh
-npm install @openreceive/http@^0.6.2 @openreceive/elements@^0.6.2 pg @vercel/functions
+npm install @openreceive/http@^0.6.3 @openreceive/elements@^0.6.3 pg @vercel/functions
 ```
 
 The packages are ES modules only: `package.json` needs `"type": "module"`.

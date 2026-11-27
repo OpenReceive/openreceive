@@ -1,4 +1,4 @@
-# OpenReceive agent directions: TanStack Start (0.6.2)
+# OpenReceive agent directions: TanStack Start (0.6.3)
 
 These directions are 42 KB. Download them with your shell and follow them from Step 0:
 

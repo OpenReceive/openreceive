@@ -32,7 +32,7 @@ use OpenReceive\Storage\SqlPaymentRepository;
  */
 final class Runtime
 {
-    public const VERSION = '0.6.2';
+    public const VERSION = '0.6.3';
 
     /** The plugin's element: plugins/hikashoppayment/openreceive, and HikaShop's payment_type. */
     public const PLUGIN = 'openreceive';

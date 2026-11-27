@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.3 - 2026-11-27
+
+Release with the complete 0.6.3 package family. No Ruby runtime changes
+from 0.6.2 in this gem.
+
 ## 0.6.2 - 2026-11-26
 
 Release with the complete 0.6.2 package family. No Ruby runtime changes
