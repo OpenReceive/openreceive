@@ -5,8 +5,9 @@
 // plugin ZIPs: the HikaShop payment plugin (plg_hikashoppayment_openreceive)
 // and its Joomla console commands (plg_console_openreceive). The payment
 // plugin's dependencies are prefixed with Strauss (OpenReceive\HikaShop\
-// Vendor\…) inside its vendor.phar, so they can never collide with Joomla's
-// own packages or another extension's, and the checkout's standalone script
+// Vendor\…) as plain files in its vendor/, so they can never collide with
+// Joomla's own packages or another extension's, and a Joomla Extensions
+// Directory reviewer can read every file. The checkout's standalone script
 // ships as the plugin's media files. The package is GPL-2.0-or-later, as the
 // Joomla Extensions Directory requires; the MIT engine inside it is
 // GPL-compatible.
@@ -70,9 +71,10 @@ if (command === "plan") {
     ownCode: OWN_CODE,
     // Every PHP file of the plugin exits unless Joomla is running.
     preamble: "define('_JEXEC', 1); ",
+    archive: "directory",
   });
   // Joomla installs only the files a manifest lists; the bundle's shipped
-  // composer.json describes vendor.phar for nobody here.
+  // composer.json describes vendor/ for nobody here.
   rmSync(path.join(payment, "composer.json"));
 
   // The plugin's entry file reaches the engine only through src/.
@@ -113,14 +115,27 @@ if (command === "plan") {
   const paymentEntries = list(path.join(pkg, "packages/plg_hikashoppayment_openreceive.zip"));
   const loosePhp = paymentEntries.filter(
     (entry) =>
-      entry.endsWith(".php") && !/^((openreceive|autoload)\.php|src\/.+\.php)$/.test(entry),
+      entry.endsWith(".php") &&
+      !/^((openreceive|autoload)\.php|(src|vendor)\/.+\.php)$/.test(entry),
   );
-  assert.deepEqual(loosePhp, [], "Only the plugin's own PHP may sit outside vendor.phar.");
+  assert.deepEqual(loosePhp, [], "Only the plugin's own PHP may sit outside vendor/.");
+  assert(!paymentEntries.includes("vendor.phar"), "The payment plugin ships no phar.");
+  // The Joomla Extensions Directory's checker wants the _JEXEC guard in every
+  // PHP file outside a library folder (vendor/ is one).
+  const paymentZip = path.join(pkg, "packages/plg_hikashoppayment_openreceive.zip");
+  for (const entry of paymentEntries.filter((name) => /^(src\/.+|[^/]+)\.php$/.test(name))) {
+    const code = execFileSync("unzip", ["-p", paymentZip, entry], { encoding: "utf8" });
+    assert.match(
+      code,
+      /^\\?defined\('_JEXEC'\) or die;$/m,
+      `${entry} must exit unless Joomla runs.`,
+    );
+  }
   for (const required of [
     "openreceive.xml",
     "openreceive.php",
     "autoload.php",
-    "vendor.phar",
+    "vendor/autoload.php",
     "LICENSE",
     "src/Runtime.php",
     "media/openreceive-checkout.js",

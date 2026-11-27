@@ -12,8 +12,8 @@ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License below
 for more details.
 
 The package bundles the OpenReceive PHP engine (openreceive/openreceive) and
-its dependencies inside vendor.phar, each under its own license (MIT, ISC or
-the Unlicense), all compatible with the GNU General Public License.
+its dependencies in vendor/, each under its own license (MIT, ISC or the
+Unlicense), all compatible with the GNU General Public License.
 
 ------------------------------------------------------------------------------
 

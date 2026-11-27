@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace OpenReceiveHikaShop;
 
+\defined('_JEXEC') or die;
+
 /**
  * Whether the cron line runs. Joomla and HikaShop run nothing on their own
  * between page views, so without it a customer who pays and leaves the page

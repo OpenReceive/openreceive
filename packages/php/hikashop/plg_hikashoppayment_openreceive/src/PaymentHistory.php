@@ -13,6 +13,8 @@ namespace OpenReceiveHikaShop;
 use OpenReceive\Storage\DatabaseConnection;
 use OpenReceive\Storage\PaymentsSchema;
 
+\defined('_JEXEC') or die;
+
 /**
  * A settled payment, written on its order the way HikaShop records a
  * payment notification: a row in the order's history whose payment id is

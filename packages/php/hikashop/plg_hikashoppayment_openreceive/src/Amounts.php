@@ -13,6 +13,8 @@ namespace OpenReceiveHikaShop;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 
+\defined('_JEXEC') or die;
+
 /**
  * Order totals as decimal strings. HikaShop stores them as DECIMAL(17,5),
  * which MySQL hands over as strings; they are rounded here as exact

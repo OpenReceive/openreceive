@@ -12,6 +12,8 @@ namespace OpenReceiveHikaShop;
 
 use OpenReceive\Storage\DatabaseConnection;
 
+\defined('_JEXEC') or die;
+
 /**
  * The engine's database seam over the mysqli link of Joomla's own database
  * driver (Joomla's default, `mysqli`). The settlement transaction runs on

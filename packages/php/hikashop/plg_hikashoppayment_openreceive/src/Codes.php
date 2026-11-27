@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace OpenReceiveHikaShop;
 
+\defined('_JEXEC') or die;
+
 /**
  * The wallet and swap codes at rest: sealed with sodium's secretbox under a
  * key derived from the site's own secret (configuration.php's $secret), so

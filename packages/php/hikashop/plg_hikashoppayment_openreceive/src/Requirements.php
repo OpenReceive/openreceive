@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace OpenReceiveHikaShop;
 
+\defined('_JEXEC') or die;
+
 /** What the engine needs from PHP: 64 bits, 8.2 or later, GMP and sodium. */
 final class Requirements
 {

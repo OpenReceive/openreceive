@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **HikaShop:** the payment plugin ships its prefixed dependencies as plain
+  files in `vendor/` instead of `vendor.phar`, so a Joomla Extensions
+  Directory reviewer can read every file, and every one of the plugin's own
+  PHP files exits unless Joomla is running. Upgrading removes the old
+  `vendor.phar`.
+
 ## 0.6.2 - 2026-11-26
 
 ### Added

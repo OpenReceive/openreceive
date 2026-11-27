@@ -27,6 +27,14 @@ class pkg_openreceiveInstallerScript extends InstallerScript
     /** @var string */
     protected $minimumJoomla = '5.0.0';
 
+    /**
+     * Releases before 0.6.3 shipped the dependencies as vendor.phar; an
+     * upgrade removes it (autoload.php never reads it).
+     *
+     * @var list<string>
+     */
+    protected $deleteFiles = ['/plugins/hikashoppayment/openreceive/vendor.phar'];
+
     /** @var list<string> */
     private const SETTINGS = ['openreceive_nwc_uri', 'openreceive_lsc_uri_primary', 'openreceive_cron_at'];
 
@@ -68,13 +76,23 @@ class pkg_openreceiveInstallerScript extends InstallerScript
             ->whereIn($db->quoteName('folder'), ['hikashoppayment', 'console'], \Joomla\Database\ParameterType::STRING);
         $db->setQuery($query)->execute();
 
-        require_once JPATH_PLUGINS . '/hikashoppayment/openreceive/autoload.php';
+        // On `php cli/joomla.php extension:install`, the console plugin already
+        // required the previous release's autoload.php in this process, so
+        // requiring it again does nothing: the new release's dependencies are
+        // loaded by their own path first. Their loader goes ahead of the old one.
+        $plugin = JPATH_PLUGINS . '/hikashoppayment/openreceive';
+        if (is_file($plugin . '/vendor/autoload.php')) {
+            require_once $plugin . '/vendor/autoload.php';
+        }
+        require_once $plugin . '/autoload.php';
         try {
             \OpenReceiveHikaShop\Runtime::migrate();
         } catch (\Throwable $error) {
             Factory::getApplication()->enqueueMessage('OpenReceive could not make its payment tables: ' . \OpenReceiveHikaShop\Runtime::errorMessage($error), 'error');
             return false;
         }
+        // Last: the previous release's loader may still read its vendor.phar.
+        $this->removeFiles();
         Factory::getApplication()->enqueueMessage('OpenReceive is installed. Next: HikaShop > System > Payment methods > New > OpenReceive, paste your receive-only NWC code and save; then add the cron line from https://openreceive.org/guides/quickstart-hikashop', 'message');
         return true;
     }

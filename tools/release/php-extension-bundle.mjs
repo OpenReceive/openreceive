@@ -4,9 +4,19 @@
 // so none can collide with the host application's packages or another
 // extension's, and packs the prefixed tree into one vendor.phar next to the
 // extension's autoload.php. The host's Composer never reads inside a .phar.
+// A host that never scans its extensions' files (Joomla) takes the prefixed
+// tree as plain files in vendor/ instead, which a reviewer can read.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { root } from "../shared/root.mjs";
 
@@ -21,8 +31,18 @@ import { root } from "../shared/root.mjs";
  *   imports Strauss rewrites (the composer.json's extra.strauss.update_call_sites).
  * @param {string} [options.preamble] PHP run before the release's autoload checks require autoload.php,
  *   for a host whose files exit unless the host defined a constant (Joomla's `_JEXEC`).
+ * @param {"phar" | "directory"} [options.archive] "phar" packs the prefixed tree into vendor.phar;
+ *   "directory" ships it as plain files in vendor/.
  */
-export function bundleDependencies({ source, staging, directory, prefix, ownCode, preamble = "" }) {
+export function bundleDependencies({
+  source,
+  staging,
+  directory,
+  prefix,
+  ownCode,
+  preamble = "",
+  archive = "phar",
+}) {
   const run = (bin, args) => execFileSync(bin, args, { cwd: directory, stdio: "inherit" });
   assert(
     existsSync(path.join(source, "vendor/bin/strauss")),
@@ -161,18 +181,23 @@ export function bundleDependencies({ source, staging, directory, prefix, ownCode
   }
   // The engine's fake wallet and swap provider are for tests, never a store.
   rmSync(path.join(prefixed, "openreceive/openreceive/src/Testing"), { recursive: true });
-  // One archive holds the prefixed classes. A host whose optimized autoload
-  // dump scans its extensions directory (Paymenter's does on every upgrade)
-  // would print a PSR-4 warning naming OpenReceive for each loose one.
-  run("php", [
-    "-d",
-    "phar.readonly=0",
-    "-r",
-    "$phar = new Phar($argv[2]); $phar->buildFromDirectory($argv[1]); $phar->setStub('<?php __HALT_COMPILER();');",
-    prefixed,
-    path.join(directory, "vendor.phar"),
-  ]);
-  rmSync(prefixed, { recursive: true });
+  if (archive === "directory") {
+    labelLicenses(prefixed);
+    renameSync(prefixed, path.join(directory, "vendor"));
+  } else {
+    // One archive holds the prefixed classes. A host whose optimized autoload
+    // dump scans its extensions directory (Paymenter's does on every upgrade)
+    // would print a PSR-4 warning naming OpenReceive for each loose one.
+    run("php", [
+      "-d",
+      "phar.readonly=0",
+      "-r",
+      "$phar = new Phar($argv[2]); $phar->buildFromDirectory($argv[1]); $phar->setStub('<?php __HALT_COMPILER();');",
+      prefixed,
+      path.join(directory, "vendor.phar"),
+    ]);
+    rmSync(prefixed, { recursive: true });
+  }
   // A release must not lean on classes another package happens to load.
   const php = prefix.replaceAll("\\", "\\\\");
   run("php", [
@@ -185,8 +210,57 @@ export function bundleDependencies({ source, staging, directory, prefix, ownCode
   ]);
   run("php", [
     "-r",
-    "foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator('phar://' . getcwd() . '/vendor.phar')) as $file) { if (str_contains($file->getPathname(), '/src/Testing/')) exit(1); }",
+    "foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($argv[1])) as $file) { if (str_contains($file->getPathname(), '/src/Testing/')) exit(1); }",
+    archive === "directory" ? "vendor" : `phar://${path.join(directory, "vendor.phar")}`,
   ]);
+}
+
+/**
+ * Names each bundled PHP file's license in a comment after its opening tag,
+ * from its package's composer.json (Composer's own autoloader files are
+ * MIT). The Joomla Extensions Directory's checker reads every PHP file of a
+ * package for a GPL or GPL-compatible license, and most libraries state
+ * theirs only in a LICENSE file.
+ */
+function labelLicenses(prefixed) {
+  const composerFiles = { license: ["MIT"], name: "composer/composer" };
+  const label = (file, pkg) => {
+    const licenses = [pkg.license].flat();
+    assert(
+      licenses.length > 0 &&
+        licenses.every((id) => /^(MIT|ISC|Unlicense|BSD-[23]-Clause)$/.test(id)),
+      `${pkg.name}'s license ${licenses.join(", ")} needs checking against the JED's list.`,
+    );
+    const code = readFileSync(file, "utf8");
+    assert(code.startsWith("<?php"), `${file} must start with <?php.`);
+    writeFileSync(
+      file,
+      code.replace(
+        /^<\?php/,
+        `<?php\n\n// License: ${licenses.join(" OR ")} (${pkg.name}, bundled by OpenReceive; see its LICENSE file).`,
+      ),
+    );
+  };
+  const visit = (dir, pkg) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(file, pkg);
+      else if (entry.name.endsWith(".php")) label(file, pkg);
+    }
+  };
+  label(path.join(prefixed, "autoload.php"), composerFiles);
+  for (const vendor of readdirSync(prefixed, { withFileTypes: true })) {
+    if (!vendor.isDirectory()) continue;
+    if (vendor.name === "composer") {
+      visit(path.join(prefixed, vendor.name), composerFiles);
+      continue;
+    }
+    for (const pkg of readdirSync(path.join(prefixed, vendor.name), { withFileTypes: true })) {
+      if (!pkg.isDirectory()) continue;
+      const pkgDir = path.join(prefixed, vendor.name, pkg.name);
+      visit(pkgDir, JSON.parse(readFileSync(path.join(pkgDir, "composer.json"), "utf8")));
+    }
+  }
 }
 
 /** The checkout's standalone script and stylesheet, checked against the release version. */

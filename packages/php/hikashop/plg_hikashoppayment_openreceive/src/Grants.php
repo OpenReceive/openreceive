@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace OpenReceiveHikaShop;
 
+\defined('_JEXEC') or die;
+
 /**
  * The orders a browser may pay, as Joomla's session keeps them: a
  * comma-separated list of order ids, newest last, at most MAX long. The
