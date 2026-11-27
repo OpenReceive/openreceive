@@ -234,6 +234,15 @@
       "btcpay": "2.4.5"
     },
     {
+      "trial": "hikashop",
+      "date": "2026-11-27",
+      "release": "0.6.2",
+      "runs": 3,
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "released",
+      "directions": "f9927c1df3a7"
+    },
+    {
       "trial": "paymenter",
       "date": "2026-10-18",
       "release": "0.4.28",
