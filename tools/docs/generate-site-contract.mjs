@@ -1020,7 +1020,7 @@ const hikashopUpdates = `<?xml version="1.0" encoding="utf-8"?>
   assets.push({
     path: assetPath(HIKASHOP_UPDATES),
     source: HIKASHOP_UPDATES,
-    content_type: "application/xml; charset=utf-8",
+    content_type: "application/xml",
     bytes: Buffer.byteLength(hikashopUpdates),
     referenced_by: ["/guides/quickstart-hikashop"],
   });
