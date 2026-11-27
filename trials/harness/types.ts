@@ -176,6 +176,9 @@ export interface Platform {
    * `prestashop`: a PrestaShop store that prestashop.ts installs and seeds
    * with two customers and five products; the customer checks out in
    * PrestaShop's shop and pays on its order confirmation page in Chromium.
+   * `hikashop`: a Joomla site that hikashop.ts gives HikaShop Starter, its
+   * sample catalog and two customers; the customer checks out in HikaShop's
+   * shop and pays on its thank-you page in Chromium.
    * `vendure`: a Vendure server, worker and its Next.js storefront starter;
    * vendure.ts fills a guest's cart through the Shop API, and the guest pays
    * at the storefront's checkout in Chromium.
@@ -192,6 +195,7 @@ export interface Platform {
     | "paymenter"
     | "fossbilling"
     | "prestashop"
+    | "hikashop"
     | "vendure"
     | "odoo"
     | "medusa";
@@ -201,6 +205,8 @@ export interface Platform {
   readonly service?: string;
   /** Port inside that service. 80 when omitted. */
   readonly container_port?: number;
+  /** How many products the plain shop lists: 5 when omitted. HikaShop's sample catalog has 15. */
+  readonly product_count?: number;
   /** Run the platform seed script after the stack is up. WordPress does; Node boots seeded. */
   readonly seed?: boolean;
   /** Commands that print the product count and whether OpenReceive is installed. Node scripts when omitted. */

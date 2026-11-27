@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
+import { liveHikashopChecks } from "./hikashop.ts";
 import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
 import { liveMedusaChecks } from "./medusa.ts";
@@ -53,6 +54,7 @@ const BY_HAND_PLATFORMS = [
   "paymenter",
   "fossbilling",
   "prestashop",
+  "hikashop",
   "vendure",
   "odoo",
   "medusa",
@@ -179,17 +181,19 @@ async function checkShop(argv: readonly string[]): Promise<void> {
           ? await liveFossbillingChecks(state.baseUrl, options)
           : platform.host === "prestashop"
             ? await livePrestashopChecks(state.baseUrl, options)
-            : platform.host === "vendure"
-              ? await liveVendureChecks(directory, state.baseUrl, options)
-              : platform.host === "odoo"
-                ? await liveOdooChecks(state.baseUrl, options)
-                : platform.host === "medusa"
-                  ? await liveMedusaChecks(directory, state.baseUrl, options)
-                  : wordpressKind(platform) === "woocommerce"
-                    ? await liveWoocommerceChecks(directory, state.baseUrl, options)
-                    : wordpressKind(platform) === "edd"
-                      ? await liveEddChecks(directory, state.baseUrl, options)
-                      : await liveShopChecks(state.baseUrl, options)),
+            : platform.host === "hikashop"
+              ? await liveHikashopChecks(state.baseUrl, options)
+              : platform.host === "vendure"
+                ? await liveVendureChecks(directory, state.baseUrl, options)
+                : platform.host === "odoo"
+                  ? await liveOdooChecks(state.baseUrl, options)
+                  : platform.host === "medusa"
+                    ? await liveMedusaChecks(directory, state.baseUrl, options)
+                    : wordpressKind(platform) === "woocommerce"
+                      ? await liveWoocommerceChecks(directory, state.baseUrl, options)
+                      : wordpressKind(platform) === "edd"
+                        ? await liveEddChecks(directory, state.baseUrl, options)
+                        : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(

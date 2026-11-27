@@ -1,0 +1,65 @@
+{
+  "slug": "hikashop",
+  "name": "HikaShop",
+  "directions": "docs/agents/hikashop.md",
+  "prompt_name": "HikaShop store on Joomla",
+  "doctor": "php cli/joomla.php openreceive:doctor",
+  "credential_store": {
+    "kind": "module-setting",
+    "where": "the OpenReceive plugin's sealed settings in HikaShop's configuration (php cli/joomla.php openreceive:configure)"
+  },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 8,
+  "live": true,
+  "host": "hikashop",
+  "service": "joomla",
+  "container_port": 80,
+  "seed": false,
+  "product_count": 15,
+  "wallet_services": ["joomla"],
+  "logs": [
+    "exec",
+    "-T",
+    "joomla",
+    "sh",
+    "-c",
+    "tail -n 60 /var/www/html/administrator/logs/openreceive.php 2>/dev/null; true"
+  ],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "mariadb",
+      "sh",
+      "-c",
+      "mariadb -ujoomla -pjoomla-local -N joomla -e \"select count(*) from joom_hikashop_product where product_type = 'main' and product_published = 1\""
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "joomla",
+      "sh",
+      "-c",
+      "test -e /var/www/html/plugins/hikashoppayment/openreceive && echo yes || echo no"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "mariadb",
+      "sh",
+      "-c",
+      "mariadb -ujoomla -pjoomla-local -N joomla -e \"select if(order_status in ('created', 'pending'), 'awaiting_payment', order_status) from joom_hikashop_order where order_id = $1\"",
+      "sh"
+    ]
+  }
+}

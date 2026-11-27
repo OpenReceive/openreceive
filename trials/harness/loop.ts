@@ -24,6 +24,7 @@ import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { devtoolsChecks } from "./devtools.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
+import { liveHikashopChecks } from "./hikashop.ts";
 import { debugPageChecks } from "./leaks.ts";
 import { donationWalkChecks, payerWalkChecks } from "./payer.ts";
 import { check, liveShopChecks } from "./live.ts";
@@ -663,29 +664,31 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
                 ? await liveFossbillingChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
                 : platform.host === "prestashop"
                   ? await livePrestashopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
-                  : platform.host === "vendure"
-                    ? await liveVendureChecks(directory, sandbox.baseUrl, {
-                        paid,
-                        ...(swap ? { swap } : {}),
-                      })
-                    : platform.host === "odoo"
-                      ? await liveOdooChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
-                      : platform.host === "medusa"
-                        ? await liveMedusaChecks(directory, sandbox.baseUrl, {
-                            paid,
-                            ...(swap ? { swap } : {}),
-                          })
-                        : wordpress !== undefined
-                          ? await (wordpress === "edd" ? liveEddChecks : liveWoocommerceChecks)(
-                              directory,
-                              sandbox.baseUrl,
-                              { paid, ...(swap ? { swap } : {}), bitcoinOnly: !scenario.swaps },
-                            )
-                          : await liveShopChecks(sandbox.baseUrl, {
+                  : platform.host === "hikashop"
+                    ? await liveHikashopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+                    : platform.host === "vendure"
+                      ? await liveVendureChecks(directory, sandbox.baseUrl, {
+                          paid,
+                          ...(swap ? { swap } : {}),
+                        })
+                      : platform.host === "odoo"
+                        ? await liveOdooChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+                        : platform.host === "medusa"
+                          ? await liveMedusaChecks(directory, sandbox.baseUrl, {
                               paid,
                               ...(swap ? { swap } : {}),
-                              bitcoinOnly: !scenario.swaps,
-                            });
+                            })
+                          : wordpress !== undefined
+                            ? await (wordpress === "edd" ? liveEddChecks : liveWoocommerceChecks)(
+                                directory,
+                                sandbox.baseUrl,
+                                { paid, ...(swap ? { swap } : {}), bitcoinOnly: !scenario.swaps },
+                              )
+                            : await liveShopChecks(sandbox.baseUrl, {
+                                paid,
+                                ...(swap ? { swap } : {}),
+                                bitcoinOnly: !scenario.swaps,
+                              });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

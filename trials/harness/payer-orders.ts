@@ -1,4 +1,5 @@
 import { fossbillingPayerOrders } from "./fossbilling.ts";
+import { hikashopPayerOrders } from "./hikashop.ts";
 import { medusaPayerOrders } from "./medusa.ts";
 import { odooPayerOrders } from "./odoo.ts";
 import type { PlaceOrder } from "./payer.ts";
@@ -33,6 +34,8 @@ export function payerOrders(
       return fossbillingPayerOrders(baseUrl);
     case "prestashop":
       return prestashopPayerOrders(baseUrl);
+    case "hikashop":
+      return hikashopPayerOrders(baseUrl);
     case "odoo":
       return odooPayerOrders(baseUrl);
     case "medusa":

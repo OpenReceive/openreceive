@@ -14,6 +14,7 @@ import {
   walletOverrideFile,
 } from "./docker.ts";
 import { setupFossbilling } from "./fossbilling.ts";
+import { setupHikashop } from "./hikashop.ts";
 import { setupOdoo } from "./odoo.ts";
 import { setupPaymenter } from "./paymenter.ts";
 import { setupPrestashop } from "./prestashop.ts";
@@ -32,6 +33,8 @@ export interface Sandbox {
 export interface ShopEvidence {
   readonly baseUrl: string;
   readonly productCount: number;
+  /** How many products the plain shop lists (platform.json's product_count, or five). */
+  readonly expectedProducts?: number;
   /** Absent on shops that are not PHP. */
   readonly gmp?: boolean;
   readonly openreceive: boolean;
@@ -253,6 +256,8 @@ export async function startShop(
     if (platform.host === "fossbilling") await setupFossbilling(directory, baseUrl, seedDir);
     // A PrestaShop merchant has run its installer and has customers and products.
     if (platform.host === "prestashop") await setupPrestashop(directory, baseUrl, seedDir);
+    // A HikaShop merchant has HikaShop set up on Joomla, with its sample catalog and customers.
+    if (platform.host === "hikashop") await setupHikashop(directory, baseUrl, seedDir);
     // An Odoo merchant has a database with eCommerce, products and customers.
     if (platform.host === "odoo") await setupOdoo(directory, seedDir);
     if (platform.seed === false) {
@@ -420,6 +425,7 @@ async function inspectContainerShop(
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     productCount: Number(lastLine),
+    expectedProducts: platform.product_count,
     openreceive: installed.stdout.trim() === "yes",
     nwcInEnv: /^(?:NWC_URI|LSC_URI_)/m.test(env.stdout),
   };
@@ -438,8 +444,8 @@ export function shopChecks(evidence: ShopEvidence, platformCodes = false): Check
     {
       id: "products_seeded",
       severity: "blocker",
-      pass: evidence.productCount === 5,
-      summary: "The shop has five products and no OpenReceive code.",
+      pass: evidence.productCount === (evidence.expectedProducts ?? 5),
+      summary: `The shop has ${evidence.expectedProducts === undefined ? "five" : evidence.expectedProducts} products and no OpenReceive code.`,
       evidence: `${evidence.productCount} products`,
     },
     ...(evidence.gmp === undefined

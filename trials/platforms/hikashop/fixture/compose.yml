@@ -1,0 +1,50 @@
+# Joomla as its official image runs it, pinned: the image installs Joomla
+# itself on first start (the JOOMLA_* variables below), its files in a named
+# volume, and MariaDB, with no OpenReceive. The harness installs HikaShop
+# Starter with Joomla's own console, runs HikaShop's setup assistant for the
+# shop's published address with its sample catalog, adds two customers
+# (seed/seed.sh), and swaps 8080 for a free port per run (sandbox.ts).
+services:
+  joomla:
+    image: joomla:6.2.0-php8.4-apache
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      JOOMLA_DB_HOST: mariadb
+      JOOMLA_DB_NAME: joomla
+      JOOMLA_DB_USER: joomla
+      JOOMLA_DB_PASSWORD: joomla-local
+      JOOMLA_SITE_NAME: Widget Shop
+      JOOMLA_ADMIN_USER: Shop Owner
+      JOOMLA_ADMIN_USERNAME: owner
+      JOOMLA_ADMIN_PASSWORD: widget-shop-local
+      JOOMLA_ADMIN_EMAIL: shop@example.test
+    volumes:
+      - joomla:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: joomla
+      MARIADB_USER: joomla
+      MARIADB_PASSWORD: joomla-local
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  joomla:
+  mariadb:

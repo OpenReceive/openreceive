@@ -68,6 +68,18 @@ export function installedProbes(platform: Platform): InstalledProbe[] {
       },
     ];
   }
+  if (platform.host === "hikashop") {
+    return [
+      {
+        service: "joomla",
+        script: versionFrom(
+          "openreceive-hikashop",
+          "/var/www/html/plugins/hikashoppayment/openreceive/src/Runtime.php",
+          "const VERSION = '([^']+)'",
+        ),
+      },
+    ];
+  }
   if (platform.host === "odoo") {
     return [
       { service: "odoo", script: PYTHON_PACKAGE },
