@@ -985,7 +985,10 @@ for (const page of PLUGIN_PAGES) {
 // Extensions Directory requires one). It is generated here from the release
 // version, so a site sync after each release serves the new download URL,
 // and `--check` fails when the committed copy is stale. The URL stays on one
-// line: Joomla reports a newline around it as "malformed".
+// line: Joomla reports a newline around it as "malformed". `<client>site</client>`
+// is required: without it Joomla files the update under the administrator
+// (client 1), a package installs as site (client 0), and the update never
+// matches the installed package.
 const HIKASHOP_UPDATES = "docs/assets/updates/hikashop.xml";
 const hikashopUpdates = `<?xml version="1.0" encoding="utf-8"?>
 <updates>
@@ -994,6 +997,7 @@ const hikashopUpdates = `<?xml version="1.0" encoding="utf-8"?>
 		<description>Bitcoin Lightning payments for HikaShop, paid straight into your own wallet.</description>
 		<element>pkg_openreceive</element>
 		<type>package</type>
+		<client>site</client>
 		<version>${release}</version>
 		<infourl title="OpenReceive for HikaShop">https://openreceive.org/guides/quickstart-hikashop</infourl>
 		<downloads>

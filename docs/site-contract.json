@@ -3040,7 +3040,7 @@
       "path": "/assets/updates/hikashop.xml",
       "source": "docs/assets/updates/hikashop.xml",
       "content_type": "application/xml",
-      "bytes": 785,
+      "bytes": 809,
       "referenced_by": [
         "/guides/quickstart-hikashop"
       ]

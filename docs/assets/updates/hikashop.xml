@@ -5,6 +5,7 @@
 		<description>Bitcoin Lightning payments for HikaShop, paid straight into your own wallet.</description>
 		<element>pkg_openreceive</element>
 		<type>package</type>
+		<client>site</client>
 		<version>0.6.2</version>
 		<infourl title="OpenReceive for HikaShop">https://openreceive.org/guides/quickstart-hikashop</infourl>
 		<downloads>
