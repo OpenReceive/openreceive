@@ -2,14 +2,25 @@
 
 A one-product shop on Express that takes Bitcoin payments over Lightning,
 paid straight into your own wallet. Orders and payment attempts live in your
-Postgres database. It is set up for Replit, and it runs on any Node host.
-There is no OpenReceive account, no build step and no worker process:
-payments settle during normal requests.
+Postgres database. It deploys to Railway in one click, it is set up for
+Replit, and it runs on any Node host. There is no OpenReceive account, no
+build step and no worker process: payments settle during normal requests.
 
 Optional swaps let customers pay with **USDT, USDC, SOL, and ETH** instead.
 A swap provider you configure converts the payment to **BTC over Lightning**,
 which settles into the same wallet. Available assets and networks depend on
 the provider; swaps are optional.
+
+## Deploy on Railway
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/cHB_UX?referralCode=sqwQQS&utm_medium=integration&utm_source=button&utm_campaign=openreceive-express)
+
+The template creates the shop and a Postgres database. Paste `NWC_URI`, a
+receive-only code from your Lightning wallet
+([get one](https://openreceive.org/get_a_nwc_code_to_receive_payments)), and
+optionally `LSC_URI_PRIMARY` for swaps
+([set up a swap provider](https://openreceive.org/set_up_swap_provider)).
+Open the shop's domain and buy the sticker to see a Lightning invoice.
 
 ## Run it on Replit
 
