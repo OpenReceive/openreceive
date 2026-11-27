@@ -124,7 +124,15 @@ test("recheck finds the platform in a kept shop's directory name", () => {
 });
 
 test("recheck walks a hosted platform as a payer, and runs nothing else on it", () => {
-  for (const host of ["paymenter", "fossbilling", "prestashop", "odoo", "medusa", "vendure"]) {
+  for (const host of [
+    "paymenter",
+    "fossbilling",
+    "prestashop",
+    "hikashop",
+    "odoo",
+    "medusa",
+    "vendure",
+  ]) {
     assert.doesNotThrow(() => assertRecheckable({ slug: host, host }, ["payer"]), host);
     assert.throws(
       () => assertRecheckable({ slug: host, host }, ["live", "payer"]),

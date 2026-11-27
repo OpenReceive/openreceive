@@ -259,7 +259,15 @@ test("apiRoute reads a checkout route from the path or PrestaShop's ?path=", () 
 });
 
 test("only BTCPay and Bolt stay out of the payer walk", () => {
-  for (const host of ["paymenter", "fossbilling", "prestashop", "odoo", "medusa", "vendure"]) {
+  for (const host of [
+    "paymenter",
+    "fossbilling",
+    "prestashop",
+    "hikashop",
+    "odoo",
+    "medusa",
+    "vendure",
+  ]) {
     const platform = { slug: host, host };
     assert.equal(hasPayerWalk(platform), true, host);
     assert.equal(typeof payerOrders(platform, "/tmp/shop", "http://127.0.0.1:1"), "function", host);
