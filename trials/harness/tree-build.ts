@@ -31,7 +31,7 @@ const WP_CLI_URL = "https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/w
 /** Everything that decides what a package contains; the rest of the tree never reaches one. */
 const SKIP_PREFIXES = ["trials/", "tests/", "docs/", "examples/", ".github/"];
 
-const PHP_BUILD_PACKAGES = ["wordpress", "paymenter", "fossbilling", "prestashop"];
+const PHP_BUILD_PACKAGES = ["wordpress", "paymenter", "fossbilling", "prestashop", "hikashop"];
 
 export interface NpmArtifact {
   readonly name: string;
@@ -440,6 +440,7 @@ async function buildFromTree(repoRoot: string, directory: string, key: string): 
     await npm("run", "release:paymenter:build");
     await npm("run", "release:fossbilling:build");
     await npm("run", "release:prestashop:build");
+    await npm("run", "release:hikashop:build");
     await npm("run", "release:odoo:build");
 
     const [npmArtifacts, gems, python, composer, releaseFiles] = await Promise.all([
