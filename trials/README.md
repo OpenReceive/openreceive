@@ -45,7 +45,7 @@ npm run trial -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Easy Digital Downloads (`edd`, the same plugin on a stock WordPress with EDD), Express (`node`), Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start on Node (`tanstack-start`), Vercel (Next.js on Neon), Vercel Functions (`vercel-functions`, static pages and functions in `api/` with no framework, on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, Flask, plain PHP, Laravel, Paymenter (its official image, seeded with clients and five products), FOSSBilling (its official image, installed and seeded the same way), PrestaShop (its official image, installed by its own command-line installer and seeded with two customers and five downloadable widgets), Vendure (a server, its worker and PostgreSQL laid out as `@vendure/create` makes them, with Vendure's Next.js starter, which `sources.json` downloads at a pinned commit), Odoo (Odoo 19's official image on PostgreSQL with eCommerce installed, seeded with two portal customers and five published widgets), and Medusa (a Medusa 2 server from Medusa's default starter on PostgreSQL, with Medusa's Next.js starter as its storefront; the buyer pays at the storefront's review step). None of them include OpenReceive.
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Easy Digital Downloads (`edd`, the same plugin on a stock WordPress with EDD), Express (`node`), Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start on Node (`tanstack-start`), Vercel (Next.js on Neon), Vercel Functions (`vercel-functions`, static pages and functions in `api/` with no framework, on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, Flask, plain PHP, Laravel, Paymenter (its official image, seeded with clients and five products), FOSSBilling (its official image, installed and seeded the same way), PrestaShop (its official image, installed by its own command-line installer and seeded with two customers and five downloadable widgets), HikaShop (Joomla 6's official image, which installs Joomla itself, with HikaShop Starter, HikaShop's setup assistant and its sample catalog of 15 garments, two customers and a free shipping method), Vendure (a server, its worker and PostgreSQL laid out as `@vendure/create` makes them, with Vendure's Next.js starter, which `sources.json` downloads at a pinned commit), Odoo (Odoo 19's official image on PostgreSQL with eCommerce installed, seeded with two portal customers and five published widgets), and Medusa (a Medusa 2 server from Medusa's default starter on PostgreSQL, with Medusa's Next.js starter as its storefront; the buyer pays at the storefront's review step). None of them include OpenReceive.
 
 ```sh
 npm run trial -- --platform php --smoke
@@ -355,8 +355,8 @@ WordPress shop, `wp plugin install <release zip> --force` through the shop's
 `--phases` also takes `payer` (the browser walk below), `leaks`, `logs` (the
 shop's own log, read for wallet codes) and `devtools` (the section above;
 `--only debug,build,tests,hot,workers` runs some of its steps). Paymenter,
-FOSSBilling, PrestaShop, Odoo, Medusa and Vendure have live modules of their
-own, so a kept shop of one of those runs only `--phases payer`. BTCPay and Bolt
+FOSSBilling, PrestaShop, HikaShop, Odoo, Medusa and Vendure have live modules of
+their own, so a kept shop of one of those runs only `--phases payer`. BTCPay and Bolt
 are not rechecked. The phases below
 run only when named:
 
@@ -419,9 +419,10 @@ On every platform but BTCPay and Bolt, after the live checks, Chromium walks
 the shop the way a buyer does (`payer.ts`) and reads what the checkout puts on
 the screen. On WooCommerce and EDD the walk places a guest order first and
 opens its order page (`wordpressPayerOrders`). On Paymenter, FOSSBilling,
-PrestaShop, Odoo, Medusa and Vendure each step orders through the platform's
-own shop, as its live checks do, and stops where the checkout is on screen
-(`payer-orders.ts`); the price it compares is the seeded product's. Every screen
+PrestaShop, HikaShop, Odoo, Medusa and Vendure each step orders through the
+platform's own shop, as its live checks do, and stops where the checkout is on screen
+(`payer-orders.ts`); the price it compares is the seeded product's (on HikaShop,
+the price the sample product's own page lists). Every screen
 is saved in the report's `payer/` folder as a screenshot and its visible text.
 
 - `payer_paid_on_screen`, `payer_paid_wording`: after the wallet settles, the
@@ -506,7 +507,7 @@ tree, before they are released:
 ```sh
 npm run trial -- --platform node --runs 1 --agent codex --tree --no-chaos
 npm run trial -- --platform node,django,rails,laravel,woocommerce,paymenter --tree
-npm run trial -- --platform node,fastify,next,nestjs,sveltekit,nuxt,astro,react-router,tanstack-start,vercel,lovable,bolt,supabase,django,fastapi,flask,rails,laravel,php,woocommerce,edd,paymenter,fossbilling,prestashop,odoo,medusa,vendure --runs 1 --parallel 8 --agent random --tree --no-chaos
+npm run trial -- --platform node,fastify,next,nestjs,sveltekit,nuxt,astro,react-router,tanstack-start,vercel,lovable,bolt,supabase,django,fastapi,flask,rails,laravel,php,woocommerce,edd,paymenter,fossbilling,prestashop,hikashop,odoo,medusa,vendure --runs 1 --parallel 8 --agent random --tree --no-chaos
 ```
 
 The harness copies the tree to a temporary folder, bumps it one patch above
@@ -534,8 +535,8 @@ stay the ones the directions give:
 - Dockerfiles get those lines after every `FROM`, before the shop's first
   commit, and a Compose override (`<shop>.tree.yml`, beside the shop) sets the
   same variables on every service, for an image the agent did not build.
-- WordPress (`wp plugin install`), the billing panels', PrestaShop's and
-  Odoo's release ZIPs, the standalone checkout tarball, and Odoo's `pip3
+- WordPress (`wp plugin install`), the billing panels', PrestaShop's, HikaShop's
+  and Odoo's release ZIPs, the standalone checkout tarball, and Odoo's `pip3
   install` inside the Dockerfile the agent writes are the served directions'
   URLs: the directions name this registry for those. WordPress's HTTP API
   refuses private addresses, so a must-use plugin beside the shop, mounted by
