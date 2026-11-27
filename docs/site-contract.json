@@ -816,7 +816,7 @@
       "slug": "quickstart-hikashop",
       "title": "HikaShop Quickstart",
       "category": "quickstart",
-      "bytes": 11688
+      "bytes": 11781
     },
     {
       "path": "/guides/quickstart-odoo",
@@ -916,7 +916,7 @@
       "slug": "agent-directions-hikashop",
       "title": "Agent directions (HikaShop)",
       "category": "agent-directions",
-      "bytes": 25753
+      "bytes": 26046
     },
     {
       "path": "/guides/agent-directions-odoo",
@@ -1328,7 +1328,7 @@
       "kind": "agent-directions-payload",
       "stack": "hikashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25753,
+      "bytes": 26046,
       "copy_button": true,
       "self_contained": true
     },

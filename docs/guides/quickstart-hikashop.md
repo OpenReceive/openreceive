@@ -157,9 +157,10 @@ thank-you page, then each method the checkout offers: Bitcoin Lightning, and
 each swap asset with its network and whether it is available for this
 amount. A small order is often below a swap provider's minimum; that is the
 amount, not a fault. The thank-you page's address carries the order's token,
-so it opens the checkout in any browser. Pass `--live-site=https://your.shop`
+so it opens the checkout in any browser. Pass `--live-site=https://your.shop/`
 when Joomla's `configuration.php` has no `$live_site`, so the printed link
-names your shop.
+names your shop. Keep the trailing `/`: Joomla's console appends
+`cli/joomla.php` to the address as written.
 
 ## How a payment works
 

@@ -141,13 +141,16 @@ account, so nobody signs in as it and no email reaches anyone), and mint its
 Lightning invoice:
 
 ```sh
-php cli/joomla.php openreceive:test-invoice --new --amount 20.00 --live-site=https://the.shop.example
+php cli/joomla.php openreceive:test-invoice --new --amount 20.00 --live-site=https://the.shop.example/
 ```
 
 `--amount 20.00` (in the shop's main currency) keeps the test order above the
 swap providers' minimums, so the user can try every method on the link you
 give them. `--live-site` takes the shop's own address, so the printed link
 names it; leave it out when Joomla's `configuration.php` sets `$live_site`.
+End the address with `/`, port included (`http://127.0.0.1:8080/`): Joomla's
+console joins it to `cli/joomla.php` as written, and without the slash it
+fails with "Could not parse the requested URI".
 
 To use an unpaid OpenReceive order, pass its id instead of `--new`.
 `test-invoice` goes through the same route as the order's thank-you page. It
