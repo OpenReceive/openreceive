@@ -496,6 +496,29 @@ for (const { manifest } of packages) {
     `${releaseDocsPath}: missing ${manifest.name}`,
   );
 }
+// A starter installs from npm, and a 0.x caret range never crosses a minor
+// version: a starter left at ^0.4.19 deploys 0.4 forever. Every caret range
+// on an @openreceive package must include the release.
+{
+  const [, releaseMinor, releasePatch] = releaseVersion.split(".").map(Number);
+  for (const entry of readdirSync(path.join(root, "examples"), { withFileTypes: true })) {
+    const manifestPath = `examples/${entry.name}/package.json`;
+    if (!entry.isDirectory() || !existsSync(path.join(root, manifestPath))) continue;
+    const manifest = readJson(manifestPath);
+    for (const [name, spec] of Object.entries({
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+    })) {
+      const caret = name.startsWith("@openreceive/") && /^\^0\.(\d+)\.(\d+)$/.exec(spec);
+      if (!caret) continue;
+      expect(
+        Number(caret[1]) === releaseMinor && Number(caret[2]) <= releasePatch,
+        `${manifestPath}: ${name} ${spec} does not install ${releaseVersion}`,
+      );
+    }
+  }
+}
+
 for (const phrase of [
   "npm run test:ci",
   "npm run release:artifacts -- check",

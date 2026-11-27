@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@next/env": "^16.4.0",
-    "@openreceive/http": "^0.4.19",
-    "@openreceive/next": "^0.4.19",
-    "@openreceive/react": "^0.4.19",
+    "@openreceive/http": "^0.6.0",
+    "@openreceive/next": "^0.6.0",
+    "@openreceive/react": "^0.6.0",
     "@vercel/functions": "^3.9.11",
     "next": "^16.4.0",
     "pg": "^8.23.1",
