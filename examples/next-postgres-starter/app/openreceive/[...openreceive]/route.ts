@@ -1,6 +1,7 @@
 import { openReceiveNextHandlers } from "@openreceive/next";
+import { walletConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
-import { VISITOR_COOKIE, findOrder } from "@/lib/orders";
+import { findOrder, VISITOR_COOKIE } from "@/lib/orders";
 
 // The wallet relay and the database driver need Node, and payment routes must
 // never be cached or prerendered.
@@ -21,7 +22,7 @@ let handlers: ReturnType<typeof openReceiveNextHandlers> | undefined;
 // wallet code. Settlement runs during these requests; no worker is needed.
 function openReceive() {
   handlers ??= openReceiveNextHandlers({
-    wallet: { nwc: process.env.NWC_URI ?? "" },
+    wallet: { nwc: process.env.NWC_URI?.trim() ?? "" },
     storage: {
       db: db(),
       // Runs once, inside the settlement transaction. `$1` placeholders.
@@ -52,5 +53,19 @@ function openReceive() {
   return handlers;
 }
 
-export const GET = (request: Request) => openReceive().GET(request);
-export const POST = (request: Request) => openReceive().POST(request);
+// Until NWC_URI is set, the routes answer with a clear error instead of
+// failing to reach a wallet. The pages show the setup steps meanwhile.
+const notConfigured = () =>
+  Response.json(
+    {
+      code: "WALLET_UNAVAILABLE",
+      message: "The shop has no wallet code yet. Set NWC_URI and redeploy.",
+      retryable: false,
+    },
+    { status: 503 },
+  );
+
+export const GET = (request: Request) =>
+  walletConfigured() ? openReceive().GET(request) : notConfigured();
+export const POST = (request: Request) =>
+  walletConfigured() ? openReceive().POST(request) : notConfigured();

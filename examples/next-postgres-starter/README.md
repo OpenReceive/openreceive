@@ -41,6 +41,8 @@ npm run dev                 # creates the tables, then starts Next.js
 | `app/actions.ts` | Creates the order before checkout. Its id is the payment reference. |
 | `app/openreceive/[...openreceive]/route.ts` | The payment routes: `authorize`, `amountFor` and `onPaid` |
 | `app/checkout/[reference]/` | The order's own page, with the drop-in checkout |
+| `app/setup.tsx` | Shown instead of the shop until `NWC_URI` is set |
+| `lib/catalog.ts` | The shop's name and its one product |
 | `lib/db.ts` | One `pg` pool on the pooled database URL |
 | `scripts/migrate.mjs` | Creates `orders` and OpenReceive's two tables |
 

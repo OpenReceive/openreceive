@@ -4,11 +4,14 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { product } from "@/lib/catalog";
+import { walletConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
 import { VISITOR_COOKIE } from "@/lib/orders";
 
 /** Creates the order first; its id is the OpenReceive reference. */
 export async function buy(): Promise<void> {
+  // No wallet code yet: the home page shows the setup steps instead.
+  if (!walletConfigured()) redirect("/");
   const jar = await cookies();
   let visitor = jar.get(VISITOR_COOKIE)?.value;
   if (!visitor) {
