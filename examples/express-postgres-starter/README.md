@@ -13,7 +13,7 @@ the provider; swaps are optional.
 
 ## Deploy on Railway
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/cHB_UX?referralCode=sqwQQS&utm_medium=integration&utm_source=button&utm_campaign=openreceive-express)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bitcoin-lightning-checkout-express-postg?referralCode=sqwQQS&utm_medium=integration&utm_source=button&utm_campaign=openreceive-express)
 
 The template creates the shop and a Postgres database. Paste `NWC_URI`, a
 receive-only code from your Lightning wallet
